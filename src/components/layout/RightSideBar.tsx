@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -17,7 +16,7 @@ import { PlusIcon, TrashIcon, CheckIcon, UploadIcon, MoreHorizontalIcon } from '
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useContextStore } from '@/store/context-store'
 // Add Dropzone import
-import { Dropzone, DropzoneContent, DropzoneEmptyState } from '@/components/ui/shadcn-io/dropzone'
+import { Dropzone } from '@/components/ui/shadcn-io/dropzone'
 // Import Sheet components instead of Dialog
 import { 
   Sheet, 
@@ -45,6 +44,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+// Add the MarkdownEditor import
+import { MarkdownEditor } from '@/components/ui/markdown-editor'
 
 interface Context {
   id: string
@@ -280,6 +281,11 @@ export function RightSideBar({ children, className }: RightSideBarProps) {
     })
   }
 
+  // Add a new function to handle description changes
+  const handleDescriptionChange = (value: string) => {
+    setNewContextDescription(value)
+  }
+
   // Add a function to reset the form data
   const resetForm = () => {
     setNewContextTitle('')
@@ -420,12 +426,12 @@ export function RightSideBar({ children, className }: RightSideBarProps) {
                   
                   <div>
                     <label className="text-sm font-medium">Description</label>
-                    <Textarea
-                      value={newContextDescription}
-                      onChange={(e) => setNewContextDescription(e.target.value)}
-                      placeholder="Enter context description..."
-                      className="mt-1 min-h-[100px] w-full"
-                    />
+                    <div className="mt-1 w-full">
+                      <MarkdownEditor 
+                        value={newContextDescription} 
+                        onChange={handleDescriptionChange} 
+                      />
+                    </div>
                   </div>
                   
                   <div className="w-full">
