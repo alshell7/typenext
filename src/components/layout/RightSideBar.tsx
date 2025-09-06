@@ -313,85 +313,87 @@ export function RightSideBar({ children, className }: RightSideBarProps) {
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-hidden p-2">
         {contexts.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground">
             No contexts yet. Add your first context to get started.
           </div>
         ) : (
-          <div className="space-y-2">
-            {contexts.map(context => (
-              <div 
-                key={context.id}
-                className={cn(
-                  "p-3 rounded-lg border-2 transition-all hover:bg-accent relative",
-                  context.isActive 
-                    ? "border-primary bg-primary/10" 
-                    : "border-transparent hover:border-primary/30"
-                )}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleViewContext(context);
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  // Show dropdown menu with view and activate options
-                  // For now, we'll just show an alert with the options
-                  const shouldActivate = confirm(`Context: ${context.title}\n\nChoose an option:\n- OK: View context\n- Cancel: Activate context`);
-                  if (shouldActivate) {
-                    if (!context.isActive) {
-                      handleActivateContext(context.id);
-                    }
-                  } else {
+          <ScrollArea className="h-full w-full">
+            <div className="space-y-2 pr-3">
+              {contexts.map(context => (
+                <div 
+                  key={context.id}
+                  className={cn(
+                    "p-3 rounded-lg border-2 transition-all hover:bg-accent relative",
+                    context.isActive 
+                      ? "border-primary bg-primary/10" 
+                      : "border-transparent hover:border-primary/30"
+                  )}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     handleViewContext(context);
-                  }
-                }}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center">
-                      <h3 className="font-medium">{context.title}</h3>
-                      {context.isActive && (
-                        // Add blinking badge for active context
-                        <span className="ml-2 relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-                        </span>
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Show dropdown menu with view and activate options
+                    // For now, we'll just show an alert with the options
+                    const shouldActivate = confirm(`Context: ${context.title}\n\nChoose an option:\n- OK: View context\n- Cancel: Activate context`);
+                    if (shouldActivate) {
+                      if (!context.isActive) {
+                        handleActivateContext(context.id);
+                      }
+                    } else {
+                      handleViewContext(context);
+                    }
+                  }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center">
+                        <h3 className="font-medium">{context.title}</h3>
+                        {context.isActive && (
+                          // Add blinking badge for active context
+                          <span className="ml-2 relative flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                        {extractTextFromValue(context.description) || 'No description'}
+                      </p>
+                      {context.files.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {context.files.map((file, index) => (
+                            <span 
+                              key={index}
+                              className="inline-flex items-center px-2 py-1 text-xs bg-secondary rounded-full"
+                            >
+                              {file}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                      {extractTextFromValue(context.description) || 'No description'}
-                    </p>
-                    {context.files.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {context.files.map((file, index) => (
-                          <span 
-                            key={index}
-                            className="inline-flex items-center px-2 py-1 text-xs bg-secondary rounded-full"
-                          >
-                            {file}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteContext(context);
+                      }}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteContext(context);
-                    }}
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </Button>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </ScrollArea>
         )}
       </div>
       
