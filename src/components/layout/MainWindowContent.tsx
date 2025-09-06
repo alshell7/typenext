@@ -26,7 +26,7 @@ const initialValue: Value = [
     ],
   },
   // Add more paragraphs to demonstrate scrolling
-  ...Array(30).fill(null).map(() => ({
+  ...Array(5).fill(null).map(() => ({
     type: 'p',
     children: [{ text: 'This is another paragraph to demonstrate scrolling behavior. Add more content to see the scrollbar in action.' }],
   })),
@@ -58,3 +58,18 @@ export function MainWindowContent({
 }
 
 export default MainWindowContent
+
+//   return (
+//     <div className={cn('flex h-full flex-col bg-background', className)}>
+//       {children || (
+//         <Plate editor={editor}>
+//           <EditorContainer variant="default" className="h-full overflow-hidden">
+//             <ScrollArea className="h-full px-5 pt-0 pb-0 text-base sm:px-[max(64px,calc(50%-350px))]">
+//               <Editor placeholder="Type your amazing content here..." variant="none" className="w-full" />
+//             </ScrollArea>
+//           </EditorContainer>
+//         </Plate>
+//       )}
+//     </div>
+//   )
+// }
