@@ -25,6 +25,11 @@ const initialValue: Value = [
       { text: ' formatting.' },
     ],
   },
+  // Add more paragraphs to demonstrate scrolling
+  ...Array(30).fill(null).map(() => ({
+    type: 'p',
+    children: [{ text: 'This is another paragraph to demonstrate scrolling behavior. Add more content to see the scrollbar in action.' }],
+  })),
 ];
 
 export function MainWindowContent({
@@ -42,8 +47,8 @@ export function MainWindowContent({
   return (
     <div className={cn('flex h-full flex-col bg-background', className)}>
       {children || (
-        <Plate editor={editor} >
-          <EditorContainer variant="default">         {/* Styles the editor area */}
+        <Plate editor={editor}>
+          <EditorContainer variant="default" className="h-full overflow-y-auto">
             <Editor placeholder="Type your amazing content here..." />
           </EditorContainer>
         </Plate>
