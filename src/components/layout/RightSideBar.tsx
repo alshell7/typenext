@@ -329,6 +329,25 @@ export function RightSideBar({ children, className }: RightSideBarProps) {
                     ? "border-primary bg-primary/10" 
                     : "border-transparent hover:border-primary/30"
                 )}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleViewContext(context);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Show dropdown menu with view and activate options
+                  // For now, we'll just show an alert with the options
+                  const shouldActivate = confirm(`Context: ${context.title}\n\nChoose an option:\n- OK: View context\n- Cancel: Activate context`);
+                  if (shouldActivate) {
+                    if (!context.isActive) {
+                      handleActivateContext(context.id);
+                    }
+                  } else {
+                    handleViewContext(context);
+                  }
+                }}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -358,47 +377,17 @@ export function RightSideBar({ children, className }: RightSideBarProps) {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
-                    {/* Dropdown menu for context actions */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                        >
-                          <MoreHorizontalIcon className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={(e) => {
-                          e.preventDefault();
-                          handleViewContext(context);
-                        }}>
-                          View
-                        </DropdownMenuItem>
-                        {!context.isActive && (
-                          <DropdownMenuItem onSelect={(e) => {
-                            e.preventDefault();
-                            handleActivateContext(context.id);
-                          }}>
-                            Activate
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteContext(context);
-                      }}
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteContext(context);
+                    }}
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))}
