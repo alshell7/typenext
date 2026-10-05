@@ -3,7 +3,7 @@ name = "typenext"
 version = "0.1.0"
 description = "A calm, local-first Markdown notepad with contextual suggestions"
 authors = ["TypeNext contributors"]
-license = "AGPL-3.0-or-later"
+license = "MIT"
 edition = "2021"
 
 [lib]

@@ -1,0 +1,15 @@
+{
+  "name": "alloc-stdlib",
+  "version": "0.2.2",
+  "repository": "https://github.com/dropbox/rust-alloc-no-stdlib",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "6032b6a9b20e03737135c55a0270ccffcc1438ef",
+  "pathInVcs": "alloc-stdlib",
+  "files": [
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE",
+      "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae"
+    }
+  ]
+}

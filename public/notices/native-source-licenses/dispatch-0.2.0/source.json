@@ -1,0 +1,38 @@
+{
+  "name": "dispatch",
+  "version": "0.2.0",
+  "repository": "http://github.com/SSheldon/rust-dispatch",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "82d6c7a5b75dc0c71c3f46f87bb6c16a476f7748",
+  "pathInVcs": "",
+  "kind": "referenced-standard-license",
+  "selectedLicense": "MIT",
+  "declaredLicense": "MIT",
+  "authors": [
+    "Steven Sheldon"
+  ],
+  "standardLicense": {
+    "path": "LICENSE-MIT-standard.txt",
+    "url": "https://opensource.org/license/mit",
+    "sha256": "4790c01c0726db5d666ede1ad9b0875ed4789b89c9a38a37c7b214b707b69249",
+    "format": "Plain text extracted from the four canonical OSI license paragraphs; original placeholders and wording preserved."
+  },
+  "files": [
+    {
+      "path": "upstream/Cargo.toml",
+      "url": "https://raw.githubusercontent.com/SSheldon/rust-dispatch/82d6c7a5b75dc0c71c3f46f87bb6c16a476f7748/Cargo.toml",
+      "sha256": "05c60b829931ef7f1f130735843c11f5cf9cc69546eca5fc941d014781c68e31"
+    },
+    {
+      "path": "upstream/README.md",
+      "url": "https://raw.githubusercontent.com/SSheldon/rust-dispatch/82d6c7a5b75dc0c71c3f46f87bb6c16a476f7748/README.md",
+      "sha256": "9e581e0edb3dcc8238feda4bc709c8c91d43c286ac91f42cf6b0004c9335da58"
+    },
+    {
+      "path": "upstream/src/lib.rs",
+      "url": "https://raw.githubusercontent.com/SSheldon/rust-dispatch/82d6c7a5b75dc0c71c3f46f87bb6c16a476f7748/src/lib.rs",
+      "sha256": "1f75d8f3bb8dbc57449c8727c68d7c75e6a5cf20347617c96ab6a608f186612b"
+    }
+  ],
+  "review": "The pinned upstream material declares the selected license by name/reference but does not contain its full standard text. The separate standardLicense file is the canonical referenced text, not a reconstructed upstream copyright-bearing license. No holder or year has been invented."
+}

@@ -1,0 +1,38 @@
+Cactus Compute Whistle and Needle3 — attribution and modifications
+Audited 2026-10-06.
+
+Publisher: Cactus Compute / Cactus-Compute.
+Source repository: https://github.com/cactus-compute/needle
+Source-license revision: 9571a58b0ad3d0e4500afa6f4e00cffb8d6d1818
+
+Optional speech weights: Cactus-Compute/whistle
+Pinned revision: b358ddadd89b7a713b5aa131f23032d3cca1b251
+https://huggingface.co/Cactus-Compute/whistle/tree/b358ddadd89b7a713b5aa131f23032d3cca1b251
+File: whistle.cact, 16,919,407 bytes.
+SHA-256: b6e02f048568ac5d01a2042556c658061e699acbc0aa2a1439f52f3d461dffeb
+The repository declares Apache-2.0 and supplies a full LICENSE, copied
+verbatim from the pinned revision to Cactus-Whistle-LICENSE.txt.
+Weights are not included in the installer; an explicit download obtains
+the unmodified weights from upstream.
+
+Bundled browser speech runtime: Cactus-Compute/needle3
+Pinned revision: c7c415a3d1b3d929014bc6e866d51ebb971f7089
+https://huggingface.co/Cactus-Compute/needle3/tree/c7c415a3d1b3d929014bc6e866d51ebb971f7089
+The repository declares Apache-2.0 and supplies a full LICENSE, copied
+verbatim from the pinned revision to Cactus-Needle3-LICENSE.txt.
+
+Original needle.js: 62,823 bytes.
+SHA-256: f3f7366dcad9555b792ee519d2518f3c506038bcb2ffd179e76e850000749359
+TypeNext appends an ES module export, "export default createNeedle;".
+The modified JavaScript file itself includes a prominent modification comment.
+No original engine logic was changed. The modification and original hash
+are also recorded beside the runtime in public/runtime/whistle/NOTICE.
+
+needle.wasm: 903,655 bytes, unmodified.
+SHA-256: c19b9ddf9c7de4eb4f37e5f1811c5bbea9f099041d2a27284daf89789ee8523d
+The app supplies these bundled bytes directly to the runtime. The Needle
+CLI, its telemetry, tool-call model weights and native executables are not
+packaged or invoked by TypeNext. Whistle uses the shared speech API locally.
+
+TypeNext's MIT license does not replace the Apache licenses of Cactus
+software/models or grant permission to imply Cactus Compute endorsement.

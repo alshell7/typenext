@@ -10,7 +10,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
 p, h1, h2, h3 { margin: 0; }
 .site-header, main, footer { width: min(1160px, calc(100% - 72px)); margin: auto; }
 .site-header { min-height: 96px; display: flex; align-items: center; justify-content: space-between; }
-.wordmark { text-decoration: none; font-size: 24px; font-weight: 600; letter-spacing: -.035em; }
+.wordmark { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-size: 24px; font-weight: 600; letter-spacing: -.035em; }
+.wordmark img { display: block; flex-shrink: 0; object-fit: contain; }
 nav { display: flex; gap: 28px; font-size: 14px; color: var(--secondary); }
 nav a { text-decoration: none; }
 .introduction { max-width: 780px; padding: 65px 0 70px; }

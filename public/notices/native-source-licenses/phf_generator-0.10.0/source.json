@@ -1,0 +1,15 @@
+{
+  "name": "phf_generator",
+  "version": "0.10.0",
+  "repository": "https://github.com/sfackler/rust-phf",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "3ea14b2166553ad6e7b9afe7244144f5d661b6c6",
+  "pathInVcs": "",
+  "files": [
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/sfackler/rust-phf/3ea14b2166553ad6e7b9afe7244144f5d661b6c6/LICENSE",
+      "sha256": "d8870d5e2ab20fc50915b711c5aa7588131c9abcc1bcb980da1efd7486522a46"
+    }
+  ]
+}

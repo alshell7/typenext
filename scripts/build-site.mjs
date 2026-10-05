@@ -9,7 +9,7 @@ for (const file of [
   'context-preview.png',
 ])
   copyFileSync(`docs/screenshots/${file}`, `site-dist/assets/${file}`)
-copyFileSync('public/Icon.svg', 'site-dist/assets/Icon.svg')
+copyFileSync('public/Icon.png', 'site-dist/assets/Icon.png')
 copyFileSync(
   'public/notices/Lucide-LICENSE.txt',
   'site-dist/assets/Lucide-LICENSE.txt'

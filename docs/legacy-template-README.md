@@ -1,5 +1,7 @@
 # Tauri React Template
 
+> Archived template documentation. This file preserves the older template's wording and historical license reference. For current TypeNext features and the MIT release, see the [project README](../README.md) and [licensing record](licensing.md).
+
 A production-ready template for building modern desktop applications with Tauri v2, React 19, and TypeScript. This template provides a solid foundation with best practices, comprehensive documentation, and quality tooling built-in.
 
 ## 🚀 Features

@@ -1,0 +1,34 @@
+SmolLM2 optional text model — provenance and license declaration
+Audited 2026-10-06.
+
+Original model publisher: Hugging Face Smol Models Research / HuggingFaceTB.
+Original: HuggingFaceTB/SmolLM2-135M-Instruct
+https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct
+The original model card explicitly declares license: apache-2.0.
+Verified original card revision: 12fd25f77366fa6b3b4b768ec3050bf629380bac
+https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct/blob/12fd25f77366fa6b3b4b768ec3050bf629380bac/README.md
+The canonical Apache License 2.0 is provided in Apache-2.0-LICENSE.txt,
+obtained from https://www.apache.org/licenses/LICENSE-2.0.txt.
+
+ONNX conversion supplier: ONNX Community, published by Felladrin.
+Conversion: onnx-community/SmolLM2-135M-Instruct-ONNX
+Pinned revision: b8a5c0f183b78c55955a5364f610c36668b5e681
+https://huggingface.co/onnx-community/SmolLM2-135M-Instruct-ONNX/tree/b8a5c0f183b78c55955a5364f610c36668b5e681
+Selected file: onnx/model_quantized.onnx (Q8), 135,658,354 bytes.
+SHA-256: 0fab87142e3eb1fcacb881f8282e7473e62ad66920c347b81f088da6fda2da37
+The six-file download is 139,186,567 bytes including tokenizer/configuration.
+
+The pinned conversion repository supplies no README, LICENSE file or
+independent license metadata. The Apache declaration above is the original
+model's declaration; this notice does not invent a separate conversion
+license or claim TypeNext owns that artifact. Both upstream identities are
+retained, and the unmodified quantized artifact is fetched directly from
+the conversion repository only after the user initiates its download.
+Neither original nor converted weights are bundled in the TypeNext release.
+
+TypeNext uses the model with its own bounded prompt, output validation and
+runtime adapter. It does not modify, train or republish the weights. The
+experimental FIM training recipe does not change the distributed model.
+Hugging Face hosts the download; hosting does not make every hosted artifact
+subject to the same license. Upstream trademarks and endorsement are not
+granted by TypeNext's MIT license.

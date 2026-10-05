@@ -18,7 +18,6 @@ import {
   Search,
   Settings2,
   ShieldCheck,
-  SquarePen,
   Sun,
   Trash2,
   X,
@@ -84,6 +83,7 @@ import type { ContextSource, Note, Workspace } from './types/notebook'
 import './App.css'
 
 const MAX_STORED_CONTEXT_CHARACTERS = 2_000_000
+const BRAND_ICON_URL = `${import.meta.env.BASE_URL}Icon.png`
 
 function App() {
   const {
@@ -1056,7 +1056,15 @@ function App() {
     >
       <aside className="note-sidebar" aria-label="Notebook">
         <div className="sidebar-brand" data-tauri-drag-region>
-          <SquarePen size={21} strokeWidth={1.6} />
+          <img
+            className="brand-mark"
+            src={BRAND_ICON_URL}
+            alt=""
+            width={22}
+            height={22}
+            draggable={false}
+            data-tauri-drag-region
+          />
           <span>TypeNext</span>
           <span className="brand-detail">a place for your words</span>
         </div>
@@ -1191,7 +1199,16 @@ function App() {
               <PanelLeft size={18} />
             </button>
             <div className="breadcrumb" data-tauri-drag-region>
-              <span>Notebook</span>
+              <img
+                className="brand-mark toolbar-brand-mark"
+                src={BRAND_ICON_URL}
+                alt="TypeNext"
+                width={18}
+                height={18}
+                draggable={false}
+                data-tauri-drag-region
+              />
+              <span className="breadcrumb-section">Notebook</span>
               <ChevronRight size={13} />
               <span>{note?.title ?? 'A fresh start'}</span>
             </div>
@@ -1583,7 +1600,14 @@ function App() {
           ) : (
             <section className="welcome-view">
               <div className="welcome-mark">
-                <SquarePen size={32} strokeWidth={1.25} />
+                <img
+                  className="brand-mark"
+                  src={BRAND_ICON_URL}
+                  alt=""
+                  width={40}
+                  height={40}
+                  draggable={false}
+                />
               </div>
               <h1>A little room to think.</h1>
               <p>

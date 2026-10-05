@@ -1,0 +1,1942 @@
+{
+  "schemaVersion": 1,
+  "auditedAt": "2026-10-06",
+  "lockfile": "package-lock.json",
+  "lockfileSha256": "251c0e02596da790a7b6030d97e991531dae21ba3b0b695936885f3ede471b94",
+  "scope": "Installed non-dev npm packages, including conservative notices for supporting/Node-only packages. TypeNext ships a browser/Tauri frontend, not Node, sharp/libvips, onnxruntime-node or native canvas binaries. Models download separately.",
+  "packages": [
+    {
+      "name": "@codemirror/autocomplete",
+      "version": "6.20.3",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/codemirror/autocomplete.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/autocomplete/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@codemirror/commands",
+      "version": "6.11.1",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/codemirror/commands.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/commands/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@codemirror/lang-css",
+      "version": "6.3.1",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/codemirror/lang-css.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/lang-css/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@codemirror/lang-html",
+      "version": "6.4.12",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/codemirror/lang-html.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/lang-html/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@codemirror/lang-javascript",
+      "version": "6.2.5",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/codemirror/lang-javascript.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/lang-javascript/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@codemirror/lang-markdown",
+      "version": "6.5.2",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/codemirror/lang-markdown.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/lang-markdown/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@codemirror/language",
+      "version": "6.12.4",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/codemirror/language.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/language/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@codemirror/lint",
+      "version": "6.9.7",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/codemirror/lint.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/lint/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@codemirror/state",
+      "version": "6.7.6",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/codemirror/state.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/state/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@codemirror/view",
+      "version": "6.43.13",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/codemirror/view.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07",
+          "source": "node_modules/@codemirror/view/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@fontsource/alegreya",
+      "version": "5.3.0",
+      "declaredLicense": "OFL-1.1",
+      "upstream": "git+https://github.com/fontsource/font-files.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a616403914fd16d254244f482b348af457a54f7e79a7919daec24129c1bd3571",
+          "source": "node_modules/@fontsource/alegreya/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@fontsource/eb-garamond",
+      "version": "5.3.0",
+      "declaredLicense": "OFL-1.1",
+      "upstream": "git+https://github.com/fontsource/font-files.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "f03c8eda63076cd52317dcd40aa04db8472d4cb592dfaafa385129dfdafc7f9c",
+          "source": "node_modules/@fontsource/eb-garamond/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@fontsource/ibm-plex-mono",
+      "version": "5.3.0",
+      "declaredLicense": "OFL-1.1",
+      "upstream": "git+https://github.com/fontsource/font-files.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "23b0a9d0c6d3f140a0b77e483c5cfa6bba574325ef5cb189ed9f2fec4884533f",
+          "source": "node_modules/@fontsource/ibm-plex-mono/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@fontsource/jetbrains-mono",
+      "version": "5.3.0",
+      "declaredLicense": "OFL-1.1",
+      "upstream": "git+https://github.com/fontsource/font-files.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "403581b69dac5cff4079205e01c6b467e56af449ecbd7247693ddb1baafa005b",
+          "source": "node_modules/@fontsource/jetbrains-mono/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@fontsource/merriweather",
+      "version": "5.3.0",
+      "declaredLicense": "OFL-1.1",
+      "upstream": "git+https://github.com/fontsource/font-files.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "aa677c3f7682d9c4f7aa48fae3f3b9d0f8d70ac6ab47b9bc20a9cc2879e15af0",
+          "source": "node_modules/@fontsource/merriweather/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@fontsource/source-sans-pro",
+      "version": "5.3.0",
+      "declaredLicense": "OFL-1.1",
+      "upstream": "https://github.com/fontsource/font-files.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3",
+          "source": "node_modules/@fontsource/source-sans-pro/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@huggingface/jinja",
+      "version": "0.5.10",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/huggingface/huggingface.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "d6e7b19451c1b3d1d66353bb4b1274138953b3bfd9ae60c56e77b1f548796982",
+          "source": "node_modules/@huggingface/jinja/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@huggingface/tokenizers",
+      "version": "0.2.0",
+      "declaredLicense": "Apache-2.0",
+      "upstream": "git+https://github.com/huggingface/tokenizers.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "source": "node_modules/@huggingface/tokenizers/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@huggingface/transformers",
+      "version": "4.3.0",
+      "declaredLicense": "Apache-2.0",
+      "upstream": "git+https://github.com/huggingface/transformers.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "source": "node_modules/@huggingface/transformers/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@img/colour",
+      "version": "1.1.0",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/lovell/colour.git",
+      "distribution": "Node-only package; native binaries are not bundled in TypeNext",
+      "licenses": [
+        {
+          "sha256": "e2eaa4603c14cb26f301e88648c12a853fa3f0f5da6d4b0972958c666e7f2ab8",
+          "source": "node_modules/@img/colour/LICENSE.md",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-win32-x64",
+      "version": "0.35.5",
+      "declaredLicense": "Apache-2.0 AND LGPL-3.0-or-later",
+      "upstream": "git+https://github.com/lovell/sharp.git",
+      "distribution": "Node-only package; native binaries are not bundled in TypeNext",
+      "licenses": [
+        {
+          "sha256": "dc1f5d2d43c5531dfe0acaf4e950ea5dbe3e61e1850cf0e983bda7efc10d6693",
+          "source": "node_modules/@img/sharp-win32-x64/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@lezer/common",
+      "version": "1.5.3",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/lezer/common.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "568902fb66eaf1f11750e966b33fd7b5d7c618e65af09f35ef843635bcf5f1ba",
+          "source": "node_modules/@lezer/common/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@lezer/css",
+      "version": "1.3.8",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/lezer/css.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "568902fb66eaf1f11750e966b33fd7b5d7c618e65af09f35ef843635bcf5f1ba",
+          "source": "node_modules/@lezer/css/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@lezer/highlight",
+      "version": "1.2.5",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/lezer/highlight.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "568902fb66eaf1f11750e966b33fd7b5d7c618e65af09f35ef843635bcf5f1ba",
+          "source": "node_modules/@lezer/highlight/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@lezer/html",
+      "version": "1.3.13",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/lezer-parser/html.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "568902fb66eaf1f11750e966b33fd7b5d7c618e65af09f35ef843635bcf5f1ba",
+          "source": "node_modules/@lezer/html/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@lezer/javascript",
+      "version": "1.5.6",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/lezer/javascript.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "568902fb66eaf1f11750e966b33fd7b5d7c618e65af09f35ef843635bcf5f1ba",
+          "source": "node_modules/@lezer/javascript/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@lezer/lr",
+      "version": "1.4.10",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/lezer/lr.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "568902fb66eaf1f11750e966b33fd7b5d7c618e65af09f35ef843635bcf5f1ba",
+          "source": "node_modules/@lezer/lr/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@lezer/markdown",
+      "version": "1.7.2",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/lezer/markdown.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "54bd812a6d334e0c438b78a43cea74b67e882739fd3450115ddc7c52be5706c1",
+          "source": "node_modules/@lezer/markdown/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@marijn/find-cluster-break",
+      "version": "1.0.4",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/marijn/find-cluster-break.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "9360b00fdd091f05c783b568bdd46c679c41b72415599252de98949462ea1acb",
+          "source": "node_modules/@marijn/find-cluster-break/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@mozilla/readability",
+      "version": "0.6.0",
+      "declaredLicense": "Apache-2.0",
+      "upstream": "https://github.com/mozilla/readability",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a5b1e8181751ce05b85b7bfaa832b785e87086250a5148e679d17ca9bdcfa958",
+          "source": "node_modules/@mozilla/readability/LICENSE.md",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@napi-rs/canvas",
+      "version": "1.0.10",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/Brooooooklyn/canvas.git",
+      "distribution": "Node-only package; native binaries are not bundled in TypeNext",
+      "licenses": [
+        {
+          "sha256": "8802fecf9da4367bc23bcf20b21cc143785fc6c92b152f3fa7fbe6ce08d344d6",
+          "source": "node_modules/@napi-rs/canvas/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@napi-rs/canvas-win32-x64-msvc",
+      "version": "1.0.10",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/Brooooooklyn/canvas.git",
+      "distribution": "Node-only package; native binaries are not bundled in TypeNext",
+      "licenses": [
+        {
+          "sha256": "8802fecf9da4367bc23bcf20b21cc143785fc6c92b152f3fa7fbe6ce08d344d6",
+          "source": "Brooooooklyn/canvas@v1.0.10/LICENSE",
+          "kind": "upstream"
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/aspromise",
+      "version": "1.1.2",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/dcodeIO/protobuf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794",
+          "source": "node_modules/@protobufjs/aspromise/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/base64",
+      "version": "1.1.2",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/dcodeIO/protobuf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794",
+          "source": "node_modules/@protobufjs/base64/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/codegen",
+      "version": "2.0.5",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/dcodeIO/protobuf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794",
+          "source": "node_modules/@protobufjs/codegen/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/eventemitter",
+      "version": "1.1.1",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/dcodeIO/protobuf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794",
+          "source": "node_modules/@protobufjs/eventemitter/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/fetch",
+      "version": "1.1.1",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/dcodeIO/protobuf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794",
+          "source": "node_modules/@protobufjs/fetch/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/float",
+      "version": "1.0.2",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/dcodeIO/protobuf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794",
+          "source": "node_modules/@protobufjs/float/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/path",
+      "version": "1.1.2",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/dcodeIO/protobuf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794",
+          "source": "node_modules/@protobufjs/path/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/pool",
+      "version": "1.1.0",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/dcodeIO/protobuf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794",
+          "source": "node_modules/@protobufjs/pool/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/utf8",
+      "version": "1.1.2",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/protobufjs/protobuf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794",
+          "source": "node_modules/@protobufjs/utf8/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/primitive",
+      "version": "1.1.7",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/primitive/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-compose-refs",
+      "version": "1.1.5",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-compose-refs/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-context",
+      "version": "1.2.2",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-context/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-dialog",
+      "version": "1.1.23",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-dialog/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-dismissable-layer",
+      "version": "1.1.19",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-dismissable-layer/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-focus-guards",
+      "version": "1.1.6",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-focus-guards/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-focus-scope",
+      "version": "1.1.16",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-focus-scope/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-id",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-id/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-portal",
+      "version": "1.1.17",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-portal/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-presence",
+      "version": "1.1.10",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-presence/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-primitive",
+      "version": "2.1.10",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-primitive/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-slot",
+      "version": "1.3.3",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-slot/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-callback-ref",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-use-callback-ref/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-controllable-state",
+      "version": "1.2.6",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-use-controllable-state/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-effect-event",
+      "version": "0.0.5",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-use-effect-event/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-layout-effect",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "source": "node_modules/@radix-ui/react-use-layout-effect/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@tauri-apps/api",
+      "version": "2.8.0",
+      "declaredLicense": "Apache-2.0 OR MIT",
+      "upstream": "git+https://github.com/tauri-apps/tauri.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+          "source": "tauri-apps/tauri@tauri-v2.8.0/LICENSE_MIT",
+          "kind": "upstream"
+        }
+      ]
+    },
+    {
+      "name": "@tauri-apps/plugin-dialog",
+      "version": "2.4.0",
+      "declaredLicense": "MIT OR Apache-2.0",
+      "upstream": "https://github.com/tauri-apps/plugins-workspace",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "eb8a6c84630461b352badcab1dbe5d0168c56d377358b2b8c86b51003272d5ef",
+          "source": "node_modules/@tauri-apps/plugin-dialog/LICENSE.spdx",
+          "kind": "package"
+        },
+        {
+          "sha256": "89ff9689dcf9dd53968785d05a26f7898bb169dbfcada8d032b3e68cf0d55607",
+          "source": "tauri-apps/plugins-workspace/LICENSE_MIT",
+          "kind": "upstream"
+        }
+      ]
+    },
+    {
+      "name": "@tauri-apps/plugin-fs",
+      "version": "2.4.2",
+      "declaredLicense": "MIT OR Apache-2.0",
+      "upstream": "https://github.com/tauri-apps/plugins-workspace",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "eb8a6c84630461b352badcab1dbe5d0168c56d377358b2b8c86b51003272d5ef",
+          "source": "node_modules/@tauri-apps/plugin-fs/LICENSE.spdx",
+          "kind": "package"
+        },
+        {
+          "sha256": "89ff9689dcf9dd53968785d05a26f7898bb169dbfcada8d032b3e68cf0d55607",
+          "source": "tauri-apps/plugins-workspace/LICENSE_MIT",
+          "kind": "upstream"
+        }
+      ]
+    },
+    {
+      "name": "@types/node",
+      "version": "24.19.1",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "source": "node_modules/@types/node/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@types/prop-types",
+      "version": "15.7.15",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "source": "node_modules/@types/prop-types/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@types/react",
+      "version": "18.3.31",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "source": "node_modules/@types/react/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@types/react-dom",
+      "version": "18.3.7",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "source": "node_modules/@types/react-dom/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "@xmldom/xmldom",
+      "version": "0.8.15",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/xmldom/xmldom.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "4da724fc305d81606b245b324d4d2586916b9d248b23d82183df753ace0fdf71",
+          "source": "node_modules/@xmldom/xmldom/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "adm-zip",
+      "version": "0.6.1",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/cthackers/adm-zip.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "6bb5b2d4c07d793ca928daa63a8899c6914fafb5ac3aa04ec10cae07f3d57dca",
+          "source": "node_modules/adm-zip/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "aria-hidden",
+      "version": "1.2.6",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/theKashey/aria-hidden.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "source": "node_modules/aria-hidden/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "base64-js",
+      "version": "1.5.1",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/beatgammit/base64-js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "5b37224c080cdcc97c871ada971c224e9926370fe74f11b539aa1cf9f3b1aca1",
+          "source": "node_modules/base64-js/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "core-util-is",
+      "version": "1.0.3",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/isaacs/core-util-is",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "33b734d60042d0fe0c92dd1fc1e874193a1c899ec3e276a2eb935d2d0bf5b710",
+          "source": "node_modules/core-util-is/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "crelt",
+      "version": "1.0.7",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/marijn/crelt.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "23852ebf6aef7fadffc92514b3c5df163a8651f2c3ed0dbb494cb49d93bd5de5",
+          "source": "node_modules/crelt/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "csstype",
+      "version": "3.2.3",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/frenic/csstype",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "11d55bd4541c75ee7879547ac49089c489163dae49551389713c3d026cab383e",
+          "source": "node_modules/csstype/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "define-data-property",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/ljharb/define-data-property.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "b41d08bc3624d8c436fc80237d73ebb361985a67f4504bbcd703e5ca2b27254c",
+          "source": "node_modules/define-data-property/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "define-properties",
+      "version": "1.2.1",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/ljharb/define-properties.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "00d402c2bbe7c67369bd01ce2c16b8ed46ccc949a1ee2d6bb8f9606afa8c7434",
+          "source": "node_modules/define-properties/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "detect-libc",
+      "version": "2.1.2",
+      "declaredLicense": "Apache-2.0",
+      "upstream": "git://github.com/lovell/detect-libc.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+          "source": "node_modules/detect-libc/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "detect-node-es",
+      "version": "1.1.0",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/thekashey/detect-node",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "54b32293ea560d22cd9b62af9b2cda1a030d910a48c6601d227c5ff2338d95f8",
+          "source": "node_modules/detect-node-es/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "dingbat-to-unicode",
+      "version": "1.0.2",
+      "declaredLicense": "BSD-2-Clause",
+      "upstream": "git+https://github.com/mwilliamson/dingbat-to-unicode.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "1013cef4b629a3c7eaf737c110fb5bebbf3abbc16e154d769468d71c3653fa37",
+          "source": "node_modules/dingbat-to-unicode/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "duck",
+      "version": "0.1.12",
+      "declaredLicense": "BSD",
+      "upstream": "https://github.com/mwilliamson/duck.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "6663bbd049205d38a496ccacb412a151980b444627d38de218b3b809aef330f1",
+          "source": "node_modules/duck/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "es-define-property",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/ljharb/es-define-property.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "5e325595b4ea8cfec3802f545b1def5d7b73e4a5b8e9ba63e32a320f67732292",
+          "source": "node_modules/es-define-property/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "es-errors",
+      "version": "1.3.0",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/ljharb/es-errors.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "5e325595b4ea8cfec3802f545b1def5d7b73e4a5b8e9ba63e32a320f67732292",
+          "source": "node_modules/es-errors/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "escape-string-regexp",
+      "version": "4.0.0",
+      "declaredLicense": "MIT",
+      "upstream": "sindresorhus/escape-string-regexp",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+          "source": "node_modules/escape-string-regexp/license",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "fflate",
+      "version": "0.8.3",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/101arrowz/fflate",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+          "source": "node_modules/fflate/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "flatbuffers",
+      "version": "25.9.23",
+      "declaredLicense": "Apache-2.0",
+      "upstream": "git+https://github.com/google/flatbuffers.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "source": "node_modules/flatbuffers/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "get-nonce",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "upstream": "git@github.com:theKashey/get-nonce.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "acf3b087b348d2f2e731b9d4131af185aad694c1204ce14a46909483fd42da05",
+          "source": "node_modules/get-nonce/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "global-agent",
+      "version": "4.1.3",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/gajus/global-agent",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "2aabdab5d0ce03a7314def8222988c2da4ba593ae82ae312439e5e306001dbae",
+          "source": "node_modules/global-agent/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "semver",
+      "version": "7.8.5",
+      "declaredLicense": "ISC",
+      "upstream": "git+https://github.com/npm/node-semver.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b",
+          "source": "node_modules/global-agent/node_modules/semver/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "globalthis",
+      "version": "1.0.4",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/ljharb/System.global.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "acfaf437865d82f0fa9b9cdcae8b550bed8d011adaa5b42d973191caf99f62a8",
+          "source": "node_modules/globalthis/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "gopd",
+      "version": "1.2.0",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/ljharb/gopd.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "d90bf0a089da4cf43d644ed240a0b3825dcdb705e64e38371d56995a4cc9e4c5",
+          "source": "node_modules/gopd/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "guid-typescript",
+      "version": "1.0.9",
+      "declaredLicense": "ISC",
+      "upstream": "https://github.com/NicolasDeveloper/guid-typescript",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "7b7d9cccacb7c923b4824996694fb8feca5fefedffe1480fd08022563615a9df",
+          "source": "node_modules/guid-typescript/package.json; SPDX ISC reference",
+          "kind": "declared-license-reference"
+        }
+      ]
+    },
+    {
+      "name": "has-property-descriptors",
+      "version": "1.0.2",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/inspect-js/has-property-descriptors.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0f0ca96f50793990031ebc488a38f7292ff70bce8ab6a8e5eeda674abc32ccdf",
+          "source": "node_modules/has-property-descriptors/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "immediate",
+      "version": "3.0.6",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/calvinmetcalf/immediate.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "809e66de579fb7d92503848bbe6d1f348f4f6521a71e5d294fe7cc0c87a3b4ff",
+          "source": "node_modules/immediate/LICENSE.txt",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "inherits",
+      "version": "2.0.4",
+      "declaredLicense": "ISC",
+      "upstream": "git://github.com/isaacs/inherits",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "5ffe28e7ade7d8f10d85d5337a73fd793dac5c462fb9a28fbf8c5046c7fbca3b",
+          "source": "node_modules/inherits/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "isarray",
+      "version": "1.0.0",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/juliangruber/isarray.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "66aa9feab8bb39aceebd69f2a357015d57ceab486d3c7a19ff8d3d4110a6d101",
+          "source": "node_modules/isarray/README.md#License",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "js-tokens",
+      "version": "4.0.0",
+      "declaredLicense": "MIT",
+      "upstream": "lydell/js-tokens",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "2213d91c606205c71eb051a199478cdc2adde945893404d7f1421436dd6d5cc1",
+          "source": "node_modules/js-tokens/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "jszip",
+      "version": "3.10.2",
+      "declaredLicense": "(MIT OR GPL-3.0-or-later)",
+      "upstream": "https://github.com/Stuk/jszip.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "566c953c6090b1218ca6217dd7359d45dde46581968586dc607d59a78af6a9c4",
+          "source": "node_modules/jszip/LICENSE.markdown",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "lie",
+      "version": "3.3.0",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/calvinmetcalf/lie.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "5c81b0caa98593408b03125efa25efe622341ed87ae55561968828cd887d64a4",
+          "source": "node_modules/lie/license.md",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "long",
+      "version": "5.3.2",
+      "declaredLicense": "Apache-2.0",
+      "upstream": "https://github.com/dcodeIO/long.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "source": "node_modules/long/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "loose-envify",
+      "version": "1.4.0",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/zertosh/loose-envify.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "4eb7543b08d955a6d23fcc224601d43ff566e775be918805e26210d7f6eb4893",
+          "source": "node_modules/loose-envify/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "lop",
+      "version": "0.4.2",
+      "declaredLicense": "BSD-2-Clause",
+      "upstream": "https://github.com/mwilliamson/lop.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "6663bbd049205d38a496ccacb412a151980b444627d38de218b3b809aef330f1",
+          "source": "node_modules/lop/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "lucide-react",
+      "version": "0.542.0",
+      "declaredLicense": "ISC",
+      "upstream": "https://github.com/lucide-icons/lucide.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "3c57143f22dac950efebf84002e360bba5458c7b90fe583b0667aaaef1a7256e",
+          "source": "node_modules/lucide-react/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "mammoth",
+      "version": "1.13.0",
+      "declaredLicense": "BSD-2-Clause",
+      "upstream": "https://github.com/mwilliamson/mammoth.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "6663bbd049205d38a496ccacb412a151980b444627d38de218b3b809aef330f1",
+          "source": "node_modules/mammoth/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "argparse",
+      "version": "1.0.10",
+      "declaredLicense": "MIT",
+      "upstream": "nodeca/argparse",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "c8442419dc614089ea022b3da6bfc089b41a58fb7b9030d1e651f2f36189dce2",
+          "source": "node_modules/mammoth/node_modules/argparse/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "matcher",
+      "version": "4.0.0",
+      "declaredLicense": "MIT",
+      "upstream": "sindresorhus/matcher",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+          "source": "node_modules/matcher/license",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "object-keys",
+      "version": "1.1.1",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/ljharb/object-keys.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "5640e5cbe2e9f57f6ccfdd8dbfbeadb875495bdbcb69d2666ce3177ccd0942e4",
+          "source": "node_modules/object-keys/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "onnxruntime-common",
+      "version": "1.30.0",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/Microsoft/onnxruntime.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+          "source": "microsoft/onnxruntime@8d85527a0/LICENSE",
+          "kind": "upstream"
+        }
+      ]
+    },
+    {
+      "name": "onnxruntime-node",
+      "version": "1.30.0",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/Microsoft/onnxruntime.git",
+      "distribution": "Node-only package; native binaries are not bundled in TypeNext",
+      "licenses": [
+        {
+          "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+          "source": "microsoft/onnxruntime@8d85527a0/LICENSE",
+          "kind": "upstream"
+        }
+      ]
+    },
+    {
+      "name": "onnxruntime-web",
+      "version": "1.31.0-dev.20260914-8d85527a0",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/Microsoft/onnxruntime.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+          "source": "microsoft/onnxruntime@8d85527a0/LICENSE",
+          "kind": "upstream"
+        }
+      ]
+    },
+    {
+      "name": "onnxruntime-common",
+      "version": "1.31.0-dev.20260911-2a43ec07e",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/Microsoft/onnxruntime.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+          "source": "microsoft/onnxruntime@8d85527a0/LICENSE",
+          "kind": "upstream"
+        }
+      ]
+    },
+    {
+      "name": "option",
+      "version": "0.2.4",
+      "declaredLicense": "BSD-2-Clause",
+      "upstream": "https://github.com/mwilliamson/node-options.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "6663bbd049205d38a496ccacb412a151980b444627d38de218b3b809aef330f1",
+          "source": "node_modules/option/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "pako",
+      "version": "1.0.11",
+      "declaredLicense": "(MIT AND Zlib)",
+      "upstream": "nodeca/pako",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539",
+          "source": "node_modules/pako/LICENSE",
+          "kind": "package"
+        },
+        {
+          "sha256": "170d7d544d380b38d5f76ab5eda29475b44ef537f4564163d6d9bece85c51c13",
+          "source": "node_modules/pako/lib/zlib/deflate.js header",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "pdfjs-dist",
+      "version": "6.2.108",
+      "declaredLicense": "Apache-2.0",
+      "upstream": "git+https://github.com/mozilla/pdf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+          "source": "node_modules/pdfjs-dist/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "platform",
+      "version": "1.3.6",
+      "declaredLicense": "MIT",
+      "upstream": "bestiejs/platform.js",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "4a161ebed4f1ef933e16ccfa00d86c718703f5d015a9987ea7ce1bb72a43cd22",
+          "source": "node_modules/platform/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "process-nextick-args",
+      "version": "2.0.1",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/calvinmetcalf/process-nextick-args.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "ecdccbcf39024f624ded480c01c0b25458e1eca8f26ecf040933865ce56d9a4f",
+          "source": "node_modules/process-nextick-args/license.md",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "protobufjs",
+      "version": "7.6.6",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "protobufjs/protobuf.js",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "49d6a1c9a623784c61c6cb70f773f3457faceb1914a13c8560a9823b7631950c",
+          "source": "node_modules/protobufjs/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "react",
+      "version": "18.3.1",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/facebook/react.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "source": "node_modules/react/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "react-dom",
+      "version": "18.3.1",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/facebook/react.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "source": "node_modules/react-dom/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "react-remove-scroll",
+      "version": "2.7.2",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/theKashey/react-remove-scroll",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "source": "node_modules/react-remove-scroll/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "react-remove-scroll-bar",
+      "version": "2.3.8",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/theKashey/react-remove-scroll-bar",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a79aae0c0f21990d9d963bb3c5a79cdcea9a46f8523ba55c58d7fe776b6ebc84",
+          "source": "theKashey/react-remove-scroll-bar/LICENSE",
+          "kind": "upstream"
+        }
+      ]
+    },
+    {
+      "name": "react-style-singleton",
+      "version": "2.2.3",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/theKashey/react-style-singleton",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "source": "node_modules/react-style-singleton/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "readable-stream",
+      "version": "2.3.8",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/nodejs/readable-stream",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "ec62dc96da0099b87f4511736c87309335527fb7031639493e06c95728dc8c54",
+          "source": "node_modules/readable-stream/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "safe-buffer",
+      "version": "5.1.2",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/feross/safe-buffer.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "c7cc929b57080f4b9d0c6cf57669f0463fc5b39906344dfc8d3bc43426b30eac",
+          "source": "node_modules/safe-buffer/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "scheduler",
+      "version": "0.23.2",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/facebook/react.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "source": "node_modules/scheduler/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "serialize-error",
+      "version": "8.1.0",
+      "declaredLicense": "MIT",
+      "upstream": "sindresorhus/serialize-error",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+          "source": "node_modules/serialize-error/license",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "setimmediate",
+      "version": "1.0.5",
+      "declaredLicense": "MIT",
+      "upstream": "YuzuJS/setImmediate",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "c4b4ad3a5746f1f5249a6dd90396ec519264e1bb02e01e48a6522c48a3a97cb4",
+          "source": "node_modules/setimmediate/LICENSE.txt",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "sharp",
+      "version": "0.35.5",
+      "declaredLicense": "Apache-2.0",
+      "upstream": "git+https://github.com/lovell/sharp.git",
+      "distribution": "Node-only package; native binaries are not bundled in TypeNext",
+      "licenses": [
+        {
+          "sha256": "73ba74dfaa520b49a401b5d21459a8523a146f3b7518a833eea5efa85130bf68",
+          "source": "node_modules/sharp/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "semver",
+      "version": "7.8.5",
+      "declaredLicense": "ISC",
+      "upstream": "git+https://github.com/npm/node-semver.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b",
+          "source": "node_modules/sharp/node_modules/semver/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "sprintf-js",
+      "version": "1.0.3",
+      "declaredLicense": "BSD-3-Clause",
+      "upstream": "https://github.com/alexei/sprintf.js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a4cdda44b5adea4731d53dcae78fb5124f8fd853e994f01e25d8c33a7daf818b",
+          "source": "node_modules/sprintf-js/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "string_decoder",
+      "version": "1.1.1",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/nodejs/string_decoder.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "11f2aafb37d06b3ee5bdaf06e9811141d0da05263c316f3d627f45c20d43261b",
+          "source": "node_modules/string_decoder/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "style-mod",
+      "version": "4.1.4",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://code.haverbeke.berlin/marijn/style-mod.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "cb4474e26547397169061d3586c00022cda5330a1b64fa13e872319f3b63aff1",
+          "source": "node_modules/style-mod/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "tslib",
+      "version": "2.8.1",
+      "declaredLicense": "0BSD",
+      "upstream": "https://github.com/Microsoft/tslib.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751",
+          "source": "node_modules/tslib/LICENSE.txt",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "type-fest",
+      "version": "0.20.2",
+      "declaredLicense": "(MIT OR CC0-1.0)",
+      "upstream": "sindresorhus/type-fest",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "64a93ffc0a06a2266dbb57ed7ebe3b56ba66ab337b6347fabdbf86c76819fbae",
+          "source": "node_modules/type-fest/license",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "underscore",
+      "version": "1.13.8",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/jashkenas/underscore.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "92905fb54f5d168a27e6d5dc7c2197020add11842be4c70689d084bae3bfe37a",
+          "source": "node_modules/underscore/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "undici-types",
+      "version": "7.24.6",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/nodejs/undici.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "a6db8096b2707bc0102d256917d4d33f298ba36d8c3f25de067a2b5bb379db27",
+          "source": "node_modules/undici-types/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "use-callback-ref",
+      "version": "1.3.3",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/theKashey/use-callback-ref/",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "source": "node_modules/use-callback-ref/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "use-sidecar",
+      "version": "1.1.3",
+      "declaredLicense": "MIT",
+      "upstream": "https://github.com/theKashey/use-sidecar",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "source": "node_modules/use-sidecar/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "util-deprecate",
+      "version": "1.0.2",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/TooTallNate/util-deprecate.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "0154425673db15cdfa80ecba2c9b1f1a867f7197a006764712849bfc3a93cbb7",
+          "source": "node_modules/util-deprecate/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "w3c-keyname",
+      "version": "2.2.8",
+      "declaredLicense": "MIT",
+      "upstream": "git+https://github.com/marijnh/w3c-keyname.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "869c30f368eb08735e779027b9f4bc9fea2f39624351856aebe42741f0bc0884",
+          "source": "node_modules/w3c-keyname/LICENSE",
+          "kind": "package"
+        }
+      ]
+    },
+    {
+      "name": "xmlbuilder",
+      "version": "10.1.1",
+      "declaredLicense": "MIT",
+      "upstream": "git://github.com/oozcitak/xmlbuilder-js.git",
+      "distribution": "Conservative production dependency inventory; see browser bundle scope",
+      "licenses": [
+        {
+          "sha256": "8ad16994acb18814fcd2ff6d0b559906b842047b995baf33fd0c55e4d24cbac8",
+          "source": "node_modules/xmlbuilder/LICENSE",
+          "kind": "package"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "name": "objc2-exception-helper",
+  "version": "0.1.1",
+  "repository": "https://github.com/madsmtm/objc2",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "8d214f5477365ffcbcbb7de058c86ed9a518efb7",
+  "pathInVcs": "crates/objc2-exception-helper",
+  "kind": "referenced-standard-license",
+  "selectedLicense": "Apache-2.0",
+  "declaredLicense": "Zlib OR Apache-2.0 OR MIT",
+  "authors": [
+    "Mads Marquart <mads@marquart.dk>"
+  ],
+  "standardLicense": {
+    "path": "LICENSE-APACHE-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  "files": [
+    {
+      "path": "upstream/Cargo.toml",
+      "url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/crates/objc2-exception-helper/Cargo.toml",
+      "sha256": "b8bf2ffec7fd293d53a316893362ca12e06c3f1fef1fa2d476161e256214ee6e"
+    },
+    {
+      "path": "upstream/README.md",
+      "url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/crates/objc2-exception-helper/README.md",
+      "sha256": "b0afbec3a223fc72d479bf60dd84311b622b4d9fb283a8dd60068d0e87d2b66a"
+    },
+    {
+      "path": "upstream/src/lib.rs",
+      "url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/crates/objc2-exception-helper/src/lib.rs",
+      "sha256": "06f4241213dd4c5887e1e4cd79a6d37a1db2b39ea3c0fb0f37a3187a70124b0c"
+    },
+    {
+      "path": "upstream/LICENSE.md",
+      "url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    }
+  ],
+  "review": "The pinned upstream material declares the selected license by name/reference but does not contain its full standard text. The separate standardLicense file is the canonical referenced text, not a reconstructed upstream copyright-bearing license. No holder or year has been invented."
+}

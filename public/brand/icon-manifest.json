@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "master": "public/brand/logo-master.png",
+  "masterSha256": "3c38618f0b8a60f685cd31feb78f249fddb336b7cda07ea4e27495ed3628ed4c",
+  "uiIcon": {
+    "path": "public/Icon.png",
+    "sha256": "1a62cd90b56a4f070526a4374427454dff1e22d41c80adbd51e5ac80df975496"
+  },
+  "icons": {
+    "src-tauri/icons/32x32.png": "a153f55612a0e57cca80fb23eabfbaa0e874c6f324118ed140c83d8109c06136",
+    "src-tauri/icons/64x64.png": "42bc3593cec878c4344b07c1f87b09a8a3463e239359d9ff7cafbb6f63ca1c34",
+    "src-tauri/icons/128x128.png": "a93517472c2c271cab11e33b645a44a7905c4a21266164e84cec62c8460fad12",
+    "src-tauri/icons/128x128@2x.png": "1a62cd90b56a4f070526a4374427454dff1e22d41c80adbd51e5ac80df975496",
+    "src-tauri/icons/1024x1024.png": "2c523656e099e4db0ff768053deef2a04854e4cbff3c31c6af9bb23702d83d93",
+    "src-tauri/icons/icon.png": "f4ec5a73a1a10570e70ca05e82ec922d782649f57932ec2159750cefea484003",
+    "src-tauri/icons/icon.ico": "9e26ab75cc5c6657e38d1de475afebc35274807ce5f10fd6572fa223d47aa14a",
+    "src-tauri/icons/icon.icns": "5be7968f82dd9d0012a06964859eea64adec150e0c8ce1ab4c66df26e36c5cba"
+  }
+}

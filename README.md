@@ -2,6 +2,8 @@
 
 A local-first Markdown notepad. Your thoughts lead; suggestions help you keep going.
 
+[Download for Windows and macOS](https://github.com/alshell7/typenext/releases/latest).
+
 ![The TypeNext writing space with local inline recall and an open context panel](docs/screenshots/writing-light.png)
 
 TypeNext gives you a quiet page, a small notebook of tabs, and context close to your writing. A suggestion appears at the cursor. You decide whether it belongs.
@@ -112,4 +114,4 @@ TypeNext uses Tauri 2, React, TypeScript, CodeMirror 6, and a small local BM25 i
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE.md).
+[MIT](LICENSE.md) for TypeNext-owned work. Bundled libraries, runtimes and fonts retain their upstream licenses; optional model weights are separate downloads. See the [licensing and provenance record](docs/licensing.md) and [complete third-party notices](public/notices/THIRD-PARTY-NOTICES.md).

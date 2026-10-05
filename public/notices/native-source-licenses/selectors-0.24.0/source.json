@@ -1,0 +1,28 @@
+{
+  "name": "selectors",
+  "version": "0.24.0",
+  "repository": "https://github.com/servo/servo",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "e82d7868d999d84f6d59719e4c397e5252aecb85",
+  "pathInVcs": "components/selectors",
+  "files": [
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/servo/servo/e82d7868d999d84f6d59719e4c397e5252aecb85/LICENSE",
+      "sha256": "1af2d2b02d9c86030d29ed77117ca7a1b0e4b6ff35bcf8eeb124867d0f5cb59e"
+    }
+  ],
+  "correspondingSource": {
+    "license": "MPL-2.0",
+    "authors": [
+      "The Servo Project Developers"
+    ],
+    "upstream": "https://github.com/servo/servo/tree/e82d7868d999d84f6d59719e4c397e5252aecb85/components/selectors",
+    "archiveUrl": "https://static.crates.io/crates/selectors/selectors-0.24.0.crate",
+    "archiveSha256": "0c37578180969d00692904465fb7f6b3d50b9a2b952b87c23d0e2e5cb5013416",
+    "archiveBytes": 45204,
+    "availabilityChecked": "2026-10-06",
+    "releaseSourcePath": "selectors-0.24.0/source/",
+    "modifiedByTypeNext": false
+  }
+}

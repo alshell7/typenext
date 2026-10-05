@@ -1,6 +1,6 @@
 # Third-party components
 
-TypeNext is AGPL-3.0-or-later. Its dependencies keep their own licenses and notices in their packages. Model weights are optional explicit downloads or user-managed server software. Runtime licenses are included with bundled runtime assets.
+TypeNext-owned code is MIT licensed. Its dependencies, fonts, model weights and runtimes retain their own licenses and copyright notices. Model weights are optional explicit downloads or user-managed server software. See [licensing](licensing.md) for the complete release inventory; bundled notices ship in `public/notices` and `public/fonts/licenses`.
 
 | Component                   | Purpose                            | License          |
 | --------------------------- | ---------------------------------- | ---------------- |
@@ -21,7 +21,7 @@ TypeNext is AGPL-3.0-or-later. Its dependencies keep their own licenses and noti
 
 Source Sans Pro, Merriweather, Alegreya, EB Garamond, JetBrains Mono, and IBM Plex Mono are self-hosted through their Fontsource packages under the SIL Open Font License. Fontsource packages include their license files. Miracode v1.0 is bundled from the [author's official release](https://github.com/IdreesInc/Miracode/releases/tag/v1.0); its license is at `public/fonts/Miracode-LICENSE.txt`.
 
-The licenses of the bundled Fontsource fonts are copied to `public/fonts/licenses` and included in the app build. The app icon uses the same Lucide Square Pen glyph as the notebook wordmark; its notice is bundled at `public/notices/Lucide-LICENSE.txt`.
+The licenses of the bundled Fontsource fonts are copied to `public/fonts/licenses` and included in the app build. The TypeNext app mark is a generated white `|>` on black, shared by the notebook, browser, executables and installers. Lucide remains the interface action-icon library; its ISC notice is bundled at `public/notices/Lucide-LICENSE.txt`.
 
 Segoe UI, Tahoma, and Times New Roman use the operating system's installed fonts and a fallback stack. They are not redistributed. Choosing Times New Roman defaults to 16 CSS pixels, equivalent to 12 points at standard CSS scale.
 

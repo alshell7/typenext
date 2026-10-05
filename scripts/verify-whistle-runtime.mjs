@@ -2,7 +2,9 @@ import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 
 const base = new URL('../public/runtime/whistle/', import.meta.url)
-const suffix = Buffer.from('\nexport default createNeedle;\n')
+const suffix = Buffer.from(
+  '\n// TypeNext modification: appended an ES-module export; original engine logic is unchanged.\nexport default createNeedle;\n'
+)
 const artifacts = [
   {
     name: 'needle.js',

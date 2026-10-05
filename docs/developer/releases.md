@@ -1,223 +1,30 @@
-# Release System
+# Releasing TypeNext
 
-This document explains how the automated release system works and how to use it.
+Every public release requires Windows x64, Apple Silicon macOS and Intel macOS assets. A successful build for one platform is insufficient to publish.
 
-## Overview
+The release workflow uses `windows-2022`, `macos-15` and `macos-15-intel` with explicit matching Rust targets. GitHub currently documents `macos-15` as ARM64 and `macos-15-intel` as Intel; see the [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Linux remains a source-build/check target and is not a required 0.1.0 binary asset.
 
-The release system provides:
+Before tagging, commit matching versions in package.json, package-lock.json, Cargo.toml, Cargo.lock and tauri.conf.json, reviewed license notices and a docs/release-notes/vVERSION.md. `node scripts/prepare-release.js v0.1.0` checks local metadata and icons without changing versions, Git state, tags or remotes. It does not require an empty working directory and does not publish anything.
 
-- **Automated GitHub Actions workflow** for building releases
-- **Version management script** for updating all version files
-- **Auto-updater support** for seamless user updates
-- **Cross-platform builds** (currently macOS, easily extended)
+Push the reviewed release commit to the repository, create its version tag, and push that tag. The workflow also supports manual dispatch naming an existing tag. It checks out the tagged commit and refuses mismatched version or MIT metadata, missing license resources, invalid icons or absent release notes. Live-provider tests remain disabled in CI.
 
-## Initial Setup
+After lightweight preparation, native builds and the frontend gate run in parallel. The frontend gate runs type checking, lint, unit/training tests, production build and offline browser regressions. Every required Windows/Mac build runs frontend unit tests, native Rust tests and clippy on its actual architecture. Windows also runs the isolated WebView2/crash-restart smoke without optional model downloads. Mac CI verifies application signatures, native binary architecture and DMG integrity; it does not perform a native WKWebView interaction test.
 
-### 1. Generate Signing Keys
+Build jobs cannot create a GitHub release. They collect the locked target's native license files, build installers, and upload workflow artifacts with version/commit/SHA-256 manifests. Missing published licenses require reviewed copies under public/notices/native-source-licenses/<name>-<version>, pinned to the package's VCS revision and source with checked hashes. Packages declaring MPL-2.0 include their corresponding published source in the native notices. No license is fetched opportunistically during packaging.
 
-First, generate a keypair for signing updates:
+The single publish job starts only after all three native builds and the frontend gate succeed. It requires these complete assets:
 
-```bash
-# Install Tauri CLI if not already installed
-npm install -g @tauri-apps/cli@next
+| Target            | Required public assets                                                       |
+| ----------------- | ---------------------------------------------------------------------------- |
+| Windows x64       | setup.exe, MSI, portable ZIP containing TypeNext.exe and licensing resources |
+| Apple Silicon Mac | DMG and ZIP containing TypeNext.app and licensing resources                  |
+| Intel Mac         | DMG and ZIP containing TypeNext.app and licensing resources                  |
+| All targets       | SHA256SUMS.txt                                                               |
 
-# Generate keypair
-tauri signer generate -w ~/.tauri/myapp.key
+After verifying the downloaded manifests, sizes, hashes and archive license payloads, the job creates a private draft or resumes its own draft. It uploads all eight assets, checks their remote sizes, uploaded states and SHA-256 digests using GitHub's [release-assets API](https://docs.github.com/en/rest/releases/assets), then makes the release public in one final operation. A failed build or upload leaves no partial public release. A failed upload may leave a draft for the next run. An already public release is never modified by this workflow; unexpected manually added draft assets require review rather than automatic deletion.
 
-# This outputs:
-# Private key: (saved to ~/.tauri/myapp.key)
-# Public key: dW50cnVzdGVkIGNvbW1lbnQ6...
-```
+GitHub Actions must be enabled with permission for the publish job's GITHUB_TOKEN to write repository contents. The remote tag must exist and continue to point to the tested commit. Re-running the existing-tag workflow can resume a failed draft without creating a new tag. Required environment approvals can be configured by maintainers if desired; this workflow does not add an approval pause itself.
 
-### 2. Configure GitHub Repository
+The initial workflow uses ad-hoc macOS signing (`APPLE_SIGNING_IDENTITY=-`) and leaves Windows binaries unsigned. Ad-hoc signing is recommended by [Tauri's GitHub pipeline guide](https://v2.tauri.app/distribute/pipelines/github/) for unsigned Apple Silicon downloads. It establishes bundle integrity and does not identify a trusted publisher or provide notarization. For trusted macOS distribution, configure a Developer ID Application certificate and notarization following [Tauri's macOS signing guide](https://v2.tauri.app/distribute/sign/macos/) and update the workflow to import the certificate and use its identity. Windows trusted signing requires a suitable signing certificate/service and corresponding [Tauri signing configuration](https://v2.tauri.app/distribute/sign/windows/). SHA-256 checksums do not replace publisher signatures.
 
-Add these secrets to your GitHub repository (Settings → Secrets and variables → Actions):
-
-- `TAURI_PRIVATE_KEY`: Content of `~/.tauri/myapp.key`
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: Password you set (if any)
-
-### 3. Update Configuration Files
-
-**Update `src-tauri/tauri.conf.json`:**
-
-```json
-{
-  "plugins": {
-    "updater": {
-      "active": true,
-      "endpoints": [
-        "https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest/download/latest.json"
-      ],
-      "dialog": true,
-      "pubkey": "YOUR_PUBLIC_KEY_FROM_STEP_1"
-    }
-  }
-}
-```
-
-**Update GitHub workflow in `.github/workflows/release.yml`:**
-
-- Change `Tauri Template App` to your app name
-- Update release body text
-
-**Update bundle info in `tauri.conf.json`:**
-
-- Change `publisher`, `shortDescription`, `longDescription`
-- Update `productName` and `identifier`
-
-## Release Process
-
-### Simple Method
-
-1. **Prepare release:**
-
-   ```bash
-   npm run release:prepare v1.0.0
-   ```
-
-2. **Script will:**
-   - Check git status is clean
-   - Run all quality checks (`npm run check:all`)
-   - Update versions in `package.json`, `Cargo.toml`, `tauri.conf.json`
-   - Ask if you want to commit and push automatically
-
-3. **GitHub Actions will:**
-   - Build the app for all platforms
-   - Create a draft release
-   - Generate `latest.json` for auto-updates
-   - Upload all installers and signatures
-
-4. **Manually publish the draft release** on GitHub
-
-### Manual Method
-
-If you prefer more control:
-
-```bash
-# 1. Update versions manually in:
-#    - package.json
-#    - src-tauri/Cargo.toml
-#    - src-tauri/tauri.conf.json
-
-# 2. Run checks
-npm run check:all
-
-# 3. Commit and tag
-git add .
-git commit -m "chore: release v1.0.0"
-git tag v1.0.0
-git push origin main --tags
-```
-
-## Auto-Updater
-
-The auto-updater provides:
-
-- **Automatic update checks** 5 seconds after app launch
-- **User-friendly dialogs** for update notifications
-- **Background downloads** with progress tracking
-- **Seamless installation** with restart prompts
-- **Silent error handling** for network issues
-
-### How It Works
-
-1. App waits 5 seconds after launch
-2. Silently checks for updates using `@tauri-apps/plugin-updater`
-3. If update available, shows browser `confirm()` dialog
-4. Downloads and installs in background with progress logging
-5. Shows completion dialog with restart option
-6. Uses `@tauri-apps/plugin-process` to restart if user agrees
-
-### Implementation
-
-The auto-updater is implemented in `src/App.tsx`:
-
-```typescript
-import { check } from '@tauri-apps/plugin-updater'
-import { relaunch } from '@tauri-apps/plugin-process'
-
-// Inside useEffect:
-const checkForUpdates = async () => {
-  try {
-    const update = await check()
-    if (update) {
-      const shouldUpdate = confirm(`Update available: ${update.version}...`)
-      if (shouldUpdate) {
-        await update.downloadAndInstall(/* progress callback */)
-        const shouldRestart = confirm('Update completed successfully!...')
-        if (shouldRestart) await relaunch()
-      }
-    }
-  } catch (error) {
-    // Silent fail - don't bother user with network issues
-    logger.error('Update check failed:', error)
-  }
-}
-```
-
-### Configuration
-
-The updater is configured in `tauri.conf.json`:
-
-- **Active**: `true` to enable update checks
-- **Dialog**: `true` to show built-in dialogs (we use custom confirm dialogs)
-- **Endpoints**: GitHub releases URL with template placeholder
-- **Public Key**: Template placeholder for signing verification
-
-## File Structure
-
-```
-.github/workflows/
-  release.yml              # GitHub Actions workflow
-
-scripts/
-  prepare-release.js       # Version management script
-
-src-tauri/
-  tauri.conf.json         # Bundle and updater configuration
-
-package.json              # Release scripts
-```
-
-## Release Artifacts
-
-Each release creates:
-
-- **macOS**: `.dmg` installer
-- **Windows**: `.msi` installer (when configured)
-- **Linux**: `.deb` and `.AppImage` (when configured)
-- **Auto-updater**: `latest.json` manifest and `.sig` signature files
-
-## Troubleshooting
-
-**Release workflow doesn't trigger:**
-
-- Ensure tag starts with `v` (e.g., `v1.0.0`)
-- Check that tag was pushed: `git push origin --tags`
-
-**Build fails:**
-
-- Verify GitHub secrets are set correctly
-- Ensure all tests pass locally: `npm run check:all`
-
-**Auto-updater issues:**
-
-- Check that public key matches the private key used for signing
-- Verify endpoint URL matches your GitHub repository
-- Check console logs in the app for error details
-
-## Version Strategy
-
-We use semantic versioning (`v1.0.0`):
-
-- **Major** (1.x.x): Breaking changes
-- **Minor** (x.1.x): New features, backwards compatible
-- **Patch** (x.x.1): Bug fixes, backwards compatible
-
-All three files must have matching versions:
-
-- `package.json` → `"version": "1.0.0"`
-- `src-tauri/Cargo.toml` → `version = "1.0.0"`
-- `src-tauri/tauri.conf.json` → `"version": "1.0.0"`
-
-The prepare-release script handles this automatically.
+In-app updating is disabled. No updater key, latest.json, updater signatures or automatic update promise is part of 0.1.0.

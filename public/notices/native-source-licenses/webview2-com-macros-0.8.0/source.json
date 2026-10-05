@@ -1,0 +1,15 @@
+{
+  "name": "webview2-com-macros",
+  "version": "0.8.0",
+  "repository": "https://github.com/wravery/webview2-rs",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "2a4d92c91002f91b49fd282abbbe8ec8d3318339",
+  "pathInVcs": "crates/callback-macros",
+  "files": [
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/wravery/webview2-rs/2a4d92c91002f91b49fd282abbbe8ec8d3318339/LICENSE",
+      "sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73"
+    }
+  ]
+}

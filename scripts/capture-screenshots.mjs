@@ -21,6 +21,9 @@ const context = await browser.newContext({
 const page = await context.newPage()
 const settled = async target => {
   await target.evaluate(() => document.fonts.ready)
+  await target.locator('.brand-mark').evaluateAll(async images => {
+    await Promise.all(images.map(image => image.decode()))
+  })
   // Let React publish its new unsaved state before awaiting the next save.
   await target.waitForTimeout(750)
   await target

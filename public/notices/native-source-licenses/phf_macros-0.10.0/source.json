@@ -1,0 +1,15 @@
+{
+  "name": "phf_macros",
+  "version": "0.10.0",
+  "repository": "https://github.com/sfackler/rust-phf",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "3cc6f05cb07933af4cf886645d1170bdcb306b6b",
+  "pathInVcs": "",
+  "files": [
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/sfackler/rust-phf/3cc6f05cb07933af4cf886645d1170bdcb306b6b/LICENSE",
+      "sha256": "d8870d5e2ab20fc50915b711c5aa7588131c9abcc1bcb980da1efd7486522a46"
+    }
+  ]
+}

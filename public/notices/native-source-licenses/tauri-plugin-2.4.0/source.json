@@ -1,0 +1,25 @@
+{
+  "name": "tauri-plugin",
+  "version": "2.4.0",
+  "repository": "https://github.com/tauri-apps/tauri",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "b4abb6cae87f9b7afa6bde0d416bff01e1d691c4",
+  "pathInVcs": "crates/tauri-plugin",
+  "files": [
+    {
+      "path": "LICENSE.spdx",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri/b4abb6cae87f9b7afa6bde0d416bff01e1d691c4/LICENSE.spdx",
+      "sha256": "5e834fe9788c524210deda859c46a550ffa5aa0cba9ea0572f0d81120e97c008"
+    },
+    {
+      "path": "LICENSE_MIT",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri/b4abb6cae87f9b7afa6bde0d416bff01e1d691c4/LICENSE_MIT",
+      "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d"
+    },
+    {
+      "path": "LICENSE_APACHE-2.0",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri/b4abb6cae87f9b7afa6bde0d416bff01e1d691c4/LICENSE_APACHE-2.0",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    }
+  ]
+}

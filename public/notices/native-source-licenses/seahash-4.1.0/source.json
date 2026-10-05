@@ -1,0 +1,39 @@
+{
+  "name": "seahash",
+  "version": "4.1.0",
+  "repository": "https://gitlab.redox-os.org/redox-os/seahash",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "94b632aeac099031c373599313d5b5f0acbbaec0",
+  "pathInVcs": "",
+  "kind": "referenced-standard-license",
+  "selectedLicense": "MIT",
+  "declaredLicense": "MIT",
+  "authors": [
+    "ticki <ticki@users.noreply.github.com>",
+    "Tom Almeida <tom@tommoa.me>"
+  ],
+  "standardLicense": {
+    "path": "LICENSE-MIT-standard.txt",
+    "url": "https://opensource.org/license/mit",
+    "sha256": "4790c01c0726db5d666ede1ad9b0875ed4789b89c9a38a37c7b214b707b69249",
+    "format": "Plain text extracted from the four canonical OSI license paragraphs; original placeholders and wording preserved."
+  },
+  "files": [
+    {
+      "path": "upstream/Cargo.toml",
+      "url": "https://gitlab.redox-os.org/redox-os/seahash/-/raw/94b632aeac099031c373599313d5b5f0acbbaec0/Cargo.toml",
+      "sha256": "dd213de338ca98b7ef7a2562bcf4e4214d215d1a8277750a6a72b4e809c8d0dd"
+    },
+    {
+      "path": "upstream/README.md",
+      "url": "https://gitlab.redox-os.org/redox-os/seahash/-/raw/94b632aeac099031c373599313d5b5f0acbbaec0/README.md",
+      "sha256": "38357210ef69a97bf9858ff22661cb1c2384179f5e6b73143cb33193e36c6473"
+    },
+    {
+      "path": "upstream/src/lib.rs",
+      "url": "https://gitlab.redox-os.org/redox-os/seahash/-/raw/94b632aeac099031c373599313d5b5f0acbbaec0/src/lib.rs",
+      "sha256": "09694fcbc9ebede5a5edd79debd23cae4d8b5c37c104e9b87a4952d7f4fc199a"
+    }
+  ],
+  "review": "The pinned upstream material declares the selected license by name/reference but does not contain its full standard text. The separate standardLicense file is the canonical referenced text, not a reconstructed upstream copyright-bearing license. No holder or year has been invented."
+}

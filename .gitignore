@@ -39,6 +39,11 @@ CREDENTIALS.txt
 # Generated from the pinned local inference runtime dependency
 public/runtime/builtin/
 
+# Target-specific native license inventories are generated for each release.
+public/notices/native-windows-x64/
+public/notices/native-macos-arm64/
+public/notices/native-macos-x64/
+
 # Python training helpers
 __pycache__/
 *.pyc

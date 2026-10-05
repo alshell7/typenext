@@ -1,0 +1,20 @@
+{
+  "name": "borsh",
+  "version": "1.5.7",
+  "repository": "https://github.com/near/borsh-rs",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "abb9582c70b2afd54eef302c23b6e6d3a0b2c1c4",
+  "pathInVcs": "borsh",
+  "files": [
+    {
+      "path": "LICENSE-MIT",
+      "url": "https://raw.githubusercontent.com/near/borsh-rs/abb9582c70b2afd54eef302c23b6e6d3a0b2c1c4/LICENSE-MIT",
+      "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "url": "https://raw.githubusercontent.com/near/borsh-rs/abb9582c70b2afd54eef302c23b6e6d3a0b2c1c4/LICENSE-APACHE",
+      "sha256": "7b724c8fa4a82af733caccabdaa21e2bf8bcb0822fe62d5cf03f99d458438705"
+    }
+  ]
+}

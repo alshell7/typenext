@@ -1,0 +1,15 @@
+{
+  "name": "webview2-com-sys",
+  "version": "0.38.0",
+  "repository": "https://github.com/wravery/webview2-rs",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "c028bc6bfb3a5b85f46afa6ed87115b841f0ea45",
+  "pathInVcs": "crates/bindings",
+  "files": [
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/wravery/webview2-rs/c028bc6bfb3a5b85f46afa6ed87115b841f0ea45/LICENSE",
+      "sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73"
+    }
+  ]
+}

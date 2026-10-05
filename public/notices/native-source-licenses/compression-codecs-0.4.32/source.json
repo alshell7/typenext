@@ -1,0 +1,20 @@
+{
+  "name": "compression-codecs",
+  "version": "0.4.32",
+  "repository": "https://github.com/Nullus157/async-compression",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "2aa1b5f8122618004b9bbab6dc679bafca616ff2",
+  "pathInVcs": "crates/compression-codecs",
+  "files": [
+    {
+      "path": "LICENSE-MIT",
+      "url": "https://raw.githubusercontent.com/Nullus157/async-compression/2aa1b5f8122618004b9bbab6dc679bafca616ff2/LICENSE-MIT",
+      "sha256": "88d1e3160df48926ad3310a8ec5699b502889565908f1be7e77cd21282c7a709"
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "url": "https://raw.githubusercontent.com/Nullus157/async-compression/2aa1b5f8122618004b9bbab6dc679bafca616ff2/LICENSE-APACHE",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    }
+  ]
+}

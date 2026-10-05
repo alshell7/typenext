@@ -1,0 +1,44 @@
+{
+  "name": "fxhash",
+  "version": "0.2.1",
+  "repository": "https://github.com/cbreeden/fxhash",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "537570af68de22d2f4bbdd5bee5d6e07268e6f42",
+  "pathInVcs": "",
+  "kind": "referenced-standard-license",
+  "selectedLicense": "Apache-2.0",
+  "declaredLicense": "Apache-2.0/MIT",
+  "authors": [
+    "cbreeden <github@u.breeden.cc>"
+  ],
+  "standardLicense": {
+    "path": "LICENSE-APACHE-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  "files": [
+    {
+      "path": "upstream/Cargo.toml",
+      "url": "https://raw.githubusercontent.com/cbreeden/fxhash/537570af68de22d2f4bbdd5bee5d6e07268e6f42/Cargo.toml",
+      "sha256": "42f07fb23f8b37acf45914ccb71df077455a353850e148afeabb5c684f8ebaab"
+    },
+    {
+      "path": "upstream/README.md",
+      "url": "https://raw.githubusercontent.com/cbreeden/fxhash/537570af68de22d2f4bbdd5bee5d6e07268e6f42/README.md",
+      "sha256": "7b9227f966b312e221bd372fef79438b2446a21241eb7542520eac29bfbc10d0"
+    },
+    {
+      "path": "upstream/lib.rs",
+      "url": "https://raw.githubusercontent.com/cbreeden/fxhash/537570af68de22d2f4bbdd5bee5d6e07268e6f42/lib.rs",
+      "sha256": "885b72a1c977dc1c3ff4e0652719e62b6d8c3e713403e571afd581283f72df7b"
+    },
+    {
+      "path": "upstream/bench.rs",
+      "url": "https://raw.githubusercontent.com/cbreeden/fxhash/537570af68de22d2f4bbdd5bee5d6e07268e6f42/bench.rs",
+      "sha256": "b4dc3ef9eeb043ffb470b37a0c2a36306a024af808eac8517924359298d3e183"
+    }
+  ],
+  "review": "The pinned upstream material declares the selected license by name/reference but does not contain its full standard text. The separate standardLicense file is the canonical referenced text, not a reconstructed upstream copyright-bearing license. No holder or year has been invented.",
+  "crateSha256": "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c",
+  "revisionEvidence": "Official upstream revision matches all included original published source and manifest bytes; cached registry archive SHA256 matches Cargo.lock."
+}

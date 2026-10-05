@@ -1,0 +1,25 @@
+{
+  "name": "match_token",
+  "version": "0.1.0",
+  "repository": "https://github.com/servo/html5ever",
+  "cargoSource": "registry+https://github.com/rust-lang/crates.io-index",
+  "revision": "0e4e125b8672abad4ff14d1e0043d3be9305af6a",
+  "pathInVcs": "match_token",
+  "files": [
+    {
+      "path": "COPYRIGHT",
+      "url": "https://raw.githubusercontent.com/servo/html5ever/0e4e125b8672abad4ff14d1e0043d3be9305af6a/COPYRIGHT",
+      "sha256": "c6b91503fc0a9852e688b56eef715dba9a1ab4b074e86875af2471ce0163b2e5"
+    },
+    {
+      "path": "LICENSE-MIT",
+      "url": "https://raw.githubusercontent.com/servo/html5ever/0e4e125b8672abad4ff14d1e0043d3be9305af6a/LICENSE-MIT",
+      "sha256": "86dd7f026f916daf7511e39951ad8ea8cf55a8db67ae64060dacf829761c18f3"
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "url": "https://raw.githubusercontent.com/servo/html5ever/0e4e125b8672abad4ff14d1e0043d3be9305af6a/LICENSE-APACHE",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    }
+  ]
+}

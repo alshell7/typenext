@@ -350,7 +350,7 @@ Controls use gentle corners: standard fields, buttons, note rows, and preview co
 
 Borders are fine (1px) and functional. A dashed reference target explains file dropping; it is part of the notebook's material vocabulary. The editable note title is borderless and square against the page. Stroke icons accompany or identify actions, with compact sizes tailored to their control rather than oversized decorative marks.
 
-The notebook wordmark and bundled app icon share Lucide's Square Pen glyph. The application uses named Lucide imports; `public/Icon.svg` carries the glyph paths on a pale rounded tile. Keep its Lucide contributor attribution and ISC notice in `public/notices/Lucide-LICENSE.txt` when reusing or rebuilding the icon. The installed icon is a fixed asset; interface pen strokes follow the current accent.
+The notebook, browser, executable and installer share the TypeNext `|>` mark: two white symbols of equal height on a black square. `public/brand/logo-master.png` is the imagegen-created master; `public/Icon.png` is its small UI derivative, and platform sizes and Windows/macOS icon containers are generated from that same image. The fixed brand colours remain black and white in either appearance. Interface action icons still use Lucide and retain its ISC notice in `public/notices/Lucide-LICENSE.txt`.
 
 ## Components
 

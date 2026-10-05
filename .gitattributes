@@ -5,6 +5,7 @@
 *.woff binary
 *.woff2 binary
 *.zip binary
+package-lock.json text eol=lf
 
 # Match the bundled sample's raw imports to its ZIP on every platform.
 examples/bramble-house/details/* text eol=lf
@@ -13,4 +14,6 @@ examples/bramble-house/welcome-note.md text eol=lf
 
 # Keep pinned upstream runtime bytes identical across Windows/macOS checkouts.
 public/runtime/whistle/needle.js -text
+# Exact upstream notices/evidence retain their original whitespace and hashes.
+public/notices/** -text -whitespace
 *.wasm binary

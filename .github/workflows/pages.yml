@@ -7,7 +7,7 @@ on:
       [
         site/**,
         docs/screenshots/**,
-        public/Icon.svg,
+        public/Icon.png,
         public/notices/**,
         scripts/build-site.mjs,
         package.json,
