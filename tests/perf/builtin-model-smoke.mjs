@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict'
 import { chromium } from '@playwright/test'
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -49,6 +50,7 @@ await build({
     plugins: () => [
       {
         name: 'synthetic-load-diagnostics',
+        enforce: 'pre',
         transform(code, id) {
           if (id.endsWith('/builtin-engine.worker.ts'))
             return code.replace(
@@ -67,7 +69,7 @@ await build({
       },
       load(id) {
         if (id === '\0builtin-harness')
-          return `import * as engine from ${JSON.stringify(path.join(root, 'src/services/builtin-engine.ts').replaceAll('\\', '/'))};globalThis.builtinEngine=engine;`
+          return `import * as engine from ${JSON.stringify(path.join(root, 'src/services/builtin-engine.ts').replaceAll('\\', '/'))};import {suggest} from ${JSON.stringify(path.join(root, 'src/services/completion.ts').replaceAll('\\', '/'))};import {defaultSettings} from ${JSON.stringify(path.join(root, 'src/notebook/model.ts').replaceAll('\\', '/'))};globalThis.builtinEngine=engine;globalThis.syntheticCompletion={suggest,defaultSettings};`
       },
     },
   ],
@@ -212,6 +214,26 @@ try {
   )
   const fixtures = [
     {
+      name: 'informal testing fragment',
+      noteTitle: 'Writing practice',
+      objective: 'Try a little everyday writing.',
+      writingBrief: 'An informal personal note.',
+      references: [],
+      beforeCursor:
+        "Sometimes the words come slowly, and that is okay.\nI'm just testing if",
+      afterCursor: '',
+    },
+    {
+      name: 'quoted prose',
+      noteTitle: 'A conversation',
+      objective: 'A quiet conversation about writing.',
+      writingBrief: '',
+      references: [],
+      beforeCursor:
+        '\"I can try again,\" she said.\nThe most useful part of this exercise was',
+      afterCursor: '',
+    },
+    {
       name: 'ordinary prose',
       noteTitle: 'A slower morning',
       objective: 'Describe an unhurried morning.',
@@ -244,28 +266,88 @@ try {
       afterCursor: ' before the next sentence.',
     },
   ]
-  for (const fixture of resourcesOnly ? [] : fixtures) {
+  for (const fixture of resourcesOnly
+    ? []
+    : fixtures.flatMap(fixture =>
+        [0, 0.35].map(temperature => ({ ...fixture, temperature }))
+      )) {
     const startedRun = performance.now()
-    const { name, ...prompt } = fixture
-    const result = await page.evaluate(async input => {
-      const engine = globalThis.builtinEngine
-      const raw = await engine.generateBuiltinInsertion(input, {
-        maxTokens: 20,
-        temperature: 0,
-      })
-      return {
-        raw,
-        reconstructed: input.beforeCursor + raw + input.afterCursor,
-        state: engine.getBuiltinState(),
-        heap: performance.memory?.usedJSHeapSize ?? null,
-      }
-    }, prompt)
+    const { name, temperature, ...prompt } = fixture
+    const result = await page.evaluate(
+      async ({ input, temperature }) => {
+        const engine = globalThis.builtinEngine
+        const raw = await engine.generateBuiltinInsertion(input, {
+          maxTokens: 48,
+          temperature,
+        })
+        const { suggest, defaultSettings } = globalThis.syntheticCompletion
+        const note = {
+          id: 'synthetic-' + crypto.randomUUID(),
+          title: input.noteTitle,
+          objective: input.objective,
+          context: input.writingBrief,
+          content: input.beforeCursor + input.afterCursor,
+          createdAt: 1,
+          updatedAt: 1,
+          sources: input.references.map((reference, index) => ({
+            id: 'source-' + index,
+            name: reference.name,
+            text: reference.text,
+            kind: 'text',
+            enabled: true,
+            addedAt: 1,
+          })),
+        }
+        const suggestion = await suggest(
+          note,
+          {
+            text: note.content,
+            cursor: input.beforeCursor.length,
+            selectionEmpty: true,
+            inCode: false,
+          },
+          {
+            ...defaultSettings(),
+            localEngine: 'embedded',
+            temperature,
+          }
+        )
+        return {
+          raw,
+          suggestion,
+          accepted: input.beforeCursor + suggestion.text + input.afterCursor,
+          reconstructed: input.beforeCursor + raw + input.afterCursor,
+          state: engine.getBuiltinState(),
+          heap: performance.memory?.usedJSHeapSize ?? null,
+        }
+      },
+      { input: prompt, temperature }
+    )
+    for (const candidate of [
+      result.suggestion,
+      ...(result.suggestion.alternatives ?? []),
+    ]) {
+      assert.doesNotMatch(
+        candidate.text,
+        /<\/?[a-z][^>]*>|&lt;|```|~~~|\{\s*"[^"]+"\s*:/iu,
+        `${name}: malformed code escaped the prose guard`
+      )
+    }
+    assert.equal(result.state.status, 'ready')
     report.runs.push({
       name,
+      temperature,
       milliseconds: Math.round(performance.now() - startedRun),
       ...result,
     })
   }
+  if (!resourcesOnly)
+    assert.ok(
+      report.runs.some(
+        run => run.suggestion.mode === 'model' && run.suggestion.text.trim()
+      ),
+      'The real model must supply at least one usable prose continuation'
+    )
   const warmStarted = performance.now()
   report.warmReload = await page.evaluate(async backend => {
     const engine = globalThis.builtinEngine
@@ -279,6 +361,12 @@ try {
   report.warmReload.milliseconds = Math.round(performance.now() - warmStarted)
   report.warmReload.processes = ownedBrowserStatistics()
   report.externalRequestsAfterDownload = report.requests.slice(afterDownload)
+  assert.equal(
+    report.externalRequestsAfterDownload.length,
+    0,
+    'Cached inference must stay offline'
+  )
+  assert.deepEqual(report.errors, [], 'Browser/runtime errors')
   report.unloaded = await page.evaluate(async () => {
     const engine = globalThis.builtinEngine
     engine.unloadBuiltinModel()
@@ -311,6 +399,8 @@ try {
           name: run.name,
           milliseconds: run.milliseconds,
           raw: run.raw,
+          temperature: run.temperature,
+          suggestion: run.suggestion,
         })),
         externalRequestsAfterDownload:
           report.externalRequestsAfterDownload?.length,

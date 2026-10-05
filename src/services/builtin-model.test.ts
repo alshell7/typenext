@@ -98,6 +98,26 @@ describe('built-in model data boundaries', () => {
       )
     ).toBe(true)
   })
+  it('keeps prose and quotes literal instead of serializing the writing as JSON', () => {
+    const writing = '"I can try again," she said.\nI\'m just testing if'
+    const messages = builtinMessages({ ...prompt, beforeCursor: writing })
+    expect(messages[1]?.content.endsWith(`Writing:\n${writing}`)).toBe(true)
+    expect(messages[1]?.content).not.toContain('"beforeCursor":')
+    expect(messages[1]?.content).not.toContain('\\n')
+    expect(messages[0]?.content).toContain('No explanation, HTML, or code')
+    const input = prepareBuiltinInput(
+      { ...prompt, beforeCursor: writing },
+      values => values.map(value => value.content).join('\n') + '<assistant>',
+      () => 200
+    )
+    expect(input?.endsWith("<assistant>I'm just testing if")).toBe(true)
+  })
+  it('preserves code completion when editor syntax explicitly identifies code', () => {
+    const messages = builtinMessages({ ...prompt, inCode: true })
+    expect(messages[0]?.content).not.toContain('HTML, or code')
+    expect(boundBuiltinPrompt({ ...prompt, inCode: true }).inCode).toBe(true)
+    expect(boundBuiltinPrompt(prompt).inCode).toBe(false)
+  })
   it('fits whole prompts without dropping the cursor or splitting a Unicode prefill', () => {
     const latest = 'The thought at this cursor'
     const large = {

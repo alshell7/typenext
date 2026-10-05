@@ -405,6 +405,107 @@ function sanitizeModelText(
   return clipInsertion(text, suffix, budget)
 }
 
+function hasBuiltinProseArtifact(
+  raw: string,
+  prefix: string,
+  inCode: boolean
+): boolean {
+  if (raw.length > MAX_MODEL_OUTPUT_CHARACTERS) return true
+  // The editor derives this from the author's actual Markdown syntax. Merely
+  // mentioning HTML or code in the title, objective or references is not consent
+  // for a small model to replace a prose continuation with markup.
+  if (inCode) return false
+  const insertion =
+    prefix.length >= 3 && raw.startsWith(prefix)
+      ? raw.slice(prefix.length)
+      : raw
+  // Inspect escaped markup without altering the text we would insert. Reject
+  // the whole completion; removing tags would keep its unrelated boilerplate.
+  const inspected = insertion
+    .replace(/&amp;/giu, '&')
+    .replace(/&(?:lt|#0*60|#x0*3c);/giu, '<')
+    .replace(/&(?:gt|#0*62|#x0*3e);/giu, '>')
+    .replace(/\\(?:u003c|x3c)/giu, '<')
+    .replace(/\\(?:u003e|x3e)/giu, '>')
+
+  if (
+    // Includes complete XML/HTML tags, comments and truncated common tags.
+    /<\/?[a-z][a-z0-9:_-]*(?:\s+[^<>\r\n]{0,240})?\s*\/?>/iu.test(inspected) ||
+    /<(?:!--|!doctype\b|\/?(?:html|head|body|pre|code|span|div|script|style|li|ul|ol|table|svg|p)(?=[\s/>]|$))/iu.test(
+      inspected
+    ) ||
+    /(?:```|~~~)/u.test(inspected)
+  )
+    return true
+
+  if (
+    // Chat/template tokens and echoed prompt fields are never prose insertions.
+    /<\|[^>\r\n]{1,80}\|>|\[(?:\/?INST|SYSTEM)\]/iu.test(inspected) ||
+    /\$\{[^}\r\n]{1,160}\}|\{\{[^}\r\n]{1,160}\}\}|\{%[^%\r\n]{1,160}%\}/u.test(
+      inspected
+    ) ||
+    /\[(?:insert|your|missing)[\t ]+(?:text|content|continuation)(?:[\t ][^\]\r\n]{0,80})?\]/iu.test(
+      inspected
+    ) ||
+    /(?:^|\n)[\t ]*(?:#{1,3}[\t ]*)?["'`]?(?:system|user|assistant|instruction|input|response|output|suggestion|completion|insertion|continuation|before[\t ]?cursor|after[\t ]?cursor|note[\t ]title|objective|writing[\t ](?:brief|background)|references?|missing[\t ]text)["'`]?[\t ]*:/iu.test(
+      inspected
+    ) ||
+    /^\s*(?:return|output|provide)\s+(?:only|exactly)\s+(?:the\s+)?(?:missing\s+text|insertion|continuation|json)\b/iu.test(
+      inspected
+    ) ||
+    /^\s*(?:here(?:'s|’s|\s+is)\s+(?:the\s+|some\s+)?(?:code|html|json)|the\s+following\s+(?:lines\s+of\s+)?code\b)/iu.test(
+      inspected
+    )
+  )
+    return true
+
+  const trimmed = inspected.trim()
+  if (/^(?:\{|\[)/u.test(trimmed)) {
+    try {
+      const value: unknown = JSON.parse(trimmed)
+      if (value !== null && typeof value === 'object') return true
+    } catch {
+      // Truncated objects and arrays still expose recognizable structured syntax.
+    }
+  }
+  if (
+    /\{\s*(?:["'][^"'\r\n]{1,80}["']|[\p{L}_$][\p{L}\p{M}\p{N}_$]{0,80})\s*:/u.test(
+      inspected
+    ) ||
+    /^\s*\[\s*(?:\{|\[|["'][^"'\r\n]{0,200}["']\s*,)/u.test(inspected) ||
+    /^[\s"'`]*[{}][\s"'`,;]*$/u.test(inspected) ||
+    /^\s*(?:["'`][\t ]*)?\}[\t ]*[,;]?/u.test(inspected) ||
+    /(?:^|\n)[\t ]*["'][\t ]*[,}\]][\t ]*["'][^"'\r\n]{1,80}["'][\t ]*:/u.test(
+      inspected
+    )
+  )
+    return true
+
+  // Require distinctive programming syntax, so ordinary words such as "let",
+  // Markdown emphasis, links, lists and inline code references remain usable.
+  return (
+    /(?:^|\n)[\t ]*(?:export[\t ]+)?(?:async[\t ]+)?function[\t ]+[\w$]+[\t ]*\(/u.test(
+      inspected
+    ) ||
+    /(?:^|\n)[\t ]*(?:export[\t ]+)?(?:const|let|var)[\t ]+[\w$]+[\t ]*(?:=|:[^\r\n=]{1,100}=)/u.test(
+      inspected
+    ) ||
+    /(?:^|\n)[\t ]*(?:(?:async[\t ]+)?def[\t ]+\w+[\t ]*\(|class[\t ]+\w+[\t ]*(?:\([^\r\n]{0,100}\)[\t ]*)?[{:])/u.test(
+      inspected
+    ) ||
+    /(?:^|\n)[\t ]*(?:import[^\r\n]{0,160}[\t ]from[\t ]+["']|from[\t ]+[\w.]+[\t ]+import[\t ]+\w)/u.test(
+      inspected
+    ) ||
+    /\bconsole\.(?:log|debug|error|warn)\s*\(|=>[\t ]*\{/u.test(inspected) ||
+    /(?:^|\n)[\t ]*(?:print|alert|document\.createElement)[\t ]*\([\t ]*["']/u.test(
+      inspected
+    ) ||
+    /(?:^|\n)[\t ]*(?:[.#][a-z][\w-]*|body|html)[\t ]*\{[^\r\n]{0,160}(?:[\w-]+\s*:)/iu.test(
+      inspected
+    )
+  )
+}
+
 function exactRecall(
   note: Note,
   context: CursorContext,
@@ -825,7 +926,7 @@ export async function suggest(
         checkAbort(signal)
       }
       const raw = await generateBuiltinInsertion(
-        { ...data, instructions },
+        { ...data, instructions, inCode: Boolean(context.inCode) },
         {
           maxTokens: budget.tokens,
           temperature,
@@ -833,13 +934,19 @@ export async function suggest(
         }
       )
       checkAbort(signal)
-      const text = sanitizeModelText(
+      const text = hasBuiltinProseArtifact(
         raw,
         beforeCursor,
-        afterCursor,
-        budget,
-        !context.inCode
+        Boolean(context.inCode)
       )
+        ? ''
+        : sanitizeModelText(
+            raw,
+            beforeCursor,
+            afterCursor,
+            budget,
+            !context.inCode
+          )
       const result = text
         ? candidatesResult([
             {

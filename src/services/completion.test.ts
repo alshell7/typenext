@@ -152,6 +152,7 @@ describe('private inline suggestions', () => {
         beforeCursor: 'The river',
         afterCursor: ' beneath the bridge.',
         instructions: config.suggestionInstructions,
+        inCode: false,
       }),
       expect.objectContaining({
         maxTokens: expect.any(Number),
@@ -988,6 +989,310 @@ describe('explicit provider requests and connection tests', () => {
     expect(request?.[0]).toBe('https://api.anthropic.com/v1/messages')
     expect(request?.[1]?.headers?.['x-api-key']).toBe('anthropic-test-key')
     expect(request?.[1]?.headers?.Authorization).toBeUndefined()
+  })
+})
+
+describe('built-in prose output guard', () => {
+  it.each([
+    [
+      'HTML from the reported failure',
+      '"} <pre><code>{ <span class="note">The following lines of code... </span></code></pre> </code></li> <li>This',
+    ],
+    [
+      'HTML anywhere after otherwise readable words',
+      ' a useful thought. <span class="note">unrelated sample</span>',
+    ],
+    ['a closing HTML tag', ' </code>'],
+    ['a truncated HTML tag', ' <pre'],
+    [
+      'escaped HTML',
+      ' &lt;pre&gt;&lt;code&gt;unrelated sample&lt;/code&gt;&lt;/pre&gt;',
+    ],
+    [
+      'double-escaped HTML',
+      ' &amp;lt;span class="note"&amp;gt;unrelated&amp;lt;/span&amp;gt;',
+    ],
+    ['numeric HTML entities', ' &#60;pre&#62;unrelated&#60;/pre&#62;'],
+    ['hexadecimal HTML entities', ' &#x3c;pre&#x3e;unrelated&#x3c;/pre&#x3e;'],
+    [
+      'literal Unicode HTML escapes',
+      ' \\u003cpre\\u003eunrelated\\u003c/pre\\u003e',
+    ],
+    ['an HTML comment', ' <!-- copied page template -->'],
+    ['a Markdown code fence', '```javascript\nconst message = "hello";\n```'],
+    ['a truncated Markdown code fence', '```html\n<span class="note">'],
+    ['a tilde code fence', '~~~python\nprint("hello")\n~~~'],
+    ['a JSON object', '{"insertion":"an unrelated answer"}'],
+    ['a truncated JSON object', '{"beforeCursor": "I want to",'],
+    ['a leading JSON brace', ' {'],
+    ['a dangling closing JSON fragment', '"}, an unrelated template.'],
+    ['a dangling JSON property fragment', '", "text": "an unrelated answer"'],
+    ['a JSON array', '["first answer", "second answer"]'],
+    ['a truncated JSON array', '["first answer",'],
+    ['a JavaScript object', '{ message: "hello" }'],
+    ['a JavaScript string array', "['first answer', 'second answer']"],
+    ['JavaScript declarations', 'const message = "hello";'],
+    ['a JavaScript function', 'function greet() { return "hello"; }'],
+    ['a Python function', 'def greet():\n    print("hello")'],
+    ['a Python call', 'print("hello")'],
+    ['a Python import', 'from typing import List'],
+    ['a JavaScript import', 'import data from "./data.json";'],
+    ['a CSS template', '.note { color: blue; }'],
+    ['console code', 'console.log("a copied example");'],
+    ['a template variable', ' ${writer.text}'],
+    ['a template block', ' {% if writer %}unfinished{% endif %}'],
+    ['a template placeholder', ' {{ missing_text }}'],
+    ['an instructional placeholder', ' [insert text here]'],
+    ['a chat role token', '<|im_start|>assistant\nunrelated answer'],
+    ['an instruction token', '[INST] Write something unrelated [/INST]'],
+    ['a prompt field', 'Before cursor: I want to\nAfter cursor: nothing'],
+    ['a response label', '### Assistant: Here is an unrelated answer.'],
+    [
+      'a label normally removed by the hosted sanitizer',
+      'Suggestion: an unrelated answer.',
+    ],
+    ['a prompt echo', 'Return only the missing text.'],
+    ['code boilerplate', 'The following lines of code show the result.'],
+    ['oversized output', 'unrelated '.repeat(1_334)],
+  ] as const)(
+    'rejects %s as a whole and uses honest offline starters',
+    async (_name, raw) => {
+      const config = { ...settings(), localEngine: 'embedded' as const }
+      const draft = note('I want to')
+      vi.mocked(generateBuiltinInsertion).mockResolvedValue(raw)
+      const result = await suggest(draft, cursor(draft.content), config)
+      const candidates = [result, ...(result.alternatives ?? [])]
+      expect(result.text).toBe(' explore the river ')
+      expect(candidates).toHaveLength(3)
+      expect(candidates.every(candidate => candidate.mode === 'starter')).toBe(
+        true
+      )
+      expect(
+        candidates.every(candidate => candidate.sources.length === 0)
+      ).toBe(true)
+      expect(candidates.every(candidate => candidate.text.length <= 230)).toBe(
+        true
+      )
+      expect(generateBuiltinInsertion).toHaveBeenCalledTimes(1)
+      expect(loadBuiltinModel).not.toHaveBeenCalled()
+      expect(getSecret).not.toHaveBeenCalled()
+      expect(requestJson).not.toHaveBeenCalled()
+    }
+  )
+
+  it('withholds the reported HTML instead of keeping its unrelated words when there is no safe local continuation', async () => {
+    const config = { ...settings(), localEngine: 'embedded' as const }
+    const draft = note("I'm just testing if")
+    draft.title = 'Quick test'
+    draft.objective = ''
+    draft.context = ''
+    vi.mocked(generateBuiltinInsertion).mockResolvedValue(
+      '"} <pre><code>{ <span class="note">The following lines of code... </span></code></pre> </code></li> <li>This'
+    )
+    expect(await suggest(draft, cursor(draft.content), config)).toEqual({
+      text: '',
+      sources: [],
+      mode: 'recall',
+    })
+    expect(generateBuiltinInsertion).toHaveBeenCalledTimes(1)
+    expect(requestJson).not.toHaveBeenCalled()
+    expect(getSecret).not.toHaveBeenCalled()
+  })
+
+  it('prefers a proven source continuation when the built-in result is rejected', async () => {
+    const config = { ...settings(), localEngine: 'embedded' as const }
+    const draft = note('The patient writer')
+    draft.sources = [
+      {
+        id: 'writing-reference',
+        name: 'Writing reference.md',
+        kind: 'markdown',
+        text: 'The patient writer pauses before choosing a word.',
+        enabled: true,
+        addedAt: 0,
+      },
+    ]
+    vi.mocked(generateBuiltinInsertion).mockResolvedValue(
+      '<pre>unrelated code</pre>'
+    )
+    expect(await suggest(draft, cursor(draft.content), config)).toEqual({
+      text: ' pauses before choosing a word.',
+      sources: ['Writing reference.md'],
+      mode: 'recall',
+    })
+    expect(generateBuiltinInsertion).toHaveBeenCalledTimes(1)
+    expect(requestJson).not.toHaveBeenCalled()
+    expect(getSecret).not.toHaveBeenCalled()
+  })
+
+  it('keeps rejected output out of the cache and never retries or changes engines', async () => {
+    const config = { ...settings(), localEngine: 'embedded' as const }
+    const draft = note('I want to')
+    config.profiles.local.endpoint = 'http://localhost:1234/v1'
+    config.profiles.local.model = 'remembered-server-model'
+    vi.mocked(generateBuiltinInsertion).mockResolvedValue(
+      '<span>copied template</span>'
+    )
+    const first = await suggest(draft, cursor(draft.content), config)
+    const cached = await suggest(draft, cursor(draft.content), config)
+    expect(cached).toEqual(first)
+    expect(first.mode).toBe('starter')
+    expect(first.text).not.toContain('copied')
+    expect(generateBuiltinInsertion).toHaveBeenCalledTimes(1)
+    expect(requestJson).not.toHaveBeenCalled()
+    expect(getSecret).not.toHaveBeenCalled()
+  })
+
+  it('does not treat a mention of HTML in the note as author code context', async () => {
+    const config = { ...settings(), localEngine: 'embedded' as const }
+    const draft = note('I want to')
+    draft.title = 'HTML reflections'
+    draft.objective = 'Describe HTML code in a personal essay'
+    draft.context = 'Discuss the feeling of reading source code.'
+    vi.mocked(generateBuiltinInsertion).mockResolvedValue(
+      '<span>unrelated sample</span>'
+    )
+    expect((await suggest(draft, cursor(draft.content), config)).mode).toBe(
+      'starter'
+    )
+    expect(generateBuiltinInsertion).toHaveBeenCalledTimes(1)
+    expect(requestJson).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ' **uncertain**, but curious.',
+    ' _a little clearer_.',
+    ' [the garden](https://example.org)',
+    ' <https://example.org>',
+    ' <writer@example.org>',
+    ' - [ ] give this thought time',
+    ' ## A quiet morning',
+    ' > A quiet detail matters.',
+    ' `array.length` is only a label.',
+    ' "a little clearer."',
+    ' x < y and y > z',
+    ' {curiosity}',
+    ' [^1]',
+    ' let this thought unfold.',
+  ])('preserves useful prose and Markdown: %j', async raw => {
+    const config = { ...settings(), localEngine: 'embedded' as const }
+    const draft = note('A thought')
+    vi.mocked(generateBuiltinInsertion).mockResolvedValue(raw)
+    const result = await suggest(draft, cursor(draft.content), config)
+    expect(result.text).toBe(raw)
+    expect(result.mode).toBe('model')
+    expect(generateBuiltinInsertion).toHaveBeenCalledTimes(1)
+    expect(requestJson).not.toHaveBeenCalled()
+  })
+
+  it('preserves an intentional partial-word insertion between existing letters', async () => {
+    const config = { ...settings(), localEngine: 'embedded' as const }
+    const draft = note('It was wondful.')
+    vi.mocked(generateBuiltinInsertion).mockResolvedValue('er')
+    const result = await suggest(draft, cursor(draft.content, 11), config)
+    expect(result.text).toBe('er')
+    expect(result.mode).toBe('model')
+    expect(
+      draft.content.slice(0, 11) + result.text + draft.content.slice(11)
+    ).toBe('It was wonderful.')
+  })
+
+  it.each([
+    {
+      before: '```html\n',
+      after: '\n```',
+      raw: '<span class="note">hello</span>',
+    },
+    {
+      before: 'An inline example `<sp',
+      after: '` explains the idea.',
+      raw: 'an class="note">hello</span>',
+    },
+    { before: '```json\n', after: '\n```', raw: '{"message":"hello"}' },
+    {
+      before: '```javascript\n',
+      after: '\n```',
+      raw: 'const message = "hello";',
+    },
+  ])(
+    'preserves intentional code using the author syntax context: $before',
+    async fixture => {
+      const config = { ...settings(), localEngine: 'embedded' as const }
+      const draft = note(fixture.before + fixture.after)
+      const context = {
+        ...cursor(draft.content, fixture.before.length),
+        inCode: true,
+      }
+      vi.mocked(generateBuiltinInsertion).mockResolvedValue(fixture.raw)
+      const result = await suggest(draft, context, config)
+      expect(result.text).toBe(fixture.raw)
+      expect(result.mode).toBe('model')
+      expect(generateBuiltinInsertion).toHaveBeenCalledWith(
+        expect.objectContaining({ inCode: true }),
+        expect.objectContaining({ maxTokens: expect.any(Number) })
+      )
+      expect(requestJson).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['hosted', 'local server', 'native FIM'] as const)(
+    'leaves the existing %s output contract unchanged',
+    async engine => {
+      const config = settings()
+      if (engine === 'hosted') {
+        config.provider = 'openai'
+        vi.mocked(getSecret).mockResolvedValue('fixture-key')
+      } else if (engine === 'native FIM') config.profiles.local.protocol = 'fim'
+      const raw = '<span class="note">hello</span>'
+      vi.mocked(requestJson).mockResolvedValue(
+        engine === 'native FIM' ? { content: raw } : completion(raw)
+      )
+      const draft = note('A thought')
+      const result = await suggest(draft, cursor(draft.content), config)
+      expect(result.text).toBe(raw)
+      expect(result.mode).toBe('model')
+      expect(requestJson).toHaveBeenCalledTimes(1)
+      expect(generateBuiltinInsertion).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not reuse a prose fallback when an author code fence is outside the bounded prompt window', async () => {
+    const config = { ...settings(), localEngine: 'embedded' as const }
+    const body = 'A'.repeat(5_100) + '\nI want to'
+    const draft = note(body)
+    const raw = '<span>hello</span>'
+    vi.mocked(generateBuiltinInsertion).mockResolvedValue(raw)
+    expect((await suggest(draft, cursor(body), config)).mode).toBe('starter')
+    const codeText = '```html\n' + body
+    const result = await suggest(
+      draft,
+      { ...cursor(codeText), inCode: true },
+      config
+    )
+    expect(result.text).toBe(raw)
+    expect(result.mode).toBe('model')
+    expect(generateBuiltinInsertion).toHaveBeenCalledTimes(2)
+    const [proseCall, codeCall] = vi.mocked(generateBuiltinInsertion).mock.calls
+    expect(proseCall?.[0].beforeCursor).toBe(codeCall?.[0].beforeCursor)
+    expect(proseCall?.[0].inCode).toBe(false)
+    expect(codeCall?.[0].inCode).toBe(true)
+    expect(requestJson).not.toHaveBeenCalled()
+  })
+
+  it('checks cancellation before inspecting rejected output or returning a fallback', async () => {
+    const config = { ...settings(), localEngine: 'embedded' as const }
+    const draft = note('I want to')
+    const controller = new AbortController()
+    vi.mocked(generateBuiltinInsertion).mockImplementationOnce(async () => {
+      controller.abort()
+      return '<span>stale template</span>'
+    })
+    await expect(
+      suggest(draft, cursor(draft.content), config, controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(generateBuiltinInsertion).toHaveBeenCalledTimes(1)
+    expect(requestJson).not.toHaveBeenCalled()
+    expect(getSecret).not.toHaveBeenCalled()
   })
 })
 

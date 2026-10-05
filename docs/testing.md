@@ -1,5 +1,9 @@
 # Testing TypeNext
 
+## SmolLM prose regression, 2026-10-06
+
+After replacing the built-in JSON prompt with literal prose and adding rejection of malformed model output, the full **512-unit-test suite**, TypeScript and zero-warning ESLint passed. Six additional Edge end-to-end cases exercise malformed raw worker output through the real engine transport and editor: automatic ghost text, fresh Ctrl+Space choices, Tab/Enter acceptance, undo, persistence, withholding a suggestion when no local fallback fits, and preserving an intentional fenced HTML completion. They assert no external requests. The model output is synthetic in these browser regressions; the separate [real pinned-model smoke](builtin-models.md#prose-regression-check-6-october) executes 20 local generations through the engine and completion service at temperatures 0 and 0.35, with zero external requests after cache loading. The production frontend and normal Windows debug installer were rebuilt. Earlier native/Rust results below were not rerun for this frontend-only fix.
+
 ## Verified on Windows, 2026-10-05
 
 Verification includes **441 unit tests**, **53 browser end-to-end tests** in installed Microsoft Edge and **29 Rust tests**. The live-provider scenario is deliberately skipped in ordinary regression runs; its opt-in results, including the fresh-choice request and recorded-response repair, are recorded below. Two Rust helper/diagnostic entries are intentionally ignored as standalone tests. TypeScript, zero-warning ESLint, Rust formatting, strict Clippy, the production frontend build and Windows Tauri/NSIS builds passed. Four Python training-data tests also passed. `npm audit` reported zero known vulnerabilities at verification.
