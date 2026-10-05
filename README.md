@@ -104,7 +104,7 @@ The active implementation is in `src/notebook`, `src/components/notebook`, and t
 
 The static project site is in `site`. Build it with `npm run site:build`. The Pages workflow publishes only `site-dist` to the `github-pages` environment when changes reach `main`.
 
-The intended deployment address is `https://alshell7.github.io/typenext/`. Publishing requires the GitHub repository and Pages access; a successful Pages workflow confirms that it is live.
+The project website is live at [alshell7.github.io/typenext](https://alshell7.github.io/typenext/).
 
 ## Contributing
 

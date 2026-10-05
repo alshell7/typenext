@@ -2,9 +2,9 @@
 
 Every public release requires Windows x64, Apple Silicon macOS and Intel macOS assets. A successful build for one platform is insufficient to publish.
 
-The release workflow uses `windows-2022`, `macos-15` and `macos-15-intel` with explicit matching Rust targets. GitHub currently documents `macos-15` as ARM64 and `macos-15-intel` as Intel; see the [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Linux remains a source-build/check target and is not a required 0.1.0 binary asset.
+The release workflow uses `windows-2022`, `macos-15` and `macos-15-intel` with explicit matching Rust targets. GitHub currently documents `macos-15` as ARM64 and `macos-15-intel` as Intel; see the [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Linux remains a source-build/check target and is not a required 0.1.1 binary asset.
 
-Before tagging, commit matching versions in package.json, package-lock.json, Cargo.toml, Cargo.lock and tauri.conf.json, reviewed license notices and a docs/release-notes/vVERSION.md. `node scripts/prepare-release.js v0.1.0` checks local metadata and icons without changing versions, Git state, tags or remotes. It does not require an empty working directory and does not publish anything.
+Before tagging, commit matching versions in package.json, package-lock.json, Cargo.toml, Cargo.lock and tauri.conf.json, reviewed license notices and a docs/release-notes/vVERSION.md. `node scripts/prepare-release.js v0.1.1` checks local metadata and icons without changing versions, Git state, tags or remotes. It does not require an empty working directory and does not publish anything.
 
 Push the reviewed release commit to the repository, create its version tag, and push that tag. The workflow also supports manual dispatch naming an existing tag. It checks out the tagged commit and refuses mismatched version or MIT metadata, missing license resources, invalid icons or absent release notes. Live-provider tests remain disabled in CI.
 
@@ -27,4 +27,4 @@ GitHub Actions must be enabled with permission for the publish job's GITHUB_TOKE
 
 The initial workflow uses ad-hoc macOS signing (`APPLE_SIGNING_IDENTITY=-`) and leaves Windows binaries unsigned. Ad-hoc signing is recommended by [Tauri's GitHub pipeline guide](https://v2.tauri.app/distribute/pipelines/github/) for unsigned Apple Silicon downloads. It establishes bundle integrity and does not identify a trusted publisher or provide notarization. For trusted macOS distribution, configure a Developer ID Application certificate and notarization following [Tauri's macOS signing guide](https://v2.tauri.app/distribute/sign/macos/) and update the workflow to import the certificate and use its identity. Windows trusted signing requires a suitable signing certificate/service and corresponding [Tauri signing configuration](https://v2.tauri.app/distribute/sign/windows/). SHA-256 checksums do not replace publisher signatures.
 
-In-app updating is disabled. No updater key, latest.json, updater signatures or automatic update promise is part of 0.1.0.
+In-app updating is disabled. No updater key, latest.json, updater signatures or automatic update promise is part of 0.1.1.

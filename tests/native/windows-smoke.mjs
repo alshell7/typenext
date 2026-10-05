@@ -4,6 +4,7 @@ import { createServer } from 'node:http'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { once } from 'node:events'
+import { waitForNormalNativeQuit } from './shutdown.mjs'
 
 // Build using artifacts/native-smoke/tauri.json before running. The independent
 // app identifier is verified over real IPC before any writing is entered.
@@ -32,6 +33,7 @@ if (offlineModels && !existsSync(syntheticWav))
     'Create the synthetic speech fixture with the Whistle smoke script first.'
   )
 const observations = []
+const normalQuits = []
 const generationRequests = []
 const server = createServer(async (request, response) => {
   if (request.headers.authorization)
@@ -122,15 +124,7 @@ async function start() {
     )
 }
 async function quitAndWait(action) {
-  const exit = once(child, 'exit')
-  await action()
-  const [code] = await Promise.race([
-    exit,
-    pause(10_000).then(() => {
-      throw new Error('Native save/quit did not exit.')
-    }),
-  ])
-  if (code !== 0) throw new Error(`Native app quit with code ${code}.`)
+  normalQuits.push(await waitForNormalNativeQuit(child, action))
   await browser.close().catch(() => {})
   await waitForDebuggerShutdown()
   browser = undefined
@@ -563,6 +557,7 @@ try {
         status: 'passed',
         identifier,
         observations,
+        normalQuits,
         unhandledErrors: errors,
         generationRequests: generationRequests.length,
         modelTransport: offlineModels
@@ -577,6 +572,7 @@ try {
     JSON.stringify({
       status: 'passed',
       observations,
+      normalQuits,
       generationRequests: generationRequests.length,
     })
   )

@@ -31,7 +31,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: node --test scripts/release/*.test.mjs
+      - run: node --test scripts/release/*.test.mjs tests/native/shutdown.test.mjs
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test:run

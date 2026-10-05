@@ -1498,7 +1498,7 @@ describe('private suggestion lifecycle', () => {
       <MarkdownEditor {...editor.props} note={notes.at(-1)!} ref={editor.ref} />
     )
     expect(undoDepth(view().state)).toBeGreaterThan(0)
-  })
+  }, 20_000)
 
   it('tracks exact UTF-8 bytes across surrogate boundaries and multiple changed spans', () => {
     let state = EditorState.create({

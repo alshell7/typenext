@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Existing release tag, for example v0.1.0'
+        description: 'Existing release tag, for example v0.1.1'
         required: true
-        default: v0.1.0
+        default: v0.1.1
         type: string
 
 permissions:
@@ -52,7 +52,7 @@ jobs:
       - name: Verify original master and every desktop icon derivative
         run: node scripts/verify-brand.mjs
       - name: Check release gate helpers
-        run: node --test scripts/release/*.test.mjs
+        run: node --test scripts/release/*.test.mjs tests/native/shutdown.test.mjs
 
   frontend:
     needs: prepare
@@ -122,6 +122,8 @@ jobs:
       - run: npm ci
       - name: Frontend unit tests on this operating system
         run: npm run test:run
+      - name: Verify clean-exit shutdown harness on this operating system
+        run: node --test tests/native/shutdown.test.mjs
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - name: Native tests on the matching Windows or Mac architecture
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
