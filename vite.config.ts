@@ -1,20 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 const host = process.env.TAURI_DEV_HOST
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
   build: {
-    chunkSizeWarningLimit: 600, // Prevent warnings for template's bundled components
+    chunkSizeWarningLimit: 600,
+  },
+  optimizeDeps: {
+    include: ['pdfjs-dist/legacy/build/pdf.mjs', 'mammoth'],
   },
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
@@ -34,7 +36,15 @@ export default defineConfig(async () => ({
       : undefined,
     watch: {
       // 3. tell vite to ignore watching `src-tauri`
-      ignored: ['**/src-tauri/**'],
+      ignored: [
+        '**/src-tauri/**',
+        '**/artifacts/**',
+        '**/test-results*/**',
+        '**/playwright-report/**',
+        '**/site/**',
+        '**/site-dist/**',
+        '**/docs/screenshots/**',
+      ],
     },
   },
 }))

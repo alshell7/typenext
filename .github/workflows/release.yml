@@ -1,4 +1,4 @@
-name: 'Release Tauri Template App'
+name: Release TypeNext
 
 on:
   push:
@@ -22,8 +22,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - platform: 'windows-latest'
+            args: '--bundles nsis,msi'
           - platform: 'macos-latest'
             args: '--bundles app,dmg'
+          - platform: 'ubuntu-latest'
+            args: '--bundles deb,appimage'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -32,7 +36,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: 22
           cache: 'npm'
 
       - name: Install Rust stable
@@ -46,26 +50,26 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Linux prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev
+
       - name: Build and release
-        uses: tauri-apps/tauri-action@dev
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name || inputs.version }}
-          releaseName: 'Tauri Template App ${{ github.ref_name || inputs.version }}'
+          tagName: ${{ inputs.version || github.ref_name }}
+          releaseName: 'TypeNext ${{ inputs.version || github.ref_name }}'
           releaseBody: |
-            ## 🚀 Tauri Template App ${{ github.ref_name || inputs.version }}
+            A local-first Markdown notebook with short, optional suggestions.
 
-            ### Installation Instructions
-            - **macOS**: Download the `.dmg` file and drag to Applications folder
+            Windows: use the installer. macOS: open the DMG and drag TypeNext to Applications. Linux: use the AppImage or Debian package.
 
-            ### Auto-Updates
-            Existing users will receive automatic update notifications.
+            These builds are not signed or notarized unless the project's signing credentials have been configured. Review platform prompts before installing.
 
-            **Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ github.ref_name || inputs.version }}
+            Changes: https://github.com/${{ github.repository }}/commits/${{ inputs.version || github.ref_name }}
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
+          includeUpdaterJson: false
           args: ${{ matrix.args }}

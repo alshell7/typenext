@@ -1,0 +1,91 @@
+export type ProviderId =
+  'openrouter' | 'openai' | 'anthropic' | 'local' | 'custom'
+export type CompletionProtocol = 'chat' | 'fim'
+
+export interface ProviderProfile {
+  endpoint: string
+  model: string
+  protocol: CompletionProtocol
+}
+
+export interface PaletteColors {
+  page: string
+  sidebar: string
+  accent: string
+}
+
+export interface PalettePreferences {
+  light: 'paper' | 'linen' | 'mist' | 'custom'
+  dark: 'graphite' | 'midnight' | 'forest' | 'custom'
+  customLight: PaletteColors
+  customDark: PaletteColors
+}
+
+export interface NotebookSettings {
+  theme: 'light' | 'dark' | 'system'
+  palette: PalettePreferences
+  fontFamily: string
+  fontSize: number
+  autoSave: boolean
+  suggestionsEnabled: boolean
+  autoSuggest: boolean
+  temperature: number
+  suggestionDelay: number
+  maxTokens: number
+  suggestionLength: 'adaptive' | 'short' | 'sentence'
+  provider: ProviderId
+  externalProvider: Exclude<ProviderId, 'local'>
+  profiles: Record<ProviderId, ProviderProfile>
+  websiteImporter: 'direct' | 'firecrawl'
+}
+
+export interface ContextSource {
+  id: string
+  name: string
+  kind: 'text' | 'markdown' | 'pdf' | 'docx' | 'website' | 'note'
+  text: string
+  origin?: string
+  linkedNoteId?: string
+  enabled: boolean
+  addedAt: number
+}
+
+export interface Note {
+  id: string
+  title: string
+  objective: string
+  context: string
+  content: string
+  sources: ContextSource[]
+  createdAt: number
+  updatedAt: number
+  filePath?: string
+  exportedAt?: number
+}
+
+export interface Workspace {
+  version: 1
+  notes: Note[]
+  openNoteIds: string[]
+  activeNoteId: string | null
+  settings: NotebookSettings
+}
+
+export interface CursorContext {
+  text: string
+  cursor: number
+  selectionEmpty: boolean
+}
+
+export interface RetrievedChunk {
+  sourceId: string
+  sourceName: string
+  text: string
+  score: number
+}
+
+export interface SuggestionResult {
+  text: string
+  sources: string[]
+  mode?: 'model' | 'recall'
+}

@@ -10,6 +10,17 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+site-dist/
+test-results/
+test-results-*/
+playwright-report/
+artifacts/
+src-tauri/.tools/
+src-tauri/target/
+CREDENTIALS.txt
+.env
+.env.*
+!.env.example
 *.local
 *.local.*
 

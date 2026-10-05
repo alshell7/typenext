@@ -1,0 +1,1043 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-05T13:25:42.949Z",
+  "title": "Design System: TypeNext",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "displayName": "Porcelain Paper",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "sidebar": {
+        "displayName": "Pebble Notebook",
+        "tonalRamp": [
+          "oklch(15% 0.0041 121.56)",
+          "oklch(25% 0.0041 121.56)",
+          "oklch(35% 0.0041 121.56)",
+          "oklch(45% 0.0041 121.56)",
+          "oklch(60% 0.0041 121.56)",
+          "oklch(72% 0.0041 121.56)",
+          "oklch(84% 0.0041 121.56)",
+          "oklch(95% 0.0041 121.56)"
+        ],
+        "role": "neutral"
+      },
+      "surface": {
+        "displayName": "Supporting Paper",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "hover": {
+        "displayName": "Page Hover Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "ink": {
+        "displayName": "Charcoal Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "secondary": {
+        "displayName": "Secondary Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "muted": {
+        "displayName": "Quiet Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "ghost": {
+        "displayName": "Provisional Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "line": {
+        "displayName": "Paper Seam",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "accent": {
+        "displayName": "Readable Sage",
+        "tonalRamp": [
+          "oklch(15% 0.0543 154.26)",
+          "oklch(25% 0.0543 154.26)",
+          "oklch(35% 0.0543 154.26)",
+          "oklch(45% 0.0543 154.26)",
+          "oklch(60% 0.0543 154.26)",
+          "oklch(72% 0.0543 154.26)",
+          "oklch(84% 0.0543 154.26)",
+          "oklch(95% 0.0543 154.26)"
+        ],
+        "role": "primary"
+      },
+      "accent-fill": {
+        "displayName": "Sage Action Fill",
+        "tonalRamp": [
+          "oklch(15% 0.0543 154.26)",
+          "oklch(25% 0.0543 154.26)",
+          "oklch(35% 0.0543 154.26)",
+          "oklch(45% 0.0543 154.26)",
+          "oklch(60% 0.0543 154.26)",
+          "oklch(72% 0.0543 154.26)",
+          "oklch(84% 0.0543 154.26)",
+          "oklch(95% 0.0543 154.26)"
+        ],
+        "role": "primary"
+      },
+      "accent-hover": {
+        "displayName": "Sage Hover Fill",
+        "tonalRamp": [
+          "oklch(15% 0.0509 154.25)",
+          "oklch(25% 0.0509 154.25)",
+          "oklch(35% 0.0509 154.25)",
+          "oklch(45% 0.0509 154.25)",
+          "oklch(60% 0.0509 154.25)",
+          "oklch(72% 0.0509 154.25)",
+          "oklch(84% 0.0509 154.25)",
+          "oklch(95% 0.0509 154.25)"
+        ],
+        "role": "primary"
+      },
+      "accent-soft": {
+        "displayName": "Page Sage Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0067 160.07)",
+          "oklch(25% 0.0067 160.07)",
+          "oklch(35% 0.0067 160.07)",
+          "oklch(45% 0.0067 160.07)",
+          "oklch(60% 0.0067 160.07)",
+          "oklch(72% 0.0067 160.07)",
+          "oklch(84% 0.0067 160.07)",
+          "oklch(95% 0.0067 160.07)"
+        ],
+        "role": "primary"
+      },
+      "on-accent": {
+        "displayName": "White on Sage",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "primary"
+      },
+      "error": {
+        "displayName": "Brick Error",
+        "tonalRamp": [
+          "oklch(15% 0.1342 26.51)",
+          "oklch(25% 0.1342 26.51)",
+          "oklch(35% 0.1342 26.51)",
+          "oklch(45% 0.1342 26.51)",
+          "oklch(60% 0.1342 26.51)",
+          "oklch(72% 0.1342 26.51)",
+          "oklch(84% 0.1342 26.51)",
+          "oklch(95% 0.1342 26.51)"
+        ]
+      },
+      "editor-caret": {
+        "displayName": "Sage Caret",
+        "tonalRamp": [
+          "oklch(15% 0.0543 154.26)",
+          "oklch(25% 0.0543 154.26)",
+          "oklch(35% 0.0543 154.26)",
+          "oklch(45% 0.0543 154.26)",
+          "oklch(60% 0.0543 154.26)",
+          "oklch(72% 0.0543 154.26)",
+          "oklch(84% 0.0543 154.26)",
+          "oklch(95% 0.0543 154.26)"
+        ],
+        "role": "primary"
+      },
+      "editor-selection": {
+        "displayName": "Page Selection Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0101 155.08)",
+          "oklch(25% 0.0101 155.08)",
+          "oklch(35% 0.0101 155.08)",
+          "oklch(45% 0.0101 155.08)",
+          "oklch(60% 0.0101 155.08)",
+          "oklch(72% 0.0101 155.08)",
+          "oklch(84% 0.0101 155.08)",
+          "oklch(95% 0.0101 155.08)"
+        ],
+        "role": "primary"
+      },
+      "sidebar-ink": {
+        "displayName": "Notebook Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "sidebar-secondary": {
+        "displayName": "Notebook Secondary Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0021 145.54)",
+          "oklch(25% 0.0021 145.54)",
+          "oklch(35% 0.0021 145.54)",
+          "oklch(45% 0.0021 145.54)",
+          "oklch(60% 0.0021 145.54)",
+          "oklch(72% 0.0021 145.54)",
+          "oklch(84% 0.0021 145.54)",
+          "oklch(95% 0.0021 145.54)"
+        ],
+        "role": "neutral"
+      },
+      "sidebar-muted": {
+        "displayName": "Notebook Quiet Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0016 106.46)",
+          "oklch(25% 0.0016 106.46)",
+          "oklch(35% 0.0016 106.46)",
+          "oklch(45% 0.0016 106.46)",
+          "oklch(60% 0.0016 106.46)",
+          "oklch(72% 0.0016 106.46)",
+          "oklch(84% 0.0016 106.46)",
+          "oklch(95% 0.0016 106.46)"
+        ],
+        "role": "neutral"
+      },
+      "sidebar-surface": {
+        "displayName": "Notebook Supporting Surface",
+        "tonalRamp": [
+          "oklch(15% 0.0029 128.49)",
+          "oklch(25% 0.0029 128.49)",
+          "oklch(35% 0.0029 128.49)",
+          "oklch(45% 0.0029 128.49)",
+          "oklch(60% 0.0029 128.49)",
+          "oklch(72% 0.0029 128.49)",
+          "oklch(84% 0.0029 128.49)",
+          "oklch(95% 0.0029 128.49)"
+        ],
+        "role": "neutral"
+      },
+      "sidebar-hover": {
+        "displayName": "Notebook Hover Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0042 121.57)",
+          "oklch(25% 0.0042 121.57)",
+          "oklch(35% 0.0042 121.57)",
+          "oklch(45% 0.0042 121.57)",
+          "oklch(60% 0.0042 121.57)",
+          "oklch(72% 0.0042 121.57)",
+          "oklch(84% 0.0042 121.57)",
+          "oklch(95% 0.0042 121.57)"
+        ],
+        "role": "neutral"
+      },
+      "sidebar-line": {
+        "displayName": "Notebook Seam",
+        "tonalRamp": [
+          "oklch(15% 0.0042 121.57)",
+          "oklch(25% 0.0042 121.57)",
+          "oklch(35% 0.0042 121.57)",
+          "oklch(45% 0.0042 121.57)",
+          "oklch(60% 0.0042 121.57)",
+          "oklch(72% 0.0042 121.57)",
+          "oklch(84% 0.0042 121.57)",
+          "oklch(95% 0.0042 121.57)"
+        ],
+        "role": "neutral"
+      },
+      "sidebar-accent": {
+        "displayName": "Readable Notebook Sage",
+        "tonalRamp": [
+          "oklch(15% 0.0543 154.26)",
+          "oklch(25% 0.0543 154.26)",
+          "oklch(35% 0.0543 154.26)",
+          "oklch(45% 0.0543 154.26)",
+          "oklch(60% 0.0543 154.26)",
+          "oklch(72% 0.0543 154.26)",
+          "oklch(84% 0.0543 154.26)",
+          "oklch(95% 0.0543 154.26)"
+        ],
+        "role": "primary"
+      },
+      "sidebar-accent-soft": {
+        "displayName": "Notebook Sage Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0086 145.50)",
+          "oklch(25% 0.0086 145.50)",
+          "oklch(35% 0.0086 145.50)",
+          "oklch(45% 0.0086 145.50)",
+          "oklch(60% 0.0086 145.50)",
+          "oklch(72% 0.0086 145.50)",
+          "oklch(84% 0.0086 145.50)",
+          "oklch(95% 0.0086 145.50)"
+        ],
+        "role": "primary"
+      },
+      "sidebar-error": {
+        "displayName": "Notebook Brick Error",
+        "tonalRamp": [
+          "oklch(15% 0.1298 26.59)",
+          "oklch(25% 0.1298 26.59)",
+          "oklch(35% 0.1298 26.59)",
+          "oklch(45% 0.1298 26.59)",
+          "oklch(60% 0.1298 26.59)",
+          "oklch(72% 0.1298 26.59)",
+          "oklch(84% 0.1298 26.59)",
+          "oklch(95% 0.1298 26.59)"
+        ]
+      },
+      "dark-paper": {
+        "displayName": "Graphite Paper",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "dark-sidebar": {
+        "displayName": "Deep Charcoal Notebook",
+        "tonalRamp": [
+          "oklch(15% 0.0067 258.37)",
+          "oklch(25% 0.0067 258.37)",
+          "oklch(35% 0.0067 258.37)",
+          "oklch(45% 0.0067 258.37)",
+          "oklch(60% 0.0067 258.37)",
+          "oklch(72% 0.0067 258.37)",
+          "oklch(84% 0.0067 258.37)",
+          "oklch(95% 0.0067 258.37)"
+        ],
+        "role": "neutral"
+      },
+      "dark-surface": {
+        "displayName": "Graphite Supporting Surface",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "dark-hover": {
+        "displayName": "Graphite Hover Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "dark-ink": {
+        "displayName": "Light Graphite Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "dark-secondary": {
+        "displayName": "Light Secondary Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "dark-muted": {
+        "displayName": "Light Quiet Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "dark-ghost": {
+        "displayName": "Light Provisional Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "dark-line": {
+        "displayName": "Graphite Seam",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "dark-accent": {
+        "displayName": "Readable Slate",
+        "tonalRamp": [
+          "oklch(15% 0.0313 251.35)",
+          "oklch(25% 0.0313 251.35)",
+          "oklch(35% 0.0313 251.35)",
+          "oklch(45% 0.0313 251.35)",
+          "oklch(60% 0.0313 251.35)",
+          "oklch(72% 0.0313 251.35)",
+          "oklch(84% 0.0313 251.35)",
+          "oklch(95% 0.0313 251.35)"
+        ],
+        "role": "primary"
+      },
+      "dark-accent-fill": {
+        "displayName": "Slate Action Fill",
+        "tonalRamp": [
+          "oklch(15% 0.0313 251.35)",
+          "oklch(25% 0.0313 251.35)",
+          "oklch(35% 0.0313 251.35)",
+          "oklch(45% 0.0313 251.35)",
+          "oklch(60% 0.0313 251.35)",
+          "oklch(72% 0.0313 251.35)",
+          "oklch(84% 0.0313 251.35)",
+          "oklch(95% 0.0313 251.35)"
+        ],
+        "role": "primary"
+      },
+      "dark-accent-hover": {
+        "displayName": "Slate Hover Fill",
+        "tonalRamp": [
+          "oklch(15% 0.0299 251.54)",
+          "oklch(25% 0.0299 251.54)",
+          "oklch(35% 0.0299 251.54)",
+          "oklch(45% 0.0299 251.54)",
+          "oklch(60% 0.0299 251.54)",
+          "oklch(72% 0.0299 251.54)",
+          "oklch(84% 0.0299 251.54)",
+          "oklch(95% 0.0299 251.54)"
+        ],
+        "role": "primary"
+      },
+      "dark-accent-soft": {
+        "displayName": "Page Slate Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0060 258.35)",
+          "oklch(25% 0.0060 258.35)",
+          "oklch(35% 0.0060 258.35)",
+          "oklch(45% 0.0060 258.35)",
+          "oklch(60% 0.0060 258.35)",
+          "oklch(72% 0.0060 258.35)",
+          "oklch(84% 0.0060 258.35)",
+          "oklch(95% 0.0060 258.35)"
+        ],
+        "role": "primary"
+      },
+      "dark-on-accent": {
+        "displayName": "Black on Slate",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "primary"
+      },
+      "dark-error": {
+        "displayName": "Pale Coral Error",
+        "tonalRamp": [
+          "oklch(15% 0.0918 26.00)",
+          "oklch(25% 0.0918 26.00)",
+          "oklch(35% 0.0918 26.00)",
+          "oklch(45% 0.0918 26.00)",
+          "oklch(60% 0.0918 26.00)",
+          "oklch(72% 0.0918 26.00)",
+          "oklch(84% 0.0918 26.00)",
+          "oklch(95% 0.0918 26.00)"
+        ]
+      },
+      "dark-editor-caret": {
+        "displayName": "Slate Caret",
+        "tonalRamp": [
+          "oklch(15% 0.0313 251.35)",
+          "oklch(25% 0.0313 251.35)",
+          "oklch(35% 0.0313 251.35)",
+          "oklch(45% 0.0313 251.35)",
+          "oklch(60% 0.0313 251.35)",
+          "oklch(72% 0.0313 251.35)",
+          "oklch(84% 0.0313 251.35)",
+          "oklch(95% 0.0313 251.35)"
+        ],
+        "role": "primary"
+      },
+      "dark-editor-selection": {
+        "displayName": "Graphite Selection Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0080 255.54)",
+          "oklch(25% 0.0080 255.54)",
+          "oklch(35% 0.0080 255.54)",
+          "oklch(45% 0.0080 255.54)",
+          "oklch(60% 0.0080 255.54)",
+          "oklch(72% 0.0080 255.54)",
+          "oklch(84% 0.0080 255.54)",
+          "oklch(95% 0.0080 255.54)"
+        ],
+        "role": "primary"
+      },
+      "dark-sidebar-ink": {
+        "displayName": "Light Notebook Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(25% 0.0000 0.00)",
+          "oklch(35% 0.0000 0.00)",
+          "oklch(45% 0.0000 0.00)",
+          "oklch(60% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ],
+        "role": "neutral"
+      },
+      "dark-sidebar-secondary": {
+        "displayName": "Light Notebook Secondary Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0018 247.85)",
+          "oklch(25% 0.0018 247.85)",
+          "oklch(35% 0.0018 247.85)",
+          "oklch(45% 0.0018 247.85)",
+          "oklch(60% 0.0018 247.85)",
+          "oklch(72% 0.0018 247.85)",
+          "oklch(84% 0.0018 247.85)",
+          "oklch(95% 0.0018 247.85)"
+        ],
+        "role": "neutral"
+      },
+      "dark-sidebar-muted": {
+        "displayName": "Light Notebook Quiet Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0019 247.85)",
+          "oklch(25% 0.0019 247.85)",
+          "oklch(35% 0.0019 247.85)",
+          "oklch(45% 0.0019 247.85)",
+          "oklch(60% 0.0019 247.85)",
+          "oklch(72% 0.0019 247.85)",
+          "oklch(84% 0.0019 247.85)",
+          "oklch(95% 0.0019 247.85)"
+        ],
+        "role": "neutral"
+      },
+      "dark-sidebar-surface": {
+        "displayName": "Deep Charcoal Supporting Surface",
+        "tonalRamp": [
+          "oklch(15% 0.0064 258.36)",
+          "oklch(25% 0.0064 258.36)",
+          "oklch(35% 0.0064 258.36)",
+          "oklch(45% 0.0064 258.36)",
+          "oklch(60% 0.0064 258.36)",
+          "oklch(72% 0.0064 258.36)",
+          "oklch(84% 0.0064 258.36)",
+          "oklch(95% 0.0064 258.36)"
+        ],
+        "role": "neutral"
+      },
+      "dark-sidebar-hover": {
+        "displayName": "Deep Charcoal Hover Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0062 258.36)",
+          "oklch(25% 0.0062 258.36)",
+          "oklch(35% 0.0062 258.36)",
+          "oklch(45% 0.0062 258.36)",
+          "oklch(60% 0.0062 258.36)",
+          "oklch(72% 0.0062 258.36)",
+          "oklch(84% 0.0062 258.36)",
+          "oklch(95% 0.0062 258.36)"
+        ],
+        "role": "neutral"
+      },
+      "dark-sidebar-line": {
+        "displayName": "Deep Charcoal Seam",
+        "tonalRamp": [
+          "oklch(15% 0.0059 258.35)",
+          "oklch(25% 0.0059 258.35)",
+          "oklch(35% 0.0059 258.35)",
+          "oklch(45% 0.0059 258.35)",
+          "oklch(60% 0.0059 258.35)",
+          "oklch(72% 0.0059 258.35)",
+          "oklch(84% 0.0059 258.35)",
+          "oklch(95% 0.0059 258.35)"
+        ],
+        "role": "neutral"
+      },
+      "dark-sidebar-accent": {
+        "displayName": "Readable Notebook Slate",
+        "tonalRamp": [
+          "oklch(15% 0.0313 251.35)",
+          "oklch(25% 0.0313 251.35)",
+          "oklch(35% 0.0313 251.35)",
+          "oklch(45% 0.0313 251.35)",
+          "oklch(60% 0.0313 251.35)",
+          "oklch(72% 0.0313 251.35)",
+          "oklch(84% 0.0313 251.35)",
+          "oklch(95% 0.0313 251.35)"
+        ],
+        "role": "primary"
+      },
+      "dark-sidebar-accent-soft": {
+        "displayName": "Notebook Slate Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0100 260.71)",
+          "oklch(25% 0.0100 260.71)",
+          "oklch(35% 0.0100 260.71)",
+          "oklch(45% 0.0100 260.71)",
+          "oklch(60% 0.0100 260.71)",
+          "oklch(72% 0.0100 260.71)",
+          "oklch(84% 0.0100 260.71)",
+          "oklch(95% 0.0100 260.71)"
+        ],
+        "role": "primary"
+      },
+      "dark-sidebar-error": {
+        "displayName": "Notebook Pale Coral Error",
+        "tonalRamp": [
+          "oklch(15% 0.0918 26.00)",
+          "oklch(25% 0.0918 26.00)",
+          "oklch(35% 0.0918 26.00)",
+          "oklch(45% 0.0918 26.00)",
+          "oklch(60% 0.0918 26.00)",
+          "oklch(72% 0.0918 26.00)",
+          "oklch(84% 0.0918 26.00)",
+          "oklch(95% 0.0918 26.00)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Dialog Headline",
+        "purpose": "Semibold headings for repeated notebook dialogs."
+      },
+      "title": {
+        "displayName": "Note Title",
+        "purpose": "Editable document titles; reduced to 27px at the narrow breakpoint."
+      },
+      "panel-title": {
+        "displayName": "Supporting Panel Title",
+        "purpose": "Context headings below the note title in emphasis."
+      },
+      "body": {
+        "displayName": "Interface Body",
+        "purpose": "Regular interface text and standard field contents."
+      },
+      "control": {
+        "displayName": "Action Label",
+        "purpose": "Semibold common-button label; local dialog and source contexts tighten its size."
+      },
+      "writing": {
+        "displayName": "Default Writing",
+        "purpose": "Merriweather at the initial 17px preference; the writer may select another face and size."
+      },
+      "note-list-title": {
+        "displayName": "Notebook Row Title",
+        "purpose": "Semibold compact titles in the note rail."
+      },
+      "field-label": {
+        "displayName": "Field Label",
+        "purpose": "Semibold visible labels for supporting forms."
+      },
+      "label": {
+        "displayName": "Supporting Label",
+        "purpose": "Navigation, short descriptions, and supporting controls."
+      },
+      "metadata": {
+        "displayName": "Quiet Metadata",
+        "purpose": "Dates, counts, local status, source metadata, and shortcut labels."
+      },
+      "hex-value": {
+        "displayName": "Custom HEX Value",
+        "purpose": "IBM Plex Mono at 12px for complete custom palette color codes; 11px on narrow screens."
+      },
+      "palette-label": {
+        "displayName": "Palette Name",
+        "purpose": "Readable 12px preset names beside the selected check, with a compact 1.3 line height."
+      }
+    },
+    "shadows": [
+      {
+        "name": "dialog-light",
+        "value": "0 20px 80px rgb(31 40 30 / 16%)",
+        "purpose": "Diffuse lift for Paper and custom surfaces with a light page luminance."
+      },
+      {
+        "name": "dialog-dark",
+        "value": "0 24px 90px rgb(0 0 0 / 36%)",
+        "purpose": "Diffuse lift for Graphite and custom surfaces with a dark page luminance."
+      },
+      {
+        "name": "notice",
+        "value": "0 8px 24px rgb(0 0 0 / 14%)",
+        "purpose": "Separate a transient status notice from the writing page."
+      },
+      {
+        "name": "notebook-overlay",
+        "value": "8px 0 24px rgb(0 0 0 / 10%)",
+        "purpose": "Narrow notebook rail when it overlays the workspace."
+      },
+      {
+        "name": "context-overlay",
+        "value": "-10px 0 25px rgb(0 0 0 / 8%)",
+        "purpose": "Narrow context panel when it overlays the writing area."
+      },
+      {
+        "name": "active-tab-seam",
+        "value": "0 -1px 0 var(--line), 1px 0 0 var(--line), -1px 0 0 var(--line)",
+        "purpose": "Border-like seam that joins the active note tab to the paper."
+      },
+      {
+        "name": "field-focus",
+        "value": "0 0 0 2px var(--accent-soft)",
+        "purpose": "Soft wash around an accent-focused paper field."
+      }
+    ],
+    "motion": [
+      {
+        "name": "field-state",
+        "value": "border-color 120ms ease",
+        "purpose": "Field border focus feedback."
+      },
+      {
+        "name": "icon-state",
+        "value": "background 120ms ease, color 120ms ease",
+        "purpose": "Compact icon control hover feedback."
+      },
+      {
+        "name": "button-state",
+        "value": "background 140ms ease, color 140ms ease, box-shadow 140ms ease",
+        "purpose": "Common button state transitions."
+      },
+      {
+        "name": "ghost-appear",
+        "value": "150ms ease-out both",
+        "purpose": "Opacity fade from 0 to 1 for a fresh continuation."
+      },
+      {
+        "name": "accepted-word",
+        "value": "240ms ease-out both",
+        "purpose": "Fade the accepted range from accent-soft background to transparent."
+      },
+      {
+        "name": "dialog-enter",
+        "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Dialog opacity 0.6 to 1 with a 6px vertical settle."
+      },
+      {
+        "name": "context-reveal",
+        "value": "200ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "purpose": "Context opacity 0.7 to 1 with an 8px horizontal settle."
+      },
+      {
+        "name": "sidebar-collapse",
+        "value": "200ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Rail width, min-width, and padding transition."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms; 1 iteration; scroll-behavior: auto",
+        "purpose": "Existing prefers-reduced-motion treatment for animations, transitions, and scrolling."
+      },
+      {
+        "name": "palette-state",
+        "value": "border-color 140ms ease-out, background-color 140ms ease-out",
+        "purpose": "Palette-card hover and selected state without geometry changes."
+      },
+      {
+        "name": "theme-state",
+        "value": "background-color 160ms ease-out, color 160ms ease-out",
+        "purpose": "Quiet color transitions for page and notebook rail when changing palette."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop-max",
+        "value": "1100px"
+      },
+      {
+        "name": "narrow-max",
+        "value": "760px"
+      },
+      {
+        "name": "palette-narrow-max",
+        "value": "480px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "A filled palette action pairing the selected accent-fill with its derived readable label.",
+      "html": "<button type=\"button\" class=\"ds-button-primary\">Done</button>",
+      "css": ".ds-button-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 15px; border: 0; border-radius: var(--radius, 8px); font: 600 15px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; white-space: nowrap; cursor: pointer; transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; background: var(--accent-fill, #42644d); border: 1px solid var(--accent, #42644d); color: var(--on-accent, #ffffff);  } .ds-button-primary:hover:not(:disabled) { background: var(--accent-hover, #4f6f59); } .ds-button-primary:focus-visible { outline: 2px solid var(--accent, #42644d); outline-offset: 3px; border-radius: 5px; } .ds-button-primary:disabled { cursor: default; opacity: 0.45; } @media (prefers-reduced-motion: reduce) { .ds-button-primary { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary Button action using the shipped shared button geometry.",
+      "html": "<button type=\"button\" class=\"ds-button-secondary\">Attach files</button>",
+      "css": ".ds-button-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 15px; border: 0; border-radius: var(--radius, 8px); font: 600 15px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; white-space: nowrap; cursor: pointer; transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; background: var(--surface, #f6f6f6); color: var(--ink, #242424); border: 1px solid var(--line, #dbdbdb); } .ds-button-secondary:hover:not(:disabled) { background: var(--hover, #ededed); } .ds-button-secondary:focus-visible { outline: 2px solid var(--accent, #42644d); outline-offset: 3px; border-radius: 5px; } .ds-button-secondary:disabled { cursor: default; opacity: 0.45; } @media (prefers-reduced-motion: reduce) { .ds-button-secondary { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }"
+    },
+    {
+      "name": "Subtle Button",
+      "kind": "button",
+      "refersTo": "button-subtle",
+      "description": "Subtle Button action using the shipped shared button geometry.",
+      "html": "<button type=\"button\" class=\"ds-button-subtle\">Cancel</button>",
+      "css": ".ds-button-subtle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 15px; border: 0; border-radius: var(--radius, 8px); font: 600 15px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; white-space: nowrap; cursor: pointer; transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; background: transparent; color: var(--secondary, #545454);  } .ds-button-subtle:hover:not(:disabled) { background: var(--hover, #ededed); } .ds-button-subtle:focus-visible { outline: 2px solid var(--accent, #42644d); outline-offset: 3px; border-radius: 5px; } .ds-button-subtle:disabled { cursor: default; opacity: 0.45; } @media (prefers-reduced-motion: reduce) { .ds-button-subtle { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Destructive Button action using the shipped shared button geometry.",
+      "html": "<button type=\"button\" class=\"ds-button-destructive\">Delete note</button>",
+      "css": ".ds-button-destructive { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 15px; border: 0; border-radius: var(--radius, 8px); font: 600 15px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; white-space: nowrap; cursor: pointer; transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; background: #a13d37; color: #fff;  } .ds-button-destructive:hover { background: #8a302b; } .ds-button-destructive:focus-visible { outline: 2px solid var(--accent, #42644d); outline-offset: 3px; border-radius: 5px; } .ds-button-destructive:disabled { cursor: default; opacity: 0.45; } @media (prefers-reduced-motion: reduce) { .ds-button-destructive { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }"
+    },
+    {
+      "name": "Paper Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Labeled paper field with the source accent border and soft focus wash.",
+      "html": "<label class=\"ds-field-label\" for=\"ds-note-title\">Title</label><input class=\"ds-paper-field\" id=\"ds-note-title\" placeholder=\"A thought worth following\" />",
+      "css": ".ds-field-label { display: block; margin: 18px 0 7px; color: var(--ink, #242424); font: 600 13px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; } .ds-paper-field { width: calc(100% - 26px); padding: 10px 12px; border: 1px solid var(--line, #dbdbdb); border-radius: var(--radius, 8px); outline: none; background: var(--paper, #ffffff); color: var(--ink, #242424); font: 400 15px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; transition: border-color 120ms ease; } .ds-paper-field::placeholder { color: var(--muted, #636363); opacity: 1; } .ds-paper-field:focus { border-color: var(--accent, #42644d); box-shadow: 0 0 0 2px var(--accent-soft, #e6ebe8); } @media (prefers-reduced-motion: reduce) { .ds-paper-field { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }"
+    },
+    {
+      "name": "Notebook Note Rows",
+      "kind": "nav",
+      "refersTo": "nav-note",
+      "description": "Active and resting notebook rows using independently derived sidebar ink, metadata, hover and selection roles.",
+      "html": "<nav class=\"ds-notebook-rows\" aria-label=\"Notebook\"><div class=\"ds-note-row ds-note-active\"><button class=\"ds-note-select\" aria-current=\"page\" type=\"button\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M10 9H8\"/><path d=\"M16 13H8\"/><path d=\"M16 17H8\"/></svg><span class=\"ds-note-copy\"><strong>On paying attention</strong><small>Today · 2 sources</small></span></button></div><div class=\"ds-note-row\"><button class=\"ds-note-select\" type=\"button\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M10 9H8\"/><path d=\"M16 13H8\"/><path d=\"M16 17H8\"/></svg><span class=\"ds-note-copy\"><strong>A small beginning</strong><small>Today</small></span></button></div></nav>",
+      "css": ".ds-notebook-rows { max-width: 218px; padding: 8px; background: var(--sidebar, #f3f4f1); color: var(--sidebar-ink, #222222); font-family: 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; } .ds-note-row { display: flex; align-items: center; border-radius: var(--radius, 8px); margin: 3px 0; } .ds-note-row.ds-note-active { background: var(--sidebar-accent-soft, #dce1dc); } .ds-note-row:hover:not(.ds-note-active) { background: var(--sidebar-hover, #e2e3e0); } .ds-note-select { display: flex; min-height: 59px; width: 100%; min-width: 0; gap: 10px; padding: 10px 12px; border: 0; background: transparent; color: inherit; font-family: inherit; text-align: left; cursor: pointer; } .ds-note-select > svg { flex-shrink: 0; margin-top: 3px; color: var(--sidebar-secondary, #505150); } .ds-note-copy { min-width: 0; } .ds-note-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; line-height: 1.4; } .ds-note-copy small { display: block; margin-top: 3px; color: var(--sidebar-muted, #5e5e5d); font-size: 11px; line-height: 1.5; } .ds-note-select:focus-visible { outline: 2px solid var(--sidebar-accent, #42644d); outline-offset: 3px; border-radius: 5px; }"
+    },
+    {
+      "name": "Server Preset",
+      "kind": "chip",
+      "refersTo": "chip-preset",
+      "description": "Compact model-server preset with the source visual selected state.",
+      "html": "<div class=\"ds-presets\"><button class=\"ds-preset ds-preset-selected\" type=\"button\">LM Studio</button><button class=\"ds-preset\" type=\"button\">Jan</button></div>",
+      "css": ".ds-presets { display: flex; flex-wrap: wrap; gap: 6px; } .ds-preset { padding: 5px 10px; border: 0; border-radius: 5px; background: var(--surface, #f6f6f6); color: var(--secondary, #545454); font: 400 11px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; cursor: pointer; } .ds-preset-selected, .ds-preset:hover { background: var(--accent-soft, #e6ebe8); color: var(--accent, #42644d); } .ds-preset:focus-visible { outline: 2px solid var(--accent, #42644d); outline-offset: 3px; border-radius: 5px; }"
+    },
+    {
+      "name": "Reference Preview Surface",
+      "kind": "card",
+      "refersTo": "card-preview",
+      "description": "Selectable source text on supporting paper, with preserved whitespace and long-content scrolling.",
+      "html": "<div class=\"ds-reference-preview\"># Attention, not interruption\n\nThe best tools leave room for attention and let the work find its own rhythm.</div>",
+      "css": ".ds-reference-preview { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 45dvh; overflow-y: auto; padding: 18px; border-radius: 8px; background: var(--surface, #f6f6f6); color: var(--secondary, #545454); font: 400 14px/1.8 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; user-select: text; }"
+    },
+    {
+      "name": "Notebook Dialog",
+      "kind": "custom",
+      "refersTo": "dialog",
+      "description": "A surface preview of the shipped paper dialog; live modal focus and dismissal are owned by Radix.",
+      "html": "<div class=\"ds-dialog-frame\"><section class=\"ds-dialog\" role=\"dialog\" aria-labelledby=\"ds-dialog-title\" aria-describedby=\"ds-dialog-description\"><div class=\"ds-dialog-heading\"><h2 id=\"ds-dialog-title\">Where would you like to begin?</h2><button type=\"button\" class=\"ds-dialog-close\" aria-label=\"Close dialog\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m18 6-12 12\"/><path d=\"m6 6 12 12\"/></svg></button></div><p class=\"ds-dialog-description\" id=\"ds-dialog-description\">Give this note a name and a little direction. You can change both anytime.</p><label class=\"ds-dialog-label\" for=\"ds-dialog-note-title\">Title</label><input class=\"ds-dialog-input\" id=\"ds-dialog-note-title\" placeholder=\"A thought worth following\" /><div class=\"ds-dialog-footer\"><button type=\"button\" class=\"ds-dialog-cancel\">Cancel</button><button type=\"button\" class=\"ds-dialog-primary\">Create note</button></div></section></div>",
+      "css": ".ds-dialog-frame { width: min(510px, calc(100vw - 32px)); max-width: 100%; } .ds-dialog { padding: 26px 28px 23px; max-height: min(88dvh, 800px); overflow-y: auto; border-radius: 14px; background: var(--paper, #ffffff); color: var(--ink, #242424); font-family: 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; box-shadow: var(--shadow, 0 20px 80px rgb(31 40 30 / 16%)); } .ds-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; } .ds-dialog-heading h2 { margin: 0; font-size: 22px; line-height: 1.4; font-weight: 600; letter-spacing: -0.025em; } .ds-dialog-close { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; color: var(--secondary, #545454); background: transparent; cursor: pointer; transition: background 120ms ease, color 120ms ease; } .ds-dialog-close:hover { color: var(--ink, #242424); background: var(--hover, #ededed); } .ds-dialog-description { margin: 10px 0 19px; color: var(--secondary, #545454); font-size: 13px; line-height: 1.7; } .ds-dialog-label { display: block; margin: 18px 0 7px; font-size: 13px; line-height: 1.5; font-weight: 600; } .ds-dialog-input { width: calc(100% - 26px); padding: 10px 12px; border: 1px solid var(--line, #dbdbdb); border-radius: var(--radius, 8px); outline: none; background: var(--paper, #ffffff); color: var(--ink, #242424); font: 400 15px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; transition: border-color 120ms ease; } .ds-dialog-input::placeholder { color: var(--muted, #636363); opacity: 1; } .ds-dialog-input:focus { border-color: var(--accent, #42644d); box-shadow: 0 0 0 2px var(--accent-soft, #e6ebe8); } .ds-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 25px; } .ds-dialog-primary, .ds-dialog-cancel { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 15px; border: 0; border-radius: var(--radius, 8px); font: 600 15px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; white-space: nowrap; cursor: pointer; transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; font-size: 13px; } .ds-dialog-primary { background: var(--accent-fill, #42644d); border: 1px solid var(--accent, #42644d); color: var(--on-accent, #ffffff); } .ds-dialog-primary:hover:not(:disabled) { background: var(--accent-hover, #4f6f59); } .ds-dialog-cancel { background: transparent; color: var(--secondary, #545454); } .ds-dialog-cancel:hover:not(:disabled) { background: var(--hover, #ededed); } .ds-dialog-close:focus-visible, .ds-dialog-primary:focus-visible, .ds-dialog-cancel:focus-visible { outline: 2px solid var(--accent, #42644d); outline-offset: 3px; border-radius: 5px; } .ds-dialog-primary:disabled, .ds-dialog-cancel:disabled { cursor: default; opacity: 0.45; } @media (max-width: 760px) { .ds-dialog { padding: 23px 21px 20px; } .ds-dialog-heading h2 { font-size: 20px; } .ds-dialog-footer { flex-wrap: wrap; } } @media (prefers-reduced-motion: reduce) { .ds-dialog-close, .ds-dialog-input, .ds-dialog-primary, .ds-dialog-cancel { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }"
+    },
+    {
+      "name": "Inline Continuation",
+      "kind": "custom",
+      "refersTo": "inline-suggestion",
+      "description": "A provisional cursor continuation in derived ghost ink with its compact Tab acceptance badge.",
+      "html": "<p class=\"ds-writing-line\">The best tools leave room for<span class=\"ds-ghost\"><span class=\"ds-ghost-text\" aria-hidden=\"true\"> attention and let the work find its own rhythm.</span><button type=\"button\" class=\"ds-ghost-accept\" tabindex=\"-1\" aria-label=\"Accept suggestion\" aria-description=\"attention and let the work find its own rhythm.\" title=\"Accept suggestion\">Tab</button></span></p>",
+      "css": ".ds-writing-line { margin: 0; color: var(--ink, #242424); font-family: var(--writing-font, 'Merriweather', Georgia, serif); font-size: var(--writing-size, 17px); line-height: 1.9; } .ds-ghost { white-space: pre-wrap; user-select: none; font-style: normal; font-weight: normal; color: var(--ghost, #636363); animation: ds-ghost-appear 150ms ease-out both; } .ds-ghost-text { color: var(--ghost, #636363); opacity: 1; pointer-events: none; } .ds-ghost-accept { padding: 2px 7px; margin-left: 6px; border: 1px solid var(--line, #dbdbdb); border-radius: 4px; background: var(--surface, #f6f6f6); color: var(--secondary, #545454); font: 400 11px/1.5 'Source Sans Pro', sans-serif; vertical-align: middle; cursor: pointer; } .ds-ghost-accept:hover { background: var(--accent-soft, #e6ebe8); color: var(--accent, #42644d); } .ds-ghost-accept:focus-visible { outline: 2px solid var(--accent, #42644d); outline-offset: 3px; border-radius: 5px; } .ds-accepted { animation: ds-accepted-word 240ms ease-out both; } @keyframes ds-ghost-appear { from { opacity: 0; } to { opacity: 1; } } @keyframes ds-accepted-word { from { background-color: var(--accent-soft, #e6ebe8); } to { background-color: transparent; } } @media (prefers-reduced-motion: reduce) { .ds-ghost, .ds-accepted { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }"
+    },
+    {
+      "name": "Palette Chooser",
+      "kind": "custom",
+      "refersTo": "palette-option",
+      "description": "Dark palette radio cards with live native selection states and a visual preview of labeled custom HEX fields. Application validation and palette application remain in PalettePicker.tsx.",
+      "html": "<fieldset class=\"ds-palette-group\"><legend>Dark palette</legend><div class=\"ds-palette-options\"><label class=\"ds-palette-option\"><input type=\"radio\" name=\"ds-dark-palette\" value=\"graphite\"/><span class=\"ds-palette-card\"><span class=\"ds-palette-preview\" style=\"--ds-preview-page:#212121;--ds-preview-sidebar:#17191c;--ds-preview-ink:#e0e0e0;--ds-preview-side-ink:#dfdfdf;--ds-preview-accent:#a6b6c8\" aria-hidden=\"true\"><span class=\"ds-palette-preview-sidebar\"><span></span><span></span><span></span></span><span class=\"ds-palette-preview-page\"><span class=\"ds-palette-preview-title\"></span><span></span><span></span><span></span></span></span><span class=\"ds-palette-option-label\"><span>Graphite</span><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m20 6-11 11-5-5\"/></svg></span></span></label><label class=\"ds-palette-option\"><input type=\"radio\" name=\"ds-dark-palette\" value=\"midnight\"/><span class=\"ds-palette-card\"><span class=\"ds-palette-preview\" style=\"--ds-preview-page:#151c28;--ds-preview-sidebar:#111722;--ds-preview-ink:#dedfe1;--ds-preview-side-ink:#dedfe0;--ds-preview-accent:#91acce\" aria-hidden=\"true\"><span class=\"ds-palette-preview-sidebar\"><span></span><span></span><span></span></span><span class=\"ds-palette-preview-page\"><span class=\"ds-palette-preview-title\"></span><span></span><span></span><span></span></span></span><span class=\"ds-palette-option-label\"><span>Midnight</span><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m20 6-11 11-5-5\"/></svg></span></span></label><label class=\"ds-palette-option\"><input type=\"radio\" name=\"ds-dark-palette\" value=\"forest\"/><span class=\"ds-palette-card\"><span class=\"ds-palette-preview\" style=\"--ds-preview-page:#202921;--ds-preview-sidebar:#172019;--ds-preview-ink:#e0e1e0;--ds-preview-side-ink:#dfe0df;--ds-preview-accent:#a8bf9d\" aria-hidden=\"true\"><span class=\"ds-palette-preview-sidebar\"><span></span><span></span><span></span></span><span class=\"ds-palette-preview-page\"><span class=\"ds-palette-preview-title\"></span><span></span><span></span><span></span></span></span><span class=\"ds-palette-option-label\"><span>Forest</span><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m20 6-11 11-5-5\"/></svg></span></span></label><label class=\"ds-palette-option\"><input type=\"radio\" name=\"ds-dark-palette\" value=\"custom\" checked/><span class=\"ds-palette-card\"><span class=\"ds-palette-preview\" style=\"--ds-preview-page:#212121;--ds-preview-sidebar:#17191c;--ds-preview-ink:#e0e0e0;--ds-preview-side-ink:#dfdfdf;--ds-preview-accent:#a6b6c8\" aria-hidden=\"true\"><span class=\"ds-palette-preview-sidebar\"><span></span><span></span><span></span></span><span class=\"ds-palette-preview-page\"><span class=\"ds-palette-preview-title\"></span><span></span><span></span><span></span></span></span><span class=\"ds-palette-option-label\"><span>Custom</span><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m20 6-11 11-5-5\"/></svg></span></span></label></div><div class=\"ds-palette-custom\"><div class=\"ds-palette-color-fields\"><div class=\"ds-palette-color-field\"><label for=\"ds-dark-page\">Page</label><div class=\"ds-palette-hex-input\"><span class=\"ds-palette-color-swatch\" style=\"background-color:#212121\" aria-hidden=\"true\"></span><input id=\"ds-dark-page\" aria-label=\"Dark page color\" type=\"text\" value=\"#212121\" maxlength=\"7\" autocomplete=\"off\" spellcheck=\"false\" /></div></div><div class=\"ds-palette-color-field\"><label for=\"ds-dark-sidebar\">Sidebar</label><div class=\"ds-palette-hex-input\"><span class=\"ds-palette-color-swatch\" style=\"background-color:#17191c\" aria-hidden=\"true\"></span><input id=\"ds-dark-sidebar\" aria-label=\"Dark sidebar color\" type=\"text\" value=\"#17191c\" maxlength=\"7\" autocomplete=\"off\" spellcheck=\"false\" /></div></div><div class=\"ds-palette-color-field\"><label for=\"ds-dark-accent\">Accent</label><div class=\"ds-palette-hex-input\"><span class=\"ds-palette-color-swatch\" style=\"background-color:#a6b6c8\" aria-hidden=\"true\"></span><input id=\"ds-dark-accent\" aria-label=\"Dark accent color\" type=\"text\" value=\"#a6b6c8\" maxlength=\"7\" autocomplete=\"off\" spellcheck=\"false\" /></div></div></div><p class=\"ds-palette-help\">Text adjusts to keep your colours readable.</p></div></fieldset>",
+      "css": ".ds-palette-group { min-width: 0; padding: 0; margin: 0 0 22px; border: 0; color: var(--ink, #242424); font: 400 15px/1.5 'Source Sans Pro', 'Segoe UI', -apple-system, sans-serif; } .ds-palette-group legend { padding: 0; margin-bottom: 9px; font-size: 13px; font-weight: 600; } .ds-palette-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; } .ds-palette-option { position: relative; min-width: 0; cursor: pointer; } .ds-palette-option > input { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; border: 0; clip-path: inset(50%); overflow: hidden; } .ds-palette-card { display: block; padding: 5px; border: 1px solid var(--line, #dbdbdb); border-radius: 9px; transition: border-color 140ms ease-out, background-color 140ms ease-out; } .ds-palette-option:hover .ds-palette-card { border-color: var(--muted, #636363); } .ds-palette-option > input:checked + .ds-palette-card { border-color: var(--accent, #42644d); background: var(--accent-soft, #e6ebe8); } .ds-palette-option > input:focus-visible + .ds-palette-card { outline: 2px solid var(--accent, #42644d); outline-offset: 3px; } .ds-palette-option-label { display: flex; justify-content: space-between; align-items: center; gap: 3px; padding: 7px 3px 2px; font-size: 12px; line-height: 1.3; } .ds-palette-option-label > svg { visibility: hidden; color: var(--accent, #42644d); } .ds-palette-option > input:checked + .ds-palette-card .ds-palette-option-label > svg { visibility: visible; } .ds-palette-preview { display: grid; grid-template-columns: 24% 1fr; height: 54px; overflow: hidden; border-radius: 5px; background: var(--ds-preview-page); } .ds-palette-preview-sidebar { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 5px; background: var(--ds-preview-sidebar); } .ds-palette-preview-sidebar > span { width: 100%; height: 2px; background: var(--ds-preview-side-ink); opacity: 0.55; } .ds-palette-preview-sidebar > span:first-child { width: 70%; height: 3px; margin-bottom: 4px; } .ds-palette-preview-page { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 11px 10px; } .ds-palette-preview-page > span { width: 100%; height: 2px; background: var(--ds-preview-ink); opacity: 0.5; } .ds-palette-preview-page > .ds-palette-preview-title { width: 52%; height: 3px; margin-bottom: 3px; background: var(--ds-preview-accent); opacity: 1; } .ds-palette-preview-page > span:last-child { width: 70%; } .ds-palette-custom { margin-top: 13px; } .ds-palette-group:not(:has(.ds-palette-option > input[value='custom']:checked)) .ds-palette-custom { display: none; } .ds-palette-color-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .ds-palette-color-field { min-width: 0; } .ds-palette-color-field > label { display: block; margin-bottom: 5px; color: var(--secondary, #545454); font-size: 12px; } .ds-palette-hex-input { position: relative; } .ds-palette-hex-input > input { width: calc(100% - 39px); padding: 9px 8px 9px 29px; border: 1px solid var(--line, #dbdbdb); border-radius: var(--radius, 8px); outline: none; background: var(--paper, #ffffff); color: var(--ink, #242424); font: 400 12px/1.5 'IBM Plex Mono', monospace; transition: border-color 120ms ease; } .ds-palette-hex-input > input:focus { border-color: var(--accent, #42644d); box-shadow: 0 0 0 2px var(--accent-soft, #e6ebe8); } .ds-palette-color-swatch { position: absolute; width: 12px; height: 12px; top: 50%; left: 9px; transform: translateY(-50%); border: 1px solid var(--muted, #636363); border-radius: 3px; pointer-events: none; } .ds-palette-help { margin: 6px 0 0; font-size: 12px; color: var(--muted, #636363); } @media (max-width: 480px) { .ds-palette-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ds-palette-color-fields { gap: 7px; } .ds-palette-hex-input > input { width: calc(100% - 35px); padding-left: 25px; font-size: 11px; } .ds-palette-color-swatch { width: 10px; height: 10px; left: 8px; } } @media (prefers-reduced-motion: reduce) { .ds-palette-card, .ds-palette-hex-input > input { transition-duration: 0.01ms !important; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Porcelain Notebook",
+    "overview": "The writing page leads; a short continuation appears only at its cursor. TypeNext feels like a quiet desktop notebook: a broad writing surface, a darker or softer notebook rail, clear text, and a restrained accent. Graphite gives dark mode neutral charcoal paper and a slate accent; Paper gives light mode porcelain paper, a pebble sidebar, and sage controls. The writer's prose has the largest uninterrupted area, while navigation, references, and model controls stay compact and practical.\n\nThe interface is sober, soft, and local-first. Light and dark appearances preserve the relationship between the page and its supporting surfaces, with a small set of optional palettes and custom colors. Familiar Radix dialogs and simple stroke icons make supporting actions predictable. A continuation remains visibly provisional until the writer accepts it.\n\nThis record describes the shipped notebook application in `src/notebook/palette.ts`, `src/App.css`, and its React/CodeMirror components. The promotional website is a separate surface; its marketing headings do not define the application's type ramp. Saved light, dark, preview, focus, and narrow screenshots establish the core hierarchy. The current palettes, scoped sidebar colors, and live-note context picker are recorded from their implementation; older screenshots do not define their current color values.",
+    "keyCharacteristics": [
+      "Generous paper for writing; compact supporting controls.",
+      "One palette accent for action, selection, and keyboard focus.",
+      "Sans-serif interface around a writer-selected prose face.",
+      "Tonal separation and fine borders at rest; diffuse shadows for overlays.",
+      "Inline continuations with explicit acceptance and quiet local status."
+    ],
+    "rules": [
+      {
+        "name": "The Accent State Rule",
+        "body": "Use the selected accent to explain action, selection, focus, or writing state. Keep ordinary paper and prose in the palette's surface and ink roles.",
+        "section": "colors"
+      },
+      {
+        "name": "The Paired Theme Rule",
+        "body": "Apply each theme's paper, ink, line, and action roles together. Preserve the relationship between writing paper and supporting surfaces when changing themes.",
+        "section": "colors"
+      },
+      {
+        "name": "The Sidebar Scope Rule",
+        "body": "Use the sidebar's derived ink, surfaces, seams, and states inside the notebook rail. Keep page and dialog roles outside that scope, and retain accent-fill with its on-accent label for filled actions.",
+        "section": "colors"
+      },
+      {
+        "name": "The Writer's Face Rule",
+        "body": "Apply writing preferences to the prose and font preview. Keep navigation, dialogs, labels, and note titles in the interface face.",
+        "section": "typography"
+      },
+      {
+        "name": "The Source Remains Rule",
+        "body": "Give Markdown quiet typographic hierarchy while preserving the source characters and direct editing surface.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Paper Rule",
+        "body": "Use paper, supporting tones, and seams for the resting workspace. Reserve diffuse lift for an actual overlay or transient notice.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** give writing the generous paper area and keep supporting controls compact.",
+      "**Do** use the paired theme roles for paper, text, borders, selections, and focus.",
+      "**Do** keep the selected accent attached to an action or a meaningful state.",
+      "**Do** use scoped sidebar roles inside the notebook rail and page roles in dialogs and the writing surface.",
+      "**Do** offer labeled preset cards and three complete HEX values for custom colors while deriving readable supporting roles.",
+      "**Do** preserve the writer's selected prose face and size while keeping interface typography consistent.",
+      "**Do** keep Markdown source visible and continuations provisional until explicitly accepted.",
+      "**Do** retain visible keyboard focus, accessible icon-control names, labeled fields, and reduced-motion behavior.",
+      "**Do** use the established row, field, dialog, and preview patterns when adding supporting notebook flows."
+    ],
+    "donts": [
+      "**Don't** introduce a chat layout, generated starter paragraphs, or decorative dashboard widgets into the writing workspace.",
+      "**Don't** borrow the promotional site's display headings for application navigation or controls.",
+      "**Don't** add decorative lift to resting writing surfaces or ordinary note rows.",
+      "**Don't** turn reference inclusion, preview, and removal into one ambiguous action.",
+      "**Don't** make a model continuation part of the document before acceptance.",
+      "**Don't** reduce the opacity of already-derived quiet text or apply a custom field's incomplete value to the palette."
+    ]
+  }
+}

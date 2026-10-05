@@ -6,8 +6,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    setupFiles: ['./src/notebook/test-setup.ts'],
+    include: ['src/notebook/**/*.test.{ts,tsx}', 'src/services/*.test.ts', 'src/components/notebook/*.test.{ts,tsx}'],
     exclude: [
       'node_modules',
       'dist',
@@ -19,7 +19,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': '/src',
+      '@': new URL('./src', import.meta.url).pathname,
     },
   },
 })

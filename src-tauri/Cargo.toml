@@ -1,16 +1,12 @@
 [package]
-name = "tauri-app"
+name = "typenext"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "A calm, local-first Markdown notepad with contextual suggestions"
+authors = ["TypeNext contributors"]
+license = "AGPL-3.0-or-later"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -18,27 +14,34 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.0.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.1.1", features = ["macos-private-api"] }
-tauri-plugin-opener = "2.5.0"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tauri-plugin-clipboard-manager = "2.3.0"
+tauri = { version = "2.1.1", features = [] }
 tauri-plugin-dialog = "2.4.0"
 tauri-plugin-fs = "2.4.2"
 tauri-plugin-log = "2.7.0"
-tauri-plugin-notification = "2.3.1"
+tauri-plugin-opener = "2.5.0"
 tauri-plugin-persisted-scope = "2.2.0"
-tauri-plugin-process = "2.3.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 log = "0.4"
-regex = "1.11.1"
+tempfile = "3"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "gzip", "brotli"] }
+tokio = { version = "1", features = ["sync", "time", "macros", "rt", "net"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-updater = "2.9.0"
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", features = ["windows-native"] }
+windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
 
-# Optimize for smaller binary size in release builds
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+
 [profile.release]
-codegen-units = 1        # Better LLVM optimization (slower build, smaller binary)
-lto = true               # Link-time optimizations
-opt-level = "s"          # Optimize for size over speed
-panic = "abort"          # Don't include panic unwinding code
-strip = true             # Remove debug symbols
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

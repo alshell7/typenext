@@ -2,5 +2,6 @@
   "identifier": "desktop-capability",
   "platforms": ["macOS", "windows", "linux"],
   "windows": ["main"],
-  "permissions": ["updater:default"]
+  "description": "Desktop platform marker; updater access is disabled until signed updates are configured",
+  "permissions": []
 }

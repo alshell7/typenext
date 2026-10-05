@@ -26,6 +26,19 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"],
+  "include": [
+    "src/App.tsx",
+    "src/main.tsx",
+    "src/vite-env.d.ts",
+    "src/notebook",
+    "src/types/notebook.ts",
+    "src/components/notebook",
+    "src/services/native.ts",
+    "src/services/storage.ts",
+    "src/services/completion.ts",
+    "src/services/retrieval.ts",
+    "src/services/sources.ts",
+    "src/services/*.test.ts"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

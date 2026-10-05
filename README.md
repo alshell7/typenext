@@ -1,203 +1,90 @@
-# Tauri React Template
+# TypeNext
 
-A production-ready template for building modern desktop applications with Tauri v2, React 19, and TypeScript. This template provides a solid foundation with best practices, comprehensive documentation, and quality tooling built-in.
+A local-first Markdown notepad. Your thoughts lead; suggestions help you keep going.
 
-## 🚀 Features
+![The TypeNext writing space with local inline recall and an open context panel](docs/screenshots/writing-light.png)
 
-- **Modern Stack**: Tauri v2 + React 19 + TypeScript + Vite
-- **UI Components**: shadcn/ui v4 + Tailwind CSS v4 + Lucide React
-- **State Management**: Zustand v5 + TanStack Query v5
-- **Testing**: Vitest v3 + Testing Library
-- **Quality Tools**: ESLint + Prettier + Rust clippy + comprehensive CI
-- **Native Integration**: Menu system + keyboard shortcuts + notifications + auto-updater
-- **Documentation**: Comprehensive developer and user guides
-- **AI-Ready**: Claude Code agents and documentation structure
+TypeNext gives you a quiet page, a small notebook of tabs, and context close to your writing. A suggestion appears at the cursor. You decide whether it belongs.
 
-## 🛠 Architecture
+## Writing
 
-### Command System
+- Create a note with a title and a little background. Set an objective, or let the first line of the note provide it.
+- Attach multiple text, Markdown, searchable PDF, DOCX, or website references. Use another note as live context; its edits follow the link without copying its text. Preview and include only the references you want.
+- Accept a continuation with **Tab**, accept a word with **Ctrl/Command + Right**, or dismiss it with **Escape**. Accepted text can be undone normally.
+- Keep recent notes, switch tabs, use focus mode, and autosave locally. Open and save ordinary Markdown files.
+- Choose light, dark, or system appearance. Start with paper or neutral graphite, choose a curated palette, or set your own page, sidebar, and accent colours. Change the writing typeface and size.
 
-Centralized command palette with keyboard shortcuts and menu integration:
+The screenshots use example writing. New notebooks start empty.
 
-```typescript
-// Execute commands via palette (Cmd+K), shortcuts, or menus
-const commands = [
-  { id: 'preferences', label: 'Open Preferences', shortcut: 'Cmd+,' },
-  { id: 'toggle-sidebar', label: 'Toggle Sidebar', shortcut: 'Cmd+1' },
-]
+Autosave keeps a recoverable previous version and saves during continuous typing. Desktop saves replace complete files atomically; interrupted or unreadable data is preserved for recovery. See [save and recovery behaviour](docs/reliability.md) for the tested guarantees and limits, and the [service](docs/services-resource-audit.md) and [editor](docs/editor-resource-audit.md) resource measurements.
+
+<details>
+<summary>Dark appearance and reference previews</summary>
+
+![TypeNext in dark appearance](docs/screenshots/writing-dark.png)
+
+![Previewing the locally cached text of a reference](docs/screenshots/context-preview.png)
+
+![Choosing another note as live context](docs/screenshots/note-picker.png)
+
+![Choosing light and dark colour palettes](docs/screenshots/palette-presets.png)
+
+</details>
+
+## Suggestions and privacy
+
+Ordinary suggestions stay on your device. With no model connected, **local recall** can complete a matching phrase from enabled references or earlier writing. It is conservative: it repeats relevant existing language and leaves the page alone when there is no match.
+
+For new wording, connect a local instruction model through LM Studio, Jan, Lemonade, or llama.cpp in **Preferences → Local suggestions**. TypeNext retrieves relevant passages with BM25 and sends a bounded objective, background, and cursor prefix/suffix to that local server. Native llama.cpp FIM is available for models trained for infill.
+
+OpenRouter, OpenAI, Anthropic, and custom endpoints are optional. **Ask an external model** explains what leaves the device and requests one suggestion. Typing, pausing, and the normal suggestion shortcut never escalate to a hosted model. OpenRouter defaults to its free-model router; model availability and account limits still apply.
+
+Notes and extracted references are stored locally. Desktop keys can be remembered in the operating system credential vault; otherwise they stay in the session. Browser keys are session-only. Website import contacts the selected website, and optional Firecrawl import sends its URL to Firecrawl. Files are parsed locally.
+
+Local models are managed by your chosen server; TypeNext does not bundle or download model weights. Scanned PDFs need OCR, and legacy `.doc` files need conversion to `.docx` or text. The researched model/runtime choices and current boundaries are in [AI design](docs/ai-design.md).
+
+## Development
+
+Node.js **22.13 or later** (or 24+), stable Rust, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform are required for desktop development. Linux also needs `libdbus-1-dev` for the credential vault.
+
+```sh
+npm ci
+npm run tauri:dev
 ```
 
-### State Management Onion
+To work on the interface in a browser:
 
-Layered state management approach:
-
-- **useState**: Component-local state
-- **Zustand**: App-wide UI state (sidebar visibility, themes)
-- **TanStack Query**: Server state and caching (preferences, data)
-
-### Performance Patterns
-
-```typescript
-// ✅ Use getState() to avoid render cascades
-const handleAction = useCallback(() => {
-  const { data, setData } = useStore.getState()
-  setData(newData)
-}, []) // Stable callback
-```
-
-## 📚 Documentation
-
-- **[User Guide](docs/userguide/userguide.md)** - End-user documentation
-- **[Developer Docs](docs/developer/)** - Architecture, patterns, and guides
-- **[Testing Guide](docs/developer/testing.md)** - Testing strategies and utilities
-- **[Claude Agents](.claude/agents/)** - AI development assistants
-
-## 🏗 Quick Start
-
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) (v18+)
-- [Rust](https://rustup.rs/) (latest stable)
-- Platform-specific dependencies (see [Tauri Prerequisites](https://tauri.app/start/prerequisites/))
-
-### Development
-
-```bash
-# Clone and install
-git clone <your-repo>
-cd tauri-template
-npm install
-
-# Start development server
+```sh
 npm run dev
-
-# Run tests and quality checks
-npm run check:all
-
-# Build for production
-npm run build
 ```
 
-### Project Structure
+The browser preview uses local browser storage and session keys. Servers must permit browser CORS; the desktop app uses its native HTTP bridge.
 
-```
-├── src/                    # React frontend
-│   ├── components/         # UI components
-│   ├── hooks/             # Custom hooks
-│   ├── store/             # Zustand stores
-│   └── services/          # API and external services
-├── src-tauri/             # Rust backend
-├── docs/                  # Documentation
-│   ├── developer/         # Developer guides
-│   └── userguide/         # User documentation
-└── .claude/agents/        # AI development assistants
+```sh
+npm run typecheck
+npm run lint
+npm run test:run
+npm run test:e2e
+cargo test --manifest-path src-tauri/Cargo.toml
+npm run tauri:build
 ```
 
-## 🧪 Quality Assurance
+Browser tests use installed Edge on Windows or Playwright Chromium elsewhere. Install the latter with `npx playwright install --with-deps chromium` when needed. `npm run test:native:windows` builds a separate test profile and exercises the real Windows WebView and Rust bridge. Live provider tests are opt-in and use synthetic text; see [testing](docs/testing.md).
 
-This template includes comprehensive quality gates:
+The active implementation is in `src/notebook`, `src/components/notebook`, and the notebook services. Earlier template code is preserved but excluded from the active TypeScript project and production bundle. `package-lock.json` is the canonical dependency lockfile.
 
-```bash
-npm run check:all  # Runs all checks below:
-```
+## Project website
 
-- ✅ TypeScript type checking
-- ✅ ESLint code linting
-- ✅ Prettier code formatting
-- ✅ Rust formatting (cargo fmt)
-- ✅ Rust linting (cargo clippy)
-- ✅ React component tests
-- ✅ Rust unit tests
+The static project site is in `site`. Build it with `npm run site:build`. The Pages workflow publishes only `site-dist` to the `github-pages` environment when changes reach `main`.
 
-## 🎯 What You Get
+The intended deployment address is `https://alshell7.github.io/typenext/`. Publishing requires the GitHub repository and Pages access; a successful Pages workflow confirms that it is live.
 
-### Native Desktop Experience
+## Contributing
 
-- **Native menus** with keyboard shortcuts
-- **System notifications** and tray integration
-- **Auto-updater** with GitHub releases
-- **File system access** with security validation
-- **Cross-platform** builds (macOS, Windows, Linux)
+Keep the writing flow small, keyboard-friendly, and understandable in the app. Changes to suggestions should test cursor movement, cancellation, suffix preservation, and the local/external privacy boundary. Changes to storage should preserve a recoverable copy and make failures visible.
 
-### Developer Experience
+TypeNext uses Tauri 2, React, TypeScript, CodeMirror 6, and a small local BM25 index. Source extraction uses PDF.js, Mammoth, and Mozilla Readability. See [third-party notices](docs/third-party.md) for bundled fonts and libraries.
 
-- **Hot reload** in development
-- **Comprehensive testing** setup
-- **Type-safe** Rust ↔ React communication
-- **CLI tools** for common tasks
-- **AI assistants** for code generation and review
+## License
 
-### Production Ready
-
-- **Security best practices** built-in
-- **Error handling** and logging
-- **Performance optimization** patterns
-- **CI/CD workflows** included
-- **Documentation** for maintenance
-
-## 🔧 Customization
-
-### Adding New Features
-
-1. **Commands**: Add to `src/lib/commands/`
-2. **UI State**: Extend Zustand stores in `src/store/`
-3. **Rust APIs**: Add Tauri commands in `src-tauri/src/lib.rs`
-4. **Documentation**: Update relevant docs in `docs/`
-
-### Configuration
-
-- **App metadata**: `src-tauri/tauri.conf.json`
-- **Build settings**: `src-tauri/Cargo.toml`
-- **Dependencies**: `package.json`
-
-## 🚀 Production Checklist
-
-Before deploying your application to production, ensure you complete these critical steps:
-
-### Security Requirements (CRITICAL)
-
-- [ ] **Generate proper Ed25519 updater keys** - Replace placeholder keys in `src-tauri/tauri.conf.json`
-- [ ] **Store private keys securely** - Never commit signing keys to version control
-- [ ] **Review plugin permissions** - Remove unused permissions in `src-tauri/capabilities/desktop.json`
-
-### App Configuration
-
-- [ ] **Update app metadata** - Change productName, version, identifier, publisher in `tauri.conf.json`
-- [ ] **Update package.json** - Set correct name, author, license, and copyright
-- [ ] **Configure proper logging** - Set production log levels (Info, not Debug)
-- [ ] **Set up error tracking** - Add Sentry, Rollbar, or similar service
-
-### Quality Assurance
-
-- [ ] **Run full test suite** - `npm run check:all` must pass
-- [ ] **Test on all target platforms** - macOS, Windows, Linux as needed
-- [ ] **Verify auto-updater flow** - Test with signed releases
-- [ ] **Performance testing** - Ensure app performs well with real data
-
-### Distribution
-
-- [ ] **Code signing certificates** - Set up proper certificates for each platform
-- [ ] **Release automation** - Configure CI/CD for automated builds and releases
-- [ ] **Update server setup** - Configure server for hosting app updates
-- [ ] **Analytics setup** - Add usage analytics if desired
-
-**📖 For detailed security instructions, see [SECURITY_PRODUCTION.md](docs/SECURITY_PRODUCTION.md)**
-
-## 📋 License
-
-This project is licensed under the [AGPL-3.0-or-later](LICENSE.md) license.
-
-## 🤝 Contributing
-
-Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for contribution guidelines.
-
-## 🔒 Security
-
-For security concerns, please see [SECURITY.md](docs/SECURITY.md).
-
----
-
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
-- [Cursor](https://cursor.sh/) with the included `.claude/agents/` for AI-assisted development
+[AGPL-3.0-or-later](LICENSE.md).

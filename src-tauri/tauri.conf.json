@@ -1,10 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "typenext-ai",
+  "productName": "TypeNext",
   "version": "0.1.0",
   "identifier": "com.typenext.ai",
   "build": {
-    "removeUnusedCommands": true,
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
@@ -13,34 +12,25 @@
   "app": {
     "windows": [
       {
-        "title": "typenext-ai",
-        "width": 800,
-        "height": 600,
-        "minWidth": 1000,
-        "minHeight": 700,
-        "resizable": true,
-        "fullscreen": false,
-        "maximized": false,
+        "label": "main",
+        "title": "TypeNext",
+        "width": 1180,
+        "height": 820,
+        "minWidth": 760,
+        "minHeight": 540,
         "center": true,
         "decorations": false,
-        "alwaysOnTop": false,
-        "transparent": true,
+        "transparent": false,
         "shadow": true,
-        "dragDropEnabled": true,
-        "windowEffects": {
-          "effects": ["hudWindow"],
-          "radius": 12.0,
-          "state": "active"
-        }
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": null
-    },
-    "macOSPrivateApi": true
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost http: https:; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost http: https: ws: wss:; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'"
+    }
   },
   "bundle": {
-    "createUpdaterArtifacts": true,
     "active": true,
     "targets": "all",
     "icon": [
@@ -50,28 +40,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "TypeNext AI",
-    "category": "DeveloperTool",
-    "shortDescription": "A minimalist ai notepad clearing the writers block. Secure, Open Source, and Powerful.",
-    "longDescription": "A minimalist ai notepad clearing the writers block. Secure, Open Source, and Powerful.",
-    "copyright": "Copyright © 2025 alshell7. All rights reserved.",
+    "publisher": "TypeNext contributors",
+    "category": "Productivity",
+    "shortDescription": "Your thoughts, with a little room to keep going.",
+    "longDescription": "A local-first Markdown notepad for Windows, macOS and Linux. Write in your own voice with short, optional suggestions grounded in your objective and context.",
+    "copyright": "Copyright © TypeNext contributors. AGPL-3.0-or-later.",
     "macOS": {
-      "frameworks": [],
-      "minimumSystemVersion": "10.15",
-      "signingIdentity": "-",
-      "providerShortName": null,
-      "entitlements": null,
-      "exceptionDomain": ""
-    }
-  },
-  "plugins": {
-    "updater": {
-      "active": true,
-      "endpoints": [
-        "https://github.com/alshell7/typenext-ai/releases/latest/download/latest.json"
-      ],
-      "dialog": true,
-      "pubkey": "YOUR_UPDATER_PUBLIC_KEY_HERE"
+      "minimumSystemVersion": "10.15"
     }
   }
 }

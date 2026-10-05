@@ -1,12 +1,12 @@
 import ReactDOM from 'react-dom/client'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import '@fontsource/source-sans-pro/latin-400.css'
+import '@fontsource/source-sans-pro/latin-600.css'
+import '@fontsource/merriweather/latin-400.css'
+import '@fontsource/merriweather/latin-400-italic.css'
+import '@fontsource/alegreya/latin-400.css'
+import '@fontsource/eb-garamond/latin-400.css'
+import '@fontsource/jetbrains-mono/latin-400.css'
+import '@fontsource/ibm-plex-mono/latin-400.css'
 import App from './App'
-import { queryClient } from './lib/query-client'
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <QueryClientProvider client={queryClient}>
-    <App />
-    <ReactQueryDevtools initialIsOpen={false} />
-  </QueryClientProvider>
-)
+ReactDOM.createRoot(document.getElementById('root')!).render(<App />)
