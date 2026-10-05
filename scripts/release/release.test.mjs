@@ -44,8 +44,15 @@ function manifests() {
   }))
 }
 
-async function publisherFixture(t, { existing = true, afterUpload } = {}) {
+async function publisherFixture(
+  t,
+  { existing = true, listVisible = true, afterCreate, afterUpload } = {}
+) {
   const directory = await temporary(t)
+  const notesFile = join(directory, 'release-notes.md')
+  const notes =
+    'Synthetic release notes: "quoted"\n\nLiteral $() and `ticks`, plus Unicode π.\n'
+  await writeFile(notesFile, notes)
   const assets = [
     ...assertManifestSet(manifests(), { tag, commit }),
     { name: 'SHA256SUMS.txt', role: 'checksums' },
@@ -65,9 +72,10 @@ async function publisherFixture(t, { existing = true, afterUpload } = {}) {
       ? { id: 404133245, tag_name: tag, draft: true, assets: [] }
       : null,
     remoteCommit: commit,
+    listVisible,
     calls: [],
   }
-  const gh = args => {
+  const gh = (args, { input } = {}) => {
     state.calls.push(args)
     const [command, path] = args
     if (command === 'api') {
@@ -79,8 +87,28 @@ async function publisherFixture(t, { existing = true, afterUpload } = {}) {
         assert.deepEqual(args.slice(2), ['--paginate', '--slurp'])
         return JSON.stringify([
           [{ id: 12, tag_name: 'v0.0.1', draft: false, assets: [] }],
-          state.release ? [state.release] : [],
+          state.release && state.listVisible ? [state.release] : [],
         ])
+      }
+      if (path === 'repos/example/typenext/releases' && args.includes('POST')) {
+        assert.equal(state.release, null)
+        assert.deepEqual(args.slice(2), ['--method', 'POST', '--input', '-'])
+        assert.deepEqual(JSON.parse(input), {
+          tag_name: tag,
+          target_commitish: commit,
+          name: `TypeNext ${tag}`,
+          body: notes,
+          draft: true,
+          prerelease: false,
+        })
+        state.release = {
+          id: 404133245,
+          tag_name: tag,
+          draft: true,
+          assets: [],
+        }
+        afterCreate?.(state)
+        return JSON.stringify(state.release)
       }
       if (path === 'repos/example/typenext/releases/404133245') {
         if (args.includes('PATCH')) {
@@ -96,13 +124,6 @@ async function publisherFixture(t, { existing = true, afterUpload } = {}) {
         }
         return JSON.stringify(state.release)
       }
-    }
-    if (command === 'release' && path === 'create') {
-      assert.equal(state.release, null)
-      assert.ok(args.includes('--draft'))
-      assert.ok(args.includes('--verify-tag'))
-      state.release = { id: 404133245, tag_name: tag, draft: true, assets: [] }
-      return ''
     }
     if (command === 'release' && path === 'upload') {
       assert.equal(state.release.draft, true)
@@ -129,6 +150,7 @@ async function publisherFixture(t, { existing = true, afterUpload } = {}) {
       repository: 'example/typenext',
       token: 'synthetic-test-token',
       directory,
+      notesFile,
       gh,
     },
   }
@@ -140,9 +162,7 @@ test('an authenticated paginated draft is resumed, verified and published by the
   assert.equal(fixture.state.release.draft, false)
   assert.equal(fixture.state.release.assets.length, 8)
   assert.equal(
-    fixture.state.calls.filter(
-      args => args[0] === 'release' && args[1] === 'create'
-    ).length,
+    fixture.state.calls.filter(args => args.includes('POST')).length,
     0
   )
   assert.equal(
@@ -164,16 +184,112 @@ test('an authenticated paginated draft is resumed, verified and published by the
   )
 })
 
-test('a first publication creates one private draft then discovers its ID without a by-tag read', async t => {
+test('creation uses the REST response ID and preserves typed JSON and multiline notes', async t => {
   const fixture = await publisherFixture(t, { existing: false })
   assert.equal(await publishRelease(fixture.options), 404133245)
   assert.equal(
-    fixture.state.calls.filter(args => args[1] === 'create').length,
+    fixture.state.calls.filter(args => args.includes('POST')).length,
     1
   )
   assert.equal(
     fixture.state.calls.filter(args => args.includes('PATCH')).length,
     1
+  )
+})
+
+test('a newly created draft can be fully verified and published while the list still omits it', async t => {
+  const fixture = await publisherFixture(t, {
+    existing: false,
+    listVisible: false,
+  })
+  assert.equal(await publishRelease(fixture.options), 404133245)
+  assert.equal(
+    fixture.state.calls.filter(args => args.includes('POST')).length,
+    1
+  )
+  assert.equal(
+    fixture.state.calls.filter(
+      args => args[1] === 'repos/example/typenext/releases?per_page=100'
+    ).length,
+    2
+  )
+  assert.equal(
+    fixture.state.calls.filter(
+      args =>
+        args[1] === 'repos/example/typenext/releases/404133245' &&
+        !args.includes('PATCH')
+    ).length,
+    2
+  )
+  assert.equal(fixture.state.release.assets.length, 8)
+  assert.equal(fixture.state.release.draft, false)
+})
+
+test('malformed creation responses cannot reach upload or publication', async t => {
+  for (const change of [
+    state => {
+      state.release.id = '404133245'
+    },
+    state => {
+      state.release.tag_name = 'v0.1.1'
+    },
+    state => {
+      state.release.draft = false
+    },
+    state => {
+      state.release.assets = null
+    },
+  ]) {
+    const fixture = await publisherFixture(t, {
+      existing: false,
+      afterCreate: change,
+    })
+    await assert.rejects(publishRelease(fixture.options))
+    assert.equal(
+      fixture.state.calls.some(
+        args => args[1] === 'upload' || args.includes('PATCH')
+      ),
+      false
+    )
+  }
+})
+
+test('a failed create request is never retried or treated as a usable draft', async t => {
+  const fixture = await publisherFixture(t, { existing: false })
+  const gh = fixture.options.gh
+  let attempts = 0
+  fixture.options.gh = (args, options) => {
+    if (args.includes('POST')) {
+      attempts++
+      throw new Error('Synthetic create authorization failure')
+    }
+    return gh(args, options)
+  }
+  await assert.rejects(
+    publishRelease(fixture.options),
+    /create authorization failure/u
+  )
+  assert.equal(attempts, 1)
+  assert.equal(
+    fixture.state.calls.some(
+      args => args[1] === 'upload' || args.includes('PATCH')
+    ),
+    false
+  )
+})
+
+test('a missing list match never bypasses numeric-ID asset verification', async t => {
+  const fixture = await publisherFixture(t, {
+    existing: false,
+    listVisible: false,
+    afterUpload: state => {
+      state.release.assets[0].digest = null
+    },
+  })
+  await assert.rejects(publishRelease(fixture.options), /different digest/u)
+  assert.equal(
+    fixture.state.calls.some(args => args.includes('PATCH')),
+    false
   )
 })
 
@@ -204,7 +320,10 @@ test('a published release or manually added draft asset is never changed', async
     )
     assert.equal(
       fixture.state.calls.some(
-        args => args[0] === 'release' || args.includes('PATCH')
+        args =>
+          args[0] === 'release' ||
+          args.includes('POST') ||
+          args.includes('PATCH')
       ),
       false
     )
@@ -271,7 +390,8 @@ test('release-list authentication failures are not mistaken for an absent draft'
   )
   assert.equal(
     fixture.state.calls.some(
-      args => args[0] === 'release' || args.includes('PATCH')
+      args =>
+        args[0] === 'release' || args.includes('POST') || args.includes('PATCH')
     ),
     false
   )

@@ -4,10 +4,11 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ROOT, assertRemoteAssets, hashFile, releaseVersion } from './lib.mjs'
 
-const runGh = args =>
+const runGh = (args, { input } = {}) =>
   execFileSync('gh', args, {
     cwd: ROOT,
     encoding: 'utf8',
+    input,
     maxBuffer: 8 * 1024 * 1024,
   })
 // GitHub's by-tag REST endpoint returns published releases only. Authenticated
@@ -45,6 +46,7 @@ export async function publishRelease({
   repository,
   token,
   directory = resolve(ROOT, 'artifacts/release-publish'),
+  notesFile = resolve(ROOT, `docs/release-notes/${tag}.md`),
   gh = runGh,
 }) {
   releaseVersion(tag)
@@ -99,23 +101,32 @@ export async function publishRelease({
       'The existing draft contains unexpected assets; review it before rerunning.'
     )
   if (!release) {
-    gh([
-      'release',
-      'create',
-      tag,
-      '--draft',
-      '--verify-tag',
-      '--repo',
-      repository,
-      '--target',
-      commit,
-      '--title',
-      `TypeNext ${tag}`,
-      '--notes-file',
-      `docs/release-notes/${tag}.md`,
-    ])
-    release = discover()
-    if (!release) throw new Error('The newly created draft is missing.')
+    const body = JSON.stringify({
+      tag_name: tag,
+      target_commitish: commit,
+      name: `TypeNext ${tag}`,
+      body: await readFile(notesFile, 'utf8'),
+      draft: true,
+      prerelease: false,
+    })
+    assertRemoteTagCommit()
+    // The POST response is authoritative for a new draft's numeric identity.
+    // Release listings can omit it temporarily even though creation succeeded.
+    // Send structured JSON through stdin to preserve booleans and note text.
+    release = JSON.parse(
+      gh(
+        [
+          'api',
+          `repos/${repository}/releases`,
+          '--method',
+          'POST',
+          '--input',
+          '-',
+        ],
+        { input: body }
+      )
+    )
+    assertDraftRelease(release, tag)
   }
   const releaseId = release.id
   release = api(`repos/${repository}/releases/${releaseId}`)
@@ -137,11 +148,14 @@ export async function publishRelease({
     ...verified.assets.map(asset => resolve(directory, asset.name)),
     '--clobber',
   ])
+  const listed = discover()
+  if (listed && listed.id !== releaseId)
+    throw new Error('The draft identity changed before publication.')
+  // The list is a duplicate/identity guard when visible; a numeric-ID read is
+  // the final authority if the new draft has not reached the listing yet.
   release = api(`repos/${repository}/releases/${releaseId}`)
   assertDraftRelease(release, tag, releaseId)
   assertRemoteAssets(verified.assets, release.assets)
-  if (discover()?.id !== releaseId)
-    throw new Error('The draft identity changed before publication.')
   assertRemoteTagCommit()
   // This is the only operation that makes the complete release public.
   const published = api(
