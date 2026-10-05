@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyWorkspace, newNote, openNote } from '../notebook/model'
 import { linkNoteSource } from '../notebook/note-context'
+import { newContextPackage } from '../notebook/context-library'
 
 const native = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: native.invoke }))
@@ -14,6 +15,166 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('notebook persistence', () => {
+  it('persists several named context packages with one stored source body and restores their memberships on recovery', async () => {
+    const { persistWorkspace, loadWorkspace } = await import('./storage')
+    const source = {
+      id: 'shared',
+      name: 'Shared.md',
+      kind: 'markdown' as const,
+      text: 'One uniquely stored package body.',
+      enabled: true,
+      addedAt: 1,
+    }
+    const research = {
+      ...newContextPackage('Research'),
+      sourceIds: [source.id],
+    }
+    const voice = { ...newContextPackage('Voice'), sourceIds: [source.id] }
+    const draft = {
+      ...newNote('Draft', '', 'My independent words'),
+      contextPackageIds: [research.id, voice.id],
+    }
+    const workspace = {
+      ...openNote(emptyWorkspace(), draft),
+      contextLibrary: [source],
+      contextPackages: [research, voice],
+    }
+    await persistWorkspace(workspace)
+    const raw = localStorage.getItem('typenext.workspace.v1')!
+    expect(raw.match(/One uniquely stored package body\./gu)).toHaveLength(1)
+    const loaded = (await loadWorkspace())!
+    expect(loaded.contextPackages).toEqual([research, voice])
+    expect(loaded.notes[0]?.contextPackageIds).toEqual([research.id, voice.id])
+    expect(loaded.notes[0]?.sources).toEqual([])
+    await persistWorkspace({
+      ...workspace,
+      contextPackages: [{ ...research, name: 'Updated research' }, voice],
+    })
+    localStorage.setItem('typenext.workspace.v1', '{broken package save')
+    const recovered = (await loadWorkspace())!
+    expect(recovered.contextPackages?.[0]?.name).toBe('Research')
+    expect(recovered.notes[0]?.content).toBe('My independent words')
+    expect(recovered.notes[0]?.contextPackageIds).toEqual([
+      research.id,
+      voice.id,
+    ])
+  })
+
+  it('preserves missing package fields for legacy migration and projects only package schema fields', async () => {
+    const { validateWorkspace } = await import('./storage')
+    const legacy = validateWorkspace({
+      ...emptyWorkspace(),
+      contextPackages: undefined,
+    })
+    expect(legacy).not.toHaveProperty('contextPackages')
+    const context = {
+      ...newContextPackage('Research'),
+      apiKey: 'must-not-persist',
+      sourceIds: ['missing-source'],
+    }
+    const workspace = validateWorkspace({
+      ...emptyWorkspace(),
+      contextPackages: [context],
+      notes: [{ ...newNote('Draft'), contextPackageIds: ['missing-package'] }],
+    })
+    expect(workspace.contextPackages?.[0]).not.toHaveProperty('apiKey')
+    expect(workspace.contextPackages?.[0]?.sourceIds).toEqual([
+      'missing-source',
+    ])
+    expect(workspace.notes[0]?.contextPackageIds).toEqual(['missing-package'])
+    expect(
+      validateWorkspace({ ...emptyWorkspace(), contextPackages: [] })
+        .contextPackages
+    ).toEqual([])
+  })
+
+  it('rejects duplicate and oversized package memberships or names before replacing a valid notebook', async () => {
+    const { validateWorkspace, persistWorkspace } = await import('./storage')
+    const context = newContextPackage('Research')
+    const valid = { ...emptyWorkspace(), contextPackages: [context] }
+    await persistWorkspace(valid)
+    const original = localStorage.getItem('typenext.workspace.v1')
+    const malformed = [
+      { ...valid, contextPackages: [context, context] },
+      {
+        ...valid,
+        contextPackages: [{ ...context, sourceIds: ['same', 'same'] }],
+      },
+      { ...valid, contextPackages: [{ ...context, name: '  ' }] },
+      { ...valid, contextPackages: [{ ...context, name: '😀'.repeat(257) }] },
+      {
+        ...valid,
+        contextPackages: [
+          {
+            ...context,
+            sourceIds: Array.from(
+              { length: 257 },
+              (_, index) => `source-${index}`
+            ),
+          },
+        ],
+      },
+      {
+        ...valid,
+        contextPackages: Array.from({ length: 257 }, (_, index) => ({
+          ...context,
+          id: `context-${index}`,
+        })),
+      },
+      {
+        ...valid,
+        notes: [{ ...newNote('Draft'), contextPackageIds: ['same', 'same'] }],
+      },
+      {
+        ...valid,
+        notes: [
+          {
+            ...newNote('Draft'),
+            contextPackageIds: Array.from(
+              { length: 65 },
+              (_, index) => `context-${index}`
+            ),
+          },
+        ],
+      },
+    ]
+    for (const workspace of malformed) {
+      expect(() => validateWorkspace(workspace)).toThrow('invalid')
+      await expect(persistWorkspace(workspace)).rejects.toThrow('invalid')
+      expect(localStorage.getItem('typenext.workspace.v1')).toBe(original)
+    }
+  })
+
+  it('includes bounded package metadata in the aggregate workspace budget', async () => {
+    const { assertWorkspaceFits } = await import('./storage')
+    const text = 'x'.repeat(7_800_000)
+    const workspace = {
+      ...emptyWorkspace(),
+      contextLibrary: Array.from({ length: 8 }, (_, index) => ({
+        id: `source-${index}`,
+        name: 'Reference.txt',
+        kind: 'text' as const,
+        text,
+        enabled: true,
+        addedAt: 1,
+      })),
+    }
+    expect(() => assertWorkspaceFits(workspace)).not.toThrow()
+    const sourceIds = Array.from({ length: 256 }, (_, index) =>
+      `id-${index}`.padEnd(256, 'x')
+    )
+    const packages = Array.from({ length: 256 }, (_, index) => ({
+      id: `context-${index}`,
+      name: 'Research',
+      sourceIds,
+      createdAt: 1,
+      updatedAt: 1,
+    }))
+    expect(() =>
+      assertWorkspaceFits({ ...workspace, contextPackages: packages })
+    ).toThrow('64 MB')
+  })
+
   it('autosaves a captured snapshot without writing API keys or switching ordinary suggestions to cloud', async () => {
     const { persistWorkspace, loadWorkspace } = await import('./storage')
     const workspace = openNote(

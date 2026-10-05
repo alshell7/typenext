@@ -1,7 +1,73 @@
-import type { ContextSource, Note } from '../types/notebook'
+import type { ContextPackage, ContextSource, Note } from '../types/notebook'
 
 export const MAX_CONTEXT_LIBRARY_ITEMS = 2048
+export const MAX_CONTEXT_PACKAGES = 256
+export const MAX_CONTEXT_PACKAGE_SOURCES = 256
+export const MAX_CONTEXT_PACKAGES_PER_NOTE = 64
 export const CONTEXT_PREVIEW_CHARACTERS = 40_000
+const EMPTY_PACKAGES: ContextPackage[] = []
+
+export function newContextPackage(name: string): ContextPackage {
+  const now = Date.now()
+  return {
+    id: crypto.randomUUID(),
+    name: name.trim() || 'Untitled context',
+    sourceIds: [],
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+/** Older snapshots become packages without changing any note's attachments. */
+export function migrateContextPackages(
+  library: ContextSource[],
+  packages?: ContextPackage[]
+): ContextPackage[] {
+  if (packages !== undefined) return packages
+  if (!library.length) return EMPTY_PACKAGES
+  const migrated: ContextPackage[] = []
+  for (
+    let offset = 0;
+    offset < library.length;
+    offset += MAX_CONTEXT_PACKAGE_SOURCES
+  ) {
+    const sources = library.slice(offset, offset + MAX_CONTEXT_PACKAGE_SOURCES)
+    const index = migrated.length + 1
+    migrated.push({
+      id:
+        index === 1
+          ? 'context-saved-references'
+          : `context-saved-references-${index}`,
+      name: index === 1 ? 'Saved references' : `Saved references ${index}`,
+      sourceIds: sources.map(source => source.id),
+      createdAt: Math.min(...sources.map(source => source.addedAt)),
+      updatedAt: Math.max(...sources.map(source => source.addedAt)),
+    })
+  }
+  return migrated
+}
+
+/** Remove only snapshots no package or direct note reference can still use. */
+export function pruneContextLibrary(
+  library: ContextSource[],
+  notes: Note[],
+  packages: ContextPackage[]
+): ContextSource[] {
+  const used = new Set(packages.flatMap(context => context.sourceIds))
+  for (const note of notes)
+    for (const source of note.sources)
+      if (source.libraryId) used.add(source.libraryId)
+  const retained = library.filter(source => used.has(source.id))
+  return retained.length === library.length ? library : retained
+}
+
+export function contextPackageUsage(notes: Note[]) {
+  const counts = new Map<string, number>()
+  for (const note of notes)
+    for (const id of new Set(note.contextPackageIds ?? []))
+      counts.set(id, (counts.get(id) ?? 0) + 1)
+  return counts
+}
 
 /** A note keeps a small reference; the reusable snapshot lives in the library. */
 export function libraryReference(

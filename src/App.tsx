@@ -44,17 +44,23 @@ import {
 import { Modal } from './notebook/Modal'
 import { ContextPanel } from './notebook/ContextPanel'
 import { ModelChooser } from './notebook/ModelChooser'
-import { DictationDialog } from './notebook/DictationDialog'
+import {
+  InlineDictation,
+  type InlineDictationHandle,
+} from './notebook/InlineDictation'
 import { ContextLibrary } from './notebook/ContextLibrary'
 import {
   contextFolder,
   findLibrarySource,
   libraryReference,
+  newContextPackage,
+  pruneContextLibrary,
 } from './notebook/context-library'
 import {
   linkNoteSource,
   resolveNoteContext,
   stripLinkedText,
+  resolvedContextBudget,
 } from './notebook/note-context'
 import { Preferences, type PreferencePane } from './notebook/Preferences'
 import { applyPalette } from './notebook/palette'
@@ -66,7 +72,7 @@ import {
   STORAGE_LIMITS,
 } from './services/storage'
 import { importContextFile, importWebsite } from './services/sources'
-import type { ContextSource, Note } from './types/notebook'
+import type { ContextSource, Note, Workspace } from './types/notebook'
 import './App.css'
 
 const MAX_STORED_CONTEXT_CHARACTERS = 2_000_000
@@ -95,8 +101,13 @@ function App() {
   )
   const [contextVisible, setContextVisible] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
-  const [dictationOpen, setDictationOpen] = useState(false)
-  const dictationNoteId = useRef<string | null>(null)
+  const [libraryPackageId, setLibraryPackageId] = useState<string | undefined>()
+  const [websitePackageId, setWebsitePackageId] = useState<string | undefined>()
+  const dictationRef = useRef<InlineDictationHandle>(null)
+  const [dictationActive, setDictationActive] = useState(false)
+  const [dictationRecovery, setDictationRecovery] = useState<string | null>(
+    null
+  )
   const [focusMode, setFocusMode] = useState(false)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<EditorStatus>({ state: 'idle' })
@@ -121,14 +132,27 @@ function App() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const recentSearch = useRef<HTMLInputElement>(null)
-  const note = useMemo(() => {
-    const active = workspace.notes.find(
-      item => item.id === workspace.activeNoteId
-    )
-    return active
-      ? resolveNoteContext(active, workspace.notes, workspace.contextLibrary)
-      : undefined
-  }, [workspace.notes, workspace.activeNoteId, workspace.contextLibrary])
+  const storedNote = useMemo(
+    () => workspace.notes.find(item => item.id === workspace.activeNoteId),
+    [workspace.notes, workspace.activeNoteId]
+  )
+  const note = useMemo(
+    () =>
+      storedNote
+        ? resolveNoteContext(
+            storedNote,
+            workspace.notes,
+            workspace.contextLibrary,
+            workspace.contextPackages
+          )
+        : undefined,
+    [
+      storedNote,
+      workspace.notes,
+      workspace.contextLibrary,
+      workspace.contextPackages,
+    ]
+  )
   const settings = workspace.settings
   const font = FONTS.find(item => item.name === settings.fontFamily) ?? FONTS[0]
   const hasLocalModel =
@@ -556,7 +580,167 @@ function App() {
     }
   }
 
-  const appendContext = (activeId: string | null, source: ContextSource) => {
+  const checkContextBudgets = (value: Workspace, previous: Workspace) => {
+    const beforeById = new Map(previous.notes.map(item => [item.id, item]))
+    for (const item of value.notes) {
+      const before = beforeById.get(item.id)
+      if (
+        (item.contextPackageIds?.length ?? 0) > 64 &&
+        (item.contextPackageIds?.length ?? 0) >
+          (before?.contextPackageIds?.length ?? 0)
+      )
+        throw new Error(
+          'A note can attach up to 64 contexts. Detach one before adding another.'
+        )
+      const budget = resolvedContextBudget(
+        item,
+        value.notes,
+        value.contextLibrary,
+        value.contextPackages
+      )
+      // A live note can grow after attachment. Always allow removal or an
+      // unchanged budget so a writer can reduce an already large context.
+      const priorBudget = before
+        ? resolvedContextBudget(
+            before,
+            previous.notes,
+            previous.contextLibrary,
+            previous.contextPackages
+          )
+        : { sources: 0, characters: 0 }
+      if (
+        (budget.sources > STORAGE_LIMITS.sourcesPerNote &&
+          budget.sources > priorBudget.sources) ||
+        (budget.characters > MAX_STORED_CONTEXT_CHARACTERS &&
+          budget.characters > priorBudget.characters)
+      )
+        throw new Error(
+          `“${item.title}” would have too much context. Detach a package or use smaller excerpts.`
+        )
+    }
+    assertWorkspaceFits(value)
+  }
+  const changePackage = (operation: (value: Workspace) => Workspace) => {
+    try {
+      setWorkspace(value => {
+        const next = operation(value)
+        checkContextBudgets(next, value)
+        return next
+      })
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error))
+    }
+  }
+  const createPackage = (name: string) => {
+    const current = getWorkspace()
+    if ((current.contextPackages?.length ?? 0) >= 256) {
+      notify('You can keep up to 256 context packages.')
+      return null
+    }
+    const created = newContextPackage(name)
+    try {
+      setWorkspace(value => {
+        const next = {
+          ...value,
+          contextPackages: [...(value.contextPackages ?? []), created],
+        }
+        assertWorkspaceFits(next)
+        return next
+      })
+      return created.id
+    } catch (error) {
+      notify(String(error))
+      return null
+    }
+  }
+  const renamePackage = (id: string, name: string) =>
+    changePackage(value => ({
+      ...value,
+      contextPackages: value.contextPackages?.map(item =>
+        item.id === id ? { ...item, name, updatedAt: Date.now() } : item
+      ),
+    }))
+  const removePackage = (id: string) =>
+    changePackage(value => {
+      const packages =
+        value.contextPackages?.filter(item => item.id !== id) ?? []
+      const notes = value.notes.map(item =>
+        item.contextPackageIds?.includes(id)
+          ? {
+              ...item,
+              contextPackageIds: item.contextPackageIds.filter(
+                key => key !== id
+              ),
+              updatedAt: Date.now(),
+            }
+          : item
+      )
+      return {
+        ...value,
+        notes,
+        contextPackages: packages,
+        contextLibrary: pruneContextLibrary(
+          value.contextLibrary ?? [],
+          notes,
+          packages
+        ),
+      }
+    })
+  const attachPackage = (id: string) =>
+    changePackage(value => ({
+      ...value,
+      notes: value.notes.map(item =>
+        item.id === value.activeNoteId && !item.contextPackageIds?.includes(id)
+          ? {
+              ...item,
+              contextPackageIds: [...(item.contextPackageIds ?? []), id],
+              updatedAt: Date.now(),
+            }
+          : item
+      ),
+    }))
+  const detachPackage = (id: string) =>
+    changePackage(value => ({
+      ...value,
+      notes: value.notes.map(item =>
+        item.id === value.activeNoteId
+          ? {
+              ...item,
+              contextPackageIds: item.contextPackageIds?.filter(
+                key => key !== id
+              ),
+              updatedAt: Date.now(),
+            }
+          : item
+      ),
+    }))
+  const removePackageSource = (packageId: string, sourceId: string) =>
+    changePackage(value => {
+      const packages =
+        value.contextPackages?.map(item =>
+          item.id === packageId
+            ? {
+                ...item,
+                sourceIds: item.sourceIds.filter(id => id !== sourceId),
+                updatedAt: Date.now(),
+              }
+            : item
+        ) ?? []
+      return {
+        ...value,
+        contextPackages: packages,
+        contextLibrary: pruneContextLibrary(
+          value.contextLibrary ?? [],
+          value.notes,
+          packages
+        ),
+      }
+    })
+  const appendContext = (
+    activeId: string | null,
+    source: ContextSource,
+    packageId?: string
+  ) => {
     let added = false
     setWorkspace(value => {
       const library = value.contextLibrary ?? []
@@ -570,6 +754,34 @@ function App() {
         throw new Error(
           'Your library has 2,048 references. Remove unused references before adding more.'
         )
+      if (packageId) {
+        const target = value.contextPackages?.find(
+          item => item.id === packageId
+        )
+        if (!target)
+          throw new Error(
+            'This context was removed. Choose another context and import again.'
+          )
+        const ids = target.sourceIds.includes(canonical.id)
+          ? target.sourceIds
+          : [...target.sourceIds, canonical.id]
+        if (ids.length > 256)
+          throw new Error(
+            'A context can contain up to 256 references. Create another context for these files.'
+          )
+        const next = {
+          ...value,
+          contextLibrary: existing ? library : [...library, canonical],
+          contextPackages: value.contextPackages!.map(item =>
+            item.id === packageId
+              ? { ...item, sourceIds: ids, updatedAt: Date.now() }
+              : item
+          ),
+        }
+        checkContextBudgets(next, value)
+        added = true
+        return next
+      }
       const active = value.notes.find(item => item.id === activeId)
       const attach =
         active &&
@@ -633,50 +845,13 @@ function App() {
               )
             : value.notes,
       }
-      assertWorkspaceFits(next)
+      checkContextBudgets(next, value)
       added = true
       return next
     })
     return added
   }
-  const attachLibrary = (id: string) => {
-    const current = getWorkspace()
-    const source = current.contextLibrary?.find(item => item.id === id)
-    if (!source) return
-    try {
-      appendContext(current.activeNoteId, source)
-    } catch (error) {
-      notify(error instanceof Error ? error.message : String(error))
-    }
-  }
-  const detachLibrary = (id: string) => {
-    const current = getWorkspace()
-    const active = current.notes.find(item => item.id === current.activeNoteId)
-    if (active)
-      updateNote(active.id, {
-        sources: active.sources.filter(source => source.libraryId !== id),
-      })
-  }
-  const removeLibrary = (id: string) =>
-    setWorkspace(value => ({
-      ...value,
-      contextLibrary: value.contextLibrary?.filter(source => source.id !== id),
-      notes: value.notes.map(item =>
-        item.sources.some(source => source.libraryId === id)
-          ? {
-              ...item,
-              sources: item.sources.filter(source => source.libraryId !== id),
-              updatedAt: Math.max(
-                Date.now(),
-                item.updatedAt + 1,
-                (item.exportedAt ?? 0) + 1
-              ),
-            }
-          : item
-      ),
-    }))
-
-  const addSources = async (files: FileList | null) => {
+  const addSources = async (files: FileList | null, packageId?: string) => {
     const activeId = getWorkspace().activeNoteId
     if (!files?.length) return
     const selectedFiles = Array.from(files).filter(
@@ -709,7 +884,10 @@ function App() {
             ...(await importContextFile(file, controller.signal)),
             folder: contextFolder(file),
           }
-          if (!controller.signal.aborted && !appendContext(activeId, source))
+          if (
+            !controller.signal.aborted &&
+            !appendContext(activeId, source, packageId)
+          )
             controller.abort()
         } catch (error) {
           if (controller.signal.aborted) break
@@ -738,8 +916,12 @@ function App() {
         controller.signal
       )
       if (controller.signal.aborted) return
-      appendContext(activeId, source)
+      appendContext(activeId, source, websitePackageId)
       setWebsiteOpen(false)
+      if (websitePackageId) {
+        setLibraryPackageId(websitePackageId)
+        setLibraryOpen(true)
+      }
       setWebsiteUrl('')
     } catch (error) {
       if (!controller.signal.aborted)
@@ -751,12 +933,12 @@ function App() {
     }
   }
 
-  const useNoteAsContext = (id: string) => {
+  const useNoteAsContext = (id: string, packageId?: string) => {
     const current = getWorkspace()
     const target = current.notes.find(item => item.id === id)
     if (!target) return
     try {
-      appendContext(current.activeNoteId, linkNoteSource(target))
+      appendContext(current.activeNoteId, linkNoteSource(target), packageId)
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error))
     }
@@ -840,8 +1022,8 @@ function App() {
             <ArrowUpRight size={14} />
           </button>
           <button className="sidebar-open" onClick={() => setLibraryOpen(true)}>
-            <Paperclip size={16} /> Context library{' '}
-            <span>{workspace.contextLibrary?.length ?? 0}</span>
+            <Paperclip size={16} /> Contexts{' '}
+            <span>{workspace.contextPackages?.length ?? 0}</span>
           </button>
         </div>
         <label className="note-search">
@@ -980,11 +1162,10 @@ function App() {
                 <button
                   className="icon-button"
                   aria-label="Dictate on this device"
-                  title="Dictate on this device"
-                  onClick={() => {
-                    dictationNoteId.current = note.id
-                    setDictationOpen(true)
-                  }}
+                  title="Dictate on this device (Ctrl / ⌘ Shift D)"
+                  aria-pressed={dictationActive}
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => dictationRef.current?.toggle()}
                 >
                   <Mic size={17} />
                 </button>
@@ -1151,6 +1332,28 @@ function App() {
                     )}
                   </div>
                 </div>
+                <InlineDictation
+                  key={note.id}
+                  ref={dictationRef}
+                  recoveryText={dictationRecovery}
+                  onRecoveryTextChange={setDictationRecovery}
+                  onActiveChange={setDictationActive}
+                  onCapture={() => {
+                    if (!editorRef.current)
+                      throw new Error('Open a note before dictating.')
+                    return editorRef.current.captureDictation()
+                  }}
+                  onRecoverInsert={text => {
+                    if (!editorRef.current)
+                      throw new Error('Open a note before inserting.')
+                    const capture = editorRef.current.captureDictation()
+                    try {
+                      capture.commit(text)
+                    } finally {
+                      capture.cancel()
+                    }
+                  }}
+                />
                 <div className="suggestion-bar">
                   <button
                     className={`local-suggestion-button ${!settings.suggestionsEnabled ? 'paused' : ''}`}
@@ -1286,16 +1489,24 @@ function App() {
               {contextVisible && !focusMode && (
                 <ContextPanel
                   key={note.id}
-                  note={note}
+                  note={storedNote!}
                   notes={workspace.notes}
+                  packages={workspace.contextPackages ?? []}
+                  onDetachPackage={detachPackage}
                   library={workspace.contextLibrary}
-                  onLibrary={() => setLibraryOpen(true)}
+                  onLibrary={packageId => {
+                    setLibraryPackageId(packageId)
+                    setLibraryOpen(true)
+                  }}
                   onUseNote={useNoteAsContext}
                   importing={importing}
                   onClose={() => setContextVisible(false)}
                   onUpdate={patch => updateNote(note.id, patch)}
                   onFiles={addSources}
-                  onWebsite={() => setWebsiteOpen(true)}
+                  onWebsite={() => {
+                    setWebsitePackageId(undefined)
+                    setWebsiteOpen(true)
+                  }}
                 />
               )}
             </>
@@ -1418,32 +1629,24 @@ function App() {
           </div>
         </form>
       </Modal>
-      <DictationDialog
-        open={dictationOpen}
-        onOpenChange={setDictationOpen}
-        onInsert={text => {
-          if (
-            getWorkspace().activeNoteId !== dictationNoteId.current ||
-            !editorRef.current
-          )
-            throw new Error(
-              'Return to the note where you started dictation before inserting this transcript.'
-            )
-          editorRef.current.insert(text)
-        }}
-      />
       <ContextLibrary
         open={libraryOpen}
         onOpenChange={setLibraryOpen}
         library={workspace.contextLibrary ?? []}
         notes={workspace.notes}
-        activeNote={note ?? null}
+        activeNote={storedNote ?? null}
+        packages={workspace.contextPackages ?? []}
+        initialPackageId={libraryPackageId}
         importing={importing}
-        onAttach={attachLibrary}
-        onDetach={detachLibrary}
-        onRemove={removeLibrary}
+        onCreatePackage={createPackage}
+        onRenamePackage={renamePackage}
+        onRemovePackage={removePackage}
+        onAttachPackage={attachPackage}
+        onDetachPackage={detachPackage}
+        onRemoveSource={removePackageSource}
         onFiles={addSources}
-        onWebsite={() => {
+        onWebsite={packageId => {
+          setWebsitePackageId(packageId)
           setLibraryOpen(false)
           setWebsiteOpen(true)
         }}

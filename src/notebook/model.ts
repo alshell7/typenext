@@ -1,5 +1,8 @@
 import type { Note, NotebookSettings, Workspace } from '../types/notebook'
-import { migrateContextLibrary } from './context-library'
+import {
+  migrateContextLibrary,
+  migrateContextPackages,
+} from './context-library'
 
 export const FONTS = [
   { name: 'Merriweather', family: "'Merriweather', Georgia, serif" },
@@ -80,6 +83,7 @@ export function emptyWorkspace(): Workspace {
     version: 1,
     notes: [],
     contextLibrary: [],
+    contextPackages: [],
     openNoteIds: [],
     activeNoteId: null,
     settings: defaultSettings(),
@@ -121,6 +125,10 @@ export function normalizeWorkspace(value: Workspace): Workspace {
     version: 1,
     notes: migrated.notes,
     contextLibrary: migrated.library,
+    contextPackages: migrateContextPackages(
+      migrated.library,
+      value.contextPackages
+    ),
     openNoteIds,
     activeNoteId:
       value.activeNoteId && openNoteIds.includes(value.activeNoteId)
@@ -144,6 +152,7 @@ export function newNote(
     objective: '',
     content,
     sources: [],
+    contextPackageIds: [],
     createdAt: now,
     updatedAt: now,
     ...(filePath ? { filePath, exportedAt: now } : {}),

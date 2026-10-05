@@ -128,6 +128,16 @@ async function openContext(page: Page) {
     await page.getByRole('button', { name: /^Context(?: \d+)?$/ }).click()
   }
   await expect(panel).toBeVisible()
+  const legacy = panel
+    .locator('details')
+    .filter({
+      has: page.getByText('Attach a single reference', { exact: true }),
+    })
+  if (
+    (await legacy.count()) &&
+    !(await legacy.evaluate(element => (element as HTMLDetailsElement).open))
+  )
+    await legacy.locator('summary').click()
   return panel
 }
 
@@ -203,6 +213,18 @@ async function expectSaved(page: Page, title: string, content: string) {
 }
 
 async function completionResponse(route: Route, text: string, status = 200) {
+  const payload = route.request().postDataJSON()
+  const manualChoices = JSON.stringify(
+    payload?.system ?? payload?.messages?.[0]?.content ?? ''
+  ).includes('insertions')
+  if (status === 200 && manualChoices)
+    text = JSON.stringify({
+      insertions: [
+        text,
+        ' takes a quieter path',
+        ' leaves room for another thought',
+      ],
+    })
   await route.fulfill({
     status,
     contentType: 'application/json',
@@ -1923,7 +1945,18 @@ test('three providers keep independent keys and models, and the chooser routes t
           headers: corsHeaders,
           contentType: 'application/json',
           body: JSON.stringify({
-            content: [{ type: 'text', text: ' makes room for a thought.' }],
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  insertions: [
+                    ' makes room for a thought.',
+                    ' notices the quiet details.',
+                    ' leaves the page open.',
+                  ],
+                }),
+              },
+            ],
             stop_reason: 'end_turn',
           }),
         })

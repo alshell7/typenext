@@ -102,6 +102,88 @@ describe('bounded microphone capture', () => {
     capture.stop()
     expect(context.close).toHaveBeenCalledTimes(1)
   })
+  it('requires the explicitly selected input and never silently changes microphones', async () => {
+    const capture = await startWhistleRecording({ deviceId: 'usb-input' })
+    expect(getUserMedia).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        audio: expect.objectContaining({ deviceId: { exact: 'usb-input' } }),
+      })
+    )
+    const cancelled = expect(capture.finished).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    capture.cancel()
+    await cancelled
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+  })
+  it.each([undefined, '', 'default'])(
+    'uses the system input without a mandatory device constraint: %s',
+    async deviceId => {
+      const capture = await startWhistleRecording({ deviceId })
+      expect(getUserMedia.mock.calls[0]?.[0].audio).not.toHaveProperty(
+        'deviceId'
+      )
+      const cancelled = expect(capture.finished).rejects.toMatchObject({
+        name: 'AbortError',
+      })
+      capture.cancel()
+      await cancelled
+    }
+  )
+  it.each(['OverconstrainedError', 'NotFoundError'])(
+    'reports an unavailable selected input for %s without fallback',
+    async name => {
+      getUserMedia.mockRejectedValue(
+        new DOMException('Missing selected input', name)
+      )
+      await expect(
+        startWhistleRecording({ deviceId: 'disconnected' })
+      ).rejects.toThrow('selected microphone is unavailable')
+      expect(getUserMedia).toHaveBeenCalledTimes(1)
+      expect(contexts[0]?.close).toHaveBeenCalledTimes(1)
+      expect(nodes).toHaveLength(0)
+    }
+  )
+  it('rejects malformed or unsupported device selection before opening audio', async () => {
+    await expect(
+      startWhistleRecording({ deviceId: 'a'.repeat(513) })
+    ).rejects.toThrow('Choose a microphone')
+    vi.stubGlobal('navigator', {
+      mediaDevices: {
+        getUserMedia,
+        getSupportedConstraints: () => ({ deviceId: false }),
+      },
+    })
+    await expect(
+      startWhistleRecording({ deviceId: 'usb-input' })
+    ).rejects.toThrow('Choose System default')
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(contexts).toHaveLength(0)
+  })
+  it('emits a finite bounded meter, resets it on Stop and ignores late levels while flushing', async () => {
+    const level = vi.fn()
+    const capture = await startWhistleRecording({ onLevel: level })
+    const node = nodes[0]!
+    node.reply({ type: 'progress', seconds: 0.2, level: 0.25 })
+    node.reply({ type: 'progress', seconds: 0.4, level: 2 })
+    node.reply({ type: 'progress', seconds: 0.6, level: -2 })
+    node.reply({ type: 'progress', seconds: 0.8, level: Number.NaN })
+    node.reply({
+      type: 'progress',
+      seconds: 1,
+      level: Number.POSITIVE_INFINITY,
+    })
+    expect(level.mock.calls).toEqual([[0], [0.25], [1], [0]])
+    capture.stop()
+    expect(level).toHaveBeenLastCalledWith(0)
+    const countAfterStop = level.mock.calls.length
+    node.reply({ type: 'progress', seconds: 1.2, level: 0.9 })
+    expect(level).toHaveBeenCalledTimes(countAfterStop)
+    node.reply({ type: 'complete', samples: new Float32Array([0.1]) })
+    await capture.finished
+    expect(level).toHaveBeenLastCalledWith(0)
+    expect(contexts[0]?.close).toHaveBeenCalledTimes(1)
+  })
 
   it('stops listening at thirty seconds and times out a worklet that cannot flush', async () => {
     const capture = await startWhistleRecording()
@@ -177,6 +259,26 @@ describe('bounded microphone capture', () => {
     grant(stream)
     await Promise.resolve()
     expect(track.stop).toHaveBeenCalledTimes(1)
+    expect(nodes).toHaveLength(0)
+  })
+  it('cancels a still-pending permission prompt when hidden and stops its late grant', async () => {
+    let grant!: (value: MediaStream) => void
+    getUserMedia.mockReturnValue(
+      new Promise<MediaStream>(resolve => {
+        grant = resolve
+      })
+    )
+    const opening = startWhistleRecording()
+    const failure = expect(opening).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await failure
+    grant(stream)
+    await Promise.resolve()
+    expect(track.stop).toHaveBeenCalledTimes(1)
+    expect(contexts[0]?.close).toHaveBeenCalledTimes(1)
     expect(nodes).toHaveLength(0)
   })
 

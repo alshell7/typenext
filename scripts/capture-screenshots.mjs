@@ -44,26 +44,49 @@ try {
   await page
     .getByLabel('Objective', { exact: true })
     .fill('Find a gentler relationship with the tools we use to think.')
-  await page.getByLabel('Attach reference files').setInputFiles({
-    name: 'Field notes.md',
-    mimeType: 'text/markdown',
-    buffer: Buffer.from(
-      '# Attention, not interruption\n\nThe best tools leave room for attention and let the work find its own rhythm. They make the next action obvious, then get out of the way.\n\nA useful suggestion is small enough to consider and easy enough to ignore. The writer keeps the final say.\n\nWriting often begins before we know exactly what we mean. It helps to have a quiet page and a little patience.'
-    ),
-  })
-  await page.getByLabel('Attach reference files').setInputFiles({
-    name: 'Earlier draft.txt',
-    mimeType: 'text/plain',
-    buffer: Buffer.from(
-      'An earlier direction for this essay. Keep it close for reference, but leave its language out of suggestions.'
-    ),
-  })
   await page
-    .getByRole('checkbox', {
-      name: 'Use Earlier draft.txt as context',
-      exact: true,
+    .getByRole('button', { name: 'Manage contexts', exact: true })
+    .click()
+  const library = page.getByRole('dialog', { name: 'Contexts', exact: true })
+  const createContext = async name => {
+    await library
+      .getByRole('button', { name: 'New context', exact: true })
+      .click()
+    await library.getByLabel('Context name', { exact: true }).fill(name)
+    await library
+      .getByRole('button', { name: 'Create context', exact: true })
+      .click()
+    await library
+      .getByRole('checkbox', { name: `Use ${name} in this note`, exact: true })
+      .check()
+  }
+  await createContext('Field research')
+  await library
+    .getByLabel('Add files to this context', { exact: true })
+    .setInputFiles({
+      name: 'Field notes.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(
+        '# Attention, not interruption\n\nThe best tools leave room for attention and let the work find its own rhythm. They make the next action obvious, then get out of the way.\n\nA useful suggestion is small enough to consider and easy enough to ignore. The writer keeps the final say.\n\nWriting often begins before we know exactly what we mean. It helps to have a quiet page and a little patience.'
+      ),
     })
-    .uncheck()
+  await library
+    .getByRole('button', { name: 'Preview Field notes.md', exact: true })
+    .waitFor()
+  await createContext('Voice & audience')
+  await library
+    .getByLabel('Add files to this context', { exact: true })
+    .setInputFiles({
+      name: 'A note on voice.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(
+        'Write for people who want a little more room to think. Keep the voice personal, precise and unhurried. Let simple observations carry the thought.'
+      ),
+    })
+  await library
+    .getByRole('button', { name: 'Preview A note on voice.txt', exact: true })
+    .waitFor()
+  await library.getByRole('button', { name: 'Done', exact: true }).click()
   const editor = page.getByRole('textbox', { name: 'Note content' })
   await editor.fill(
     'Some mornings, the work begins with making a little space. A clear desk. A quiet page. Enough time to follow a thought without asking it to become something useful straight away.\n\n## A quieter kind of tool\n\nI keep returning to the same question: what would it feel like if our tools helped us stay with an idea, instead of pulling us away from it?\n\nThere is a difference between being offered a thought and being given room to finish your own. I want the second kind of help. Something small, at the moment I need it.\n\nThe best tools leave room for'
@@ -79,10 +102,15 @@ try {
   await page.locator('.cm-ghost-suggestion').waitFor({ state: 'visible' })
   await settled(page)
   await page.screenshot({ path: 'docs/screenshots/writing-dark.png' })
-  await page.getByRole('button', { name: 'Preview Field notes.md' }).click()
+  await page
+    .getByRole('button', { name: 'Manage Field research', exact: true })
+    .click()
+  await library
+    .getByRole('button', { name: 'Preview Field notes.md', exact: true })
+    .click()
   await settled(page)
   await page.screenshot({ path: 'docs/screenshots/context-preview.png' })
-  await page.getByRole('button', { name: 'Done', exact: true }).click()
+  await library.getByRole('button', { name: 'Done', exact: true }).click()
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
   const paletteDialog = page.getByRole('dialog', {
     name: 'Make yourself at home',
@@ -111,30 +139,27 @@ try {
     .getByRole('navigation', { name: 'Open notes', exact: true })
     .getByRole('button', { name: 'On paying attention', exact: true })
     .click()
-  await page.getByRole('button', { name: 'Use a note', exact: true }).click()
   await page
-    .getByRole('dialog', { name: 'Use a note as context', exact: true })
-    .getByLabel('Search notes', { exact: true })
-    .fill('small')
+    .getByRole('button', { name: 'Manage Field research', exact: true })
+    .click()
+  await library.getByRole('button', { name: 'Use a note', exact: true }).click()
+  await library.getByLabel('Search notes', { exact: true }).fill('small')
   await settled(page)
   await page.screenshot({ path: 'docs/screenshots/note-picker.png' })
-  await page
+  await library
     .getByRole('button', {
-      name: 'Use Small observations as context',
+      name: 'Add Small observations to Field research',
       exact: true,
     })
     .click()
-  await page
+  await library
     .getByRole('button', { name: 'Preview Small observations', exact: true })
     .click()
   await settled(page)
   await page.screenshot({ path: 'docs/screenshots/linked-note.png' })
-  await page.getByRole('button', { name: 'Done', exact: true }).click()
-  await page.getByRole('button', { name: /Context library/ }).click()
-  const library = page.getByRole('dialog', {
-    name: 'Context library',
-    exact: true,
-  })
+  await library
+    .getByRole('button', { name: 'Close source preview', exact: true })
+    .click()
   const folder = path.resolve('artifacts/ui/context/Field research')
   mkdirSync(folder, { recursive: true })
   writeFileSync(
@@ -146,7 +171,7 @@ try {
     'A quiet writing tool should make the next useful action easy to find, then leave the writer with the page.'
   )
   await library
-    .getByLabel('Add folder to context library', { exact: true })
+    .getByLabel('Add folder to this context', { exact: true })
     .setInputFiles(folder)
   await library
     .getByRole('button', { name: 'Preview Walking notes.md', exact: true })
@@ -186,17 +211,28 @@ try {
   await page.screenshot({ path: 'docs/screenshots/local-model-setup.png' })
   await page.getByRole('button', { name: 'Done', exact: true }).click()
   await page
+    .getByRole('button', { name: 'Close context panel', exact: true })
+    .click()
+  await page
     .getByRole('button', { name: 'Dictate on this device', exact: true })
     .click()
   await page
-    .getByRole('dialog', { name: 'Dictate a thought', exact: true })
+    .getByRole('region', { name: 'Inline dictation', exact: true })
+    .waitFor()
+  await page
+    .getByRole('button', { name: 'Allow and refresh microphones', exact: true })
     .waitFor()
   await settled(page)
   await page.screenshot({ path: 'docs/screenshots/dictation-setup.png' })
+  await page
+    .getByRole('button', { name: 'Hide note sidebar', exact: true })
+    .click()
   await page.setViewportSize({ width: 390, height: 844 })
   await settled(page)
   await page.screenshot({ path: 'docs/screenshots/dictation-setup-narrow.png' })
-  await page.getByRole('button', { name: 'Close dialog', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Hide dictation controls', exact: true })
+    .click()
   await page.setViewportSize({ width: 1440, height: 960 })
   const mobileContext = await browser.newContext({
     viewport: { width: 390, height: 844 },

@@ -89,7 +89,7 @@ async function start() {
         (offlineModels
           ? ` --use-fake-device-for-media-stream --use-fake-ui-for-media-stream --use-file-for-fake-audio-capture="${syntheticWav}"`
           : ''),
-      WEBVIEW2_USER_DATA_FOLDER: join(out, 'webview-profile'),
+      WEBVIEW2_USER_DATA_FOLDER: join(out, `webview-${identifier}`),
     },
   })
   for (let index = 0; index < 80; index++) {
@@ -279,52 +279,147 @@ try {
     await page
       .getByRole('button', { name: 'Dictate on this device', exact: true })
       .click()
-    const voice = page.getByRole('dialog', {
-      name: 'Dictate a thought',
+    const voice = page.getByRole('region', {
+      name: 'Inline dictation',
       exact: true,
     })
+    await expect(voice).toBeVisible()
+    // Cached models let the toolbar record immediately. Stop that setup
+    // gesture before choosing an exact input; uncached models just show setup.
+    await editor.press('Escape')
+    const chooseInput = voice.getByRole('button', {
+      name: 'Choose microphone',
+      exact: true,
+    })
+    if ((await chooseInput.getAttribute('aria-expanded')) !== 'true')
+      await chooseInput.click()
     await voice
       .getByRole('button', {
         name: /^(Download Whistle|Load downloaded model)/,
       })
       .click()
     await expect(
-      voice.getByRole('button', { name: 'Record', exact: true })
+      voice.getByRole('button', { name: 'Dictate', exact: true })
     ).toBeEnabled({ timeout: 120_000 })
-    await voice.getByLabel('Language', { exact: true }).selectOption('en')
+    await voice
+      .getByRole('button', {
+        name: 'Allow and refresh microphones',
+        exact: true,
+      })
+      .click()
+    await expect(
+      voice.getByRole('button', {
+        name: 'Allow and refresh microphones',
+        exact: true,
+      })
+    ).toBeEnabled()
+    const microphoneId = await voice
+      .getByRole('combobox', { name: 'Microphone', exact: true })
+      .locator('option')
+      .evaluateAll(options =>
+        options.map(option => option.value).find(value => value !== '')
+      )
+    if (!microphoneId)
+      throw new Error('The fake microphone was not discovered.')
+    await voice
+      .getByRole('combobox', { name: 'Microphone', exact: true })
+      .selectOption(microphoneId)
+    await voice
+      .getByLabel('Dictation language', { exact: true })
+      .selectOption('en')
+    await voice
+      .getByRole('button', { name: 'Choose microphone', exact: true })
+      .click()
+    const dictationSettings = await preferences('Local suggestions')
+    await dictationSettings
+      .getByLabel('Use on this device', { exact: true })
+      .selectOption('server')
+    await dictationSettings
+      .getByRole('switch', { name: /^Suggest after a pause/ })
+      .setChecked(true)
+    await dictationSettings
+      .getByRole('button', { name: 'Done', exact: true })
+      .click()
+    await editor.focus()
+    await editor.press('Control+End')
+    const requestsBeforeSpeech = generationRequests.length
     await page.bringToFront()
-    await expect
-      .poll(() => page.evaluate(() => document.visibilityState))
-      .toBe('visible')
-    await voice.getByRole('button', { name: 'Record', exact: true }).click()
+    await editor.press('Control+Shift+d')
     await expect(
-      voice.getByRole('button', { name: 'Stop & transcribe', exact: true })
+      voice.getByRole('button', { name: 'Stop', exact: true })
     ).toBeVisible({ timeout: 10_000 })
-    await page.waitForTimeout(5_000)
-    await voice
-      .getByRole('button', { name: 'Stop & transcribe', exact: true })
-      .click()
-    await expect(
-      voice.getByLabel('Your transcript', { exact: true })
-    ).toBeVisible({ timeout: 30_000 })
-    const transcript = await voice
-      .getByLabel('Your transcript', { exact: true })
-      .inputValue()
-    expect(transcript.toLowerCase()).toContain('patient writer')
-    await voice
-      .getByLabel('Your transcript', { exact: true })
-      .fill(' A reviewed dictated thought.')
-    await voice
-      .getByRole('button', { name: 'Insert transcript', exact: true })
-      .click()
+    await expect(page.locator('.cm-dictation-anchor')).toHaveText('Listening…')
+    await editor.pressSequentially(' Typed alongside.')
+    await page.waitForTimeout(4_000)
+    expect(generationRequests.length).toBe(requestsBeforeSpeech)
+    await editor.press('Control+Shift+d')
+    await expect(page.locator('.cm-dictation-anchor')).toHaveCount(0, {
+      timeout: 30_000,
+    })
+    await expect(editor).toContainText('patient writer')
+    const dictated = await editor.textContent()
+    expect(dictated.startsWith(accepted + ' Typed alongside. ')).toBe(true)
     await expect(editor).toBeFocused()
-    await expect(editor).toHaveText(accepted + ' A reviewed dictated thought.')
+    await expect
+      .poll(() => generationRequests.length)
+      .toBe(requestsBeforeSpeech + 1)
+    await expect(page.locator('.cm-ghost-text')).toBeVisible()
+    await editor.press('Escape')
     await editor.press('Control+z')
-    await expect(editor).toHaveText(accepted)
+    await expect(editor).toHaveText(accepted + ' Typed alongside.')
+    await editor.press('Control+Shift+d')
+    await expect(
+      voice.getByRole('button', { name: 'Stop', exact: true })
+    ).toBeVisible()
+    await editor.press('Escape')
+    await expect(page.locator('.cm-dictation-anchor')).toHaveCount(0)
+    await expect(editor).toHaveText(accepted + ' Typed alongside.')
+    await editor.fill(accepted)
+    const quiet = await preferences('Local suggestions')
+    await quiet
+      .getByRole('switch', { name: /^Suggest after a pause/ })
+      .setChecked(false)
+    await quiet.getByRole('button', { name: 'Done', exact: true }).click()
     observations.push(
-      'Real native Whistle download and WASM, fake-device synthetic speech capture, local transcription, editable review, explicit insert, editor focus and one-step undo passed.'
+      'Real inline Whistle capture with a selected microphone, shortcut start/stop/cancel, concurrent typing, mapped insertion, automatic model suggestion and one-step speech undo passed.'
     )
   }
+
+  await page.getByRole('button', { name: 'Context', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Manage contexts', exact: true })
+    .click()
+  const contexts = page.getByRole('dialog', { name: 'Contexts', exact: true })
+  for (const name of ['Research', 'Voice']) {
+    await contexts
+      .getByRole('button', { name: 'New context', exact: true })
+      .click()
+    await contexts.getByLabel('Context name', { exact: true }).fill(name)
+    await contexts
+      .getByRole('button', { name: 'Create context', exact: true })
+      .click()
+    await contexts
+      .getByLabel('Add files to this context', { exact: true })
+      .setInputFiles({
+        name: `${name}.txt`,
+        mimeType: 'text/plain',
+        buffer: Buffer.from(
+          `Synthetic ${name} context remains attached after a native restart.`
+        ),
+      })
+    await contexts
+      .getByRole('button', { name: `Preview ${name}.txt`, exact: true })
+      .waitFor()
+    await contexts
+      .getByRole('checkbox', { name: `Use ${name} in this note`, exact: true })
+      .check()
+  }
+  await contexts.getByRole('button', { name: 'Done', exact: true }).click()
+  await expect.poll(() => saved().contextPackages?.length).toBe(2)
+  await expect.poll(() => saved().notes[0].contextPackageIds?.length).toBe(2)
+  await page
+    .getByRole('button', { name: 'Close context panel', exact: true })
+    .click()
 
   const deniedPath = join(out, 'not-granted.md')
   const denial = await page.evaluate(async path => {
@@ -390,6 +485,19 @@ try {
     exact: true,
   })
   await expect(reopened).toHaveText(last, { useInnerText: true })
+  await page.getByRole('button', { name: 'Context', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Manage Research', exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Manage Voice', exact: true })
+  ).toBeVisible()
+  await page
+    .getByRole('button', { name: 'Close context panel', exact: true })
+    .click()
+  observations.push(
+    'Two independently named context packages, source memberships and note attachments survived native autosave and restart.'
+  )
   const snapshot = readFileSync(dataPath, 'utf8')
   await reopened.fill(last + '\nThis edit will be discarded deliberately.')
   await osClose()
@@ -444,7 +552,7 @@ try {
     )
   )
   expect(errors).toEqual([])
-  expect(generationRequests).toHaveLength(1)
+  expect(generationRequests).toHaveLength(offlineModels ? 2 : 1)
   observations.push(
     'Continuous typing saves before the pause; abrupt native process termination restarts with exact last durable text.'
   )

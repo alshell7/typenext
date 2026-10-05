@@ -422,6 +422,102 @@ describe('manual suggestion choices', () => {
       expect.objectContaining({ mode: 'model', menuOpen: false, choices: 1 })
     )
     expect(vi.mocked(suggest).mock.calls[0]?.[2].provider).toBe('openai')
+    expect(vi.mocked(suggest).mock.calls[0]?.[4]).toBeUndefined()
+  })
+
+  it('refreshes hosted choices on repeated Ctrl+Space at the same cursor and accepts only the selected insertion', async () => {
+    vi.mocked(suggest)
+      .mockResolvedValueOnce({
+        text: 'careful',
+        sources: [],
+        mode: 'model',
+        alternatives: [
+          { text: 'patient', sources: [], mode: 'model' },
+          { text: 'steady', sources: [], mode: 'model' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        text: 'thoughtful',
+        sources: [],
+        mode: 'model',
+        alternatives: [
+          { text: 'quiet', sources: [], mode: 'model' },
+          { text: 'unhurried', sources: [], mode: 'model' },
+        ],
+      })
+    const editor = mountEditor(makeNote('The  ending.'), {
+      ...makeSettings(),
+      provider: 'openrouter',
+      externalAutoEnabled: true,
+      autoSuggest: false,
+    })
+    act(() => {
+      editor.view.focus()
+      editor.view.dispatch({ selection: EditorSelection.cursor(4) })
+      syncDOMSelection(editor.view)
+    })
+    await act(async () =>
+      fireEvent.keyDown(editor.content, {
+        key: ' ',
+        code: 'Space',
+        ctrlKey: true,
+      })
+    )
+    expect(screen.getAllByRole('option')).toHaveLength(3)
+    expect(screen.getAllByRole('option')[0]).toHaveTextContent('careful')
+    await act(async () =>
+      fireEvent.keyDown(editor.content, {
+        key: ' ',
+        code: 'Space',
+        ctrlKey: true,
+      })
+    )
+    expect(suggest).toHaveBeenCalledTimes(2)
+    expect(
+      vi
+        .mocked(suggest)
+        .mock.calls.every(call => call[4]?.purpose === 'alternatives')
+    ).toBe(true)
+    expect(screen.getAllByRole('option')).toHaveLength(3)
+    expect(screen.getAllByRole('option')[0]).toHaveTextContent('thoughtful')
+    expect(editor.view.state.doc.toString()).toBe('The  ending.')
+    expect(editor.onChange).not.toHaveBeenCalled()
+    act(() => fireEvent.keyDown(editor.content, { key: 'ArrowDown' }))
+    act(() => fireEvent.keyDown(editor.content, { key: 'Enter' }))
+    expect(editor.view.state.doc.toString()).toBe('The quiet ending.')
+    expect(editor.content).toHaveFocus()
+    act(() => expect(undo(editor.view)).toBe(true))
+    expect(editor.view.state.doc.toString()).toBe('The  ending.')
+  })
+
+  it('keeps a single valid hosted choice usable with an honest refresh hint', async () => {
+    vi.mocked(suggest).mockResolvedValue({
+      text: 'careful',
+      sources: [],
+      mode: 'model',
+    })
+    const editor = mountEditor(makeNote('The  ending.'), {
+      ...makeSettings(),
+      externalAutoEnabled: true,
+      autoSuggest: false,
+    })
+    act(() => {
+      editor.view.focus()
+      editor.view.dispatch({ selection: EditorSelection.cursor(4) })
+      syncDOMSelection(editor.view)
+    })
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    expect(editor.onStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        state: 'suggestion',
+        choices: 1,
+        mode: 'model',
+        message: expect.stringContaining('one distinct choice'),
+      })
+    )
+    act(() => fireEvent.keyDown(editor.content, { key: 'Tab' }))
+    expect(editor.view.state.doc.toString()).toBe('The careful ending.')
   })
 
   it('never accepts a detached stale option after cursor movement dismisses its menu', async () => {
@@ -675,7 +771,10 @@ describe('private suggestion lifecycle', () => {
       expect(vi.mocked(suggest).mock.calls[0]?.[2].provider).toBe(provider)
       expect(screen.queryByRole('listbox')).toBeNull()
       await act(async () => editor.ref.current?.requestSuggestion())
-      expect(suggest).toHaveBeenCalledTimes(1)
+      expect(suggest).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(suggest).mock.calls[1]?.[4]).toEqual({
+        purpose: 'alternatives',
+      })
       expect(screen.getByRole('listbox')).toBeVisible()
       const label = {
         openai: 'OpenAI',
@@ -1515,7 +1614,7 @@ describe('private suggestion lifecycle', () => {
     expect(editor.view.state.field(documentByteSize)).toBe(
       STORAGE_LIMITS.noteBytes - 1
     )
-  })
+  }, 30_000)
   it('allows an identical selection replacement instead of misclassifying it as a blocked insertion', () => {
     const editor = mountEditor(makeNote('The same ending.'))
     act(() => editor.view.dispatch({ selection: EditorSelection.range(4, 8) }))

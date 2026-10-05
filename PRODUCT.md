@@ -16,13 +16,14 @@ Writers, researchers, and people recording thoughts need a calm place to write w
 - An optional objective, with the first nonempty line used as fallback context.
 - Local autosave, recent notes, native file open and Markdown export.
 - Light/dark/system themes with pure black and contrast presets, custom colours, font and size preferences.
-- Short inline suggestions with Tab to accept, Escape to dismiss, and a Ctrl/Command + Space menu with arrow-key preview and explicit acceptance.
+- Short inline suggestions with Tab to accept, Escape to dismiss, and a Ctrl/Command + Space menu with arrow-key preview and explicit acceptance. A selected hosted chat model returns up to three fresh choices from one manual request; navigating the choices does not make another request.
 - Suggestions without attached references, using the note's own context. Offline writing starters are distinguished from recalled phrases and local model output.
 - Optional OpenRouter, OpenAI, Anthropic, local, and custom compatible endpoints with temperature control, saved models, custom suggestion instructions and deliberate continuous external mode.
 - Local retrieval from enabled text, Markdown, PDF, DOCX, and website context sources.
-- A reusable library of folder snapshots, files, websites and live notes, with multiple references per note. Only a linked note's own writing is used; links never recursively expand its context.
+- Named, reusable context packages containing folder snapshots, files, websites and live notes. Attach multiple packages to each note and store shared source text once. Only a linked note's own writing is used; links never recursively expand its context.
 - Native credentials stored in the operating system credential vault; browser credentials are session only.
-- Optional in-app SmolLM2 text inference and Whistle dictation with verified downloads, cancellable worker jobs, idle unloading and explicit transcript review. No hosted fallback.
+- Optional in-app SmolLM2 text inference and Whistle dictation with verified downloads, cancellable worker jobs and idle unloading. No hosted fallback.
+- Inline Whistle recording with Ctrl/Command + Shift + D to start/stop, Escape to cancel, microphone and language selection, and a 30-second capture limit. Writers can type alongside recording; the transcript enters the mapped recording position automatically and resumes automatic suggestions when enabled. Failed insertion preserves an editable transcript for recovery.
 - Local model servers connect through their HTTP API. Models are not bundled or downloaded without a deliberate user action.
 
 ## Experience constraints

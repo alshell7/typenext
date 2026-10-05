@@ -1,15 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import type { ContextSource, Note } from '../types/notebook'
+import type { ContextPackage, ContextSource, Note } from '../types/notebook'
 import {
   contextFolder,
   contextLibraryFolders,
   contextLibraryUsage,
+  contextPackageUsage,
   filterContextLibrary,
   libraryReference,
   migrateContextLibrary,
+  migrateContextPackages,
+  MAX_CONTEXT_PACKAGE_SOURCES,
+  newContextPackage,
+  pruneContextLibrary,
   resolveLibrarySource,
 } from './context-library'
-import { resolveNoteContext, stripLinkedText } from './note-context'
+import {
+  resolveNoteContext,
+  resolvedContextBudget,
+  stripLinkedText,
+} from './note-context'
+import { emptyWorkspace, normalizeWorkspace } from './model'
 
 function source(id: string, text = 'Imported writing.'): ContextSource {
   return {
@@ -274,5 +284,234 @@ describe('reusable context library', () => {
         null
       )
     ).toEqual([live])
+  })
+})
+
+function context(id: string, sourceIds: string[]): ContextPackage {
+  return { id, name: id, sourceIds, createdAt: 1, updatedAt: 2 }
+}
+
+describe('reusable named context packages', () => {
+  it('groups old snapshots without broadening the sources included in an existing note', () => {
+    const first = source('first', 'Only this evidence was attached.')
+    const other = source('other', 'This must not become context implicitly.')
+    const draft = note('draft', [libraryReference(first, false)])
+    const restored = normalizeWorkspace({
+      ...emptyWorkspace(),
+      contextPackages: undefined,
+      contextLibrary: [first, other],
+      notes: [draft],
+    })
+    expect(restored.contextPackages).toEqual([
+      {
+        id: 'context-saved-references',
+        name: 'Saved references',
+        sourceIds: ['first', 'other'],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ])
+    expect(restored.notes[0]?.contextPackageIds).toBeUndefined()
+    const resolved = resolveNoteContext(
+      restored.notes[0]!,
+      restored.notes,
+      restored.contextLibrary,
+      restored.contextPackages
+    )
+    expect(resolved.sources).toHaveLength(1)
+    expect(resolved.sources[0]).toMatchObject({
+      text: first.text,
+      enabled: false,
+    })
+    expect(
+      resolvedContextBudget(
+        restored.notes[0]!,
+        restored.notes,
+        restored.contextLibrary,
+        restored.contextPackages
+      )
+    ).toEqual({ sources: 1, characters: 0 })
+  })
+
+  it('chunks migration at the package source bound and keeps explicit package deletion stable', () => {
+    const library = Array.from(
+      { length: MAX_CONTEXT_PACKAGE_SOURCES + 7 },
+      (_, index) => source(`source-${index}`)
+    )
+    const packages = migrateContextPackages(library)
+    expect(packages.map(context => context.sourceIds.length)).toEqual([256, 7])
+    expect(packages.flatMap(context => context.sourceIds)).toEqual(
+      library.map(source => source.id)
+    )
+    const removed: ContextPackage[] = []
+    expect(migrateContextPackages(library, removed)).toBe(removed)
+    expect(migrateContextPackages(library, packages)).toBe(packages)
+    expect(newContextPackage('  Research  ')).toMatchObject({
+      name: 'Research',
+      sourceIds: [],
+    })
+  })
+
+  it('merges several attached packages and direct references without duplicating shared evidence or changing raw notes', () => {
+    const shared = source('shared', 'Shared evidence.')
+    const first = source('first', 'First evidence.')
+    const second = source('second', 'Second evidence.')
+    const direct = source('direct', 'Direct evidence.')
+    const packages = [
+      context('research', ['shared', 'first']),
+      context('voice', ['shared', 'second']),
+    ]
+    const draft = {
+      ...note('draft', [libraryReference(shared, false), direct]),
+      contextPackageIds: ['research', 'voice'],
+    }
+    const resolved = resolveNoteContext(
+      draft,
+      [draft],
+      [shared, first, second],
+      packages
+    )
+    expect(resolved.sources.map(source => source.text)).toEqual([
+      'Shared evidence.',
+      'Direct evidence.',
+      'First evidence.',
+      'Second evidence.',
+    ])
+    expect(resolved.sources.every(source => source.enabled)).toBe(true)
+    expect(draft.sources[0]).toMatchObject({ text: '', enabled: false })
+    expect(draft.contextPackageIds).toEqual(['research', 'voice'])
+    expect(
+      resolvedContextBudget(draft, [draft], [shared, first, second], packages)
+    ).toEqual({
+      sources: 4,
+      characters: resolved.sources.reduce(
+        (count, source) => count + source.text.length,
+        0
+      ),
+    })
+  })
+
+  it('propagates package source edits to every attached note without copying the collection into notes', () => {
+    const first = source('first', 'Original evidence.')
+    const second = source('second', 'Additional evidence.')
+    const packages = [context('research', ['first'])]
+    const drafts = [
+      { ...note('one'), contextPackageIds: ['research'] },
+      { ...note('two'), contextPackageIds: ['research'] },
+    ]
+    expect(
+      resolveNoteContext(drafts[0]!, drafts, [first], packages).sources[0]?.text
+    ).toBe('Original evidence.')
+    const editedLibrary = [{ ...first, text: 'Modified evidence.' }, second]
+    const editedPackages = [
+      { ...packages[0]!, sourceIds: ['first', 'second'], updatedAt: 3 },
+    ]
+    for (const draft of drafts) {
+      expect(
+        resolveNoteContext(
+          draft,
+          drafts,
+          editedLibrary,
+          editedPackages
+        ).sources.map(source => source.text)
+      ).toEqual(['Modified evidence.', 'Additional evidence.'])
+      expect(draft.sources).toEqual([])
+    }
+  })
+
+  it('reads only a linked note’s current words, deduplicates note links, and skips a note’s own writing', () => {
+    const draft = {
+      ...note('draft'),
+      content: 'My current words',
+      contextPackageIds: ['live', 'other'],
+    }
+    const target = {
+      ...note('target'),
+      title: 'Current research',
+      content: 'Current target words',
+      context: 'Do not recursively include this background',
+    }
+    const self: ContextSource = {
+      ...source('self', ''),
+      kind: 'note',
+      linkedNoteId: draft.id,
+    }
+    const linked: ContextSource = {
+      ...source('linked', ''),
+      kind: 'note',
+      linkedNoteId: target.id,
+    }
+    const duplicate: ContextSource = { ...linked, id: 'duplicate' }
+    target.sources = [self]
+    draft.sources = [libraryReference(self)]
+    const library = [self, linked, duplicate]
+    const packages = [
+      context('live', ['self', 'linked']),
+      context('other', ['duplicate']),
+    ]
+    const resolved = resolveNoteContext(
+      draft,
+      [draft, target],
+      library,
+      packages
+    )
+    expect(resolved.sources).toHaveLength(1)
+    expect(resolved.sources[0]).toMatchObject({
+      name: 'Current research',
+      text: 'Current target words',
+    })
+    const changed = {
+      ...target,
+      title: 'Edited research',
+      content: 'New target writing',
+    }
+    expect(
+      resolveNoteContext(draft, [draft, changed], library, packages).sources[0]
+    ).toMatchObject({ name: 'Edited research', text: 'New target writing' })
+    expect(target.sources[0]?.text).toBe('')
+  })
+
+  it('ignores missing package members without reviving stale copied evidence', () => {
+    const shared = source('shared', 'Current evidence.')
+    const draft = {
+      ...note('draft', [
+        { ...libraryReference(source('gone')), text: 'Stale evidence' },
+      ]),
+      contextPackageIds: ['research', 'missing-package'],
+    }
+    const resolved = resolveNoteContext(
+      draft,
+      [],
+      [shared],
+      [context('research', ['missing-source', 'shared'])]
+    )
+    expect(resolved.sources).toHaveLength(2)
+    expect(resolved.sources[0]).toMatchObject({ text: '', enabled: false })
+    expect(resolved.sources[1]?.text).toBe(shared.text)
+    expect(draft.contextPackageIds).toContain('missing-package')
+  })
+
+  it('prunes only orphan snapshots after removal and preserves shared or excluded direct references', () => {
+    const library = [source('first'), source('shared'), source('direct')]
+    const notes = [note('draft', [libraryReference(library[2]!, false)])]
+    const packages = [
+      context('research', ['first', 'shared']),
+      context('voice', ['shared']),
+    ]
+    expect(pruneContextLibrary(library, notes, packages)).toBe(library)
+    expect(pruneContextLibrary(library, notes, [packages[1]!])).toEqual([
+      library[1],
+      library[2],
+    ])
+    expect(library).toHaveLength(3)
+    const usage = contextPackageUsage([
+      {
+        ...note('first'),
+        contextPackageIds: ['research', 'research', 'voice'],
+      },
+      { ...note('second'), contextPackageIds: ['research'] },
+    ])
+    expect(usage.get('research')).toBe(2)
+    expect(usage.get('voice')).toBe(1)
   })
 })

@@ -3,8 +3,7 @@
   border-bottom: 1px solid var(--line);
 }
 .whistle-model-heading,
-.whistle-model-actions,
-.dictation-action-row {
+.whistle-model-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -24,8 +23,7 @@
   line-height: 1.6;
   color: var(--secondary);
 }
-.whistle-model-state,
-.dictation-status {
+.whistle-model-state {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -51,65 +49,4 @@
   min-width: 0;
   height: 6px;
   accent-color: var(--accent);
-}
-.dictation-controls {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 20px 0 16px;
-}
-.dictation-controls select {
-  min-width: 185px;
-}
-.dictation-time {
-  padding-bottom: 8px;
-  color: var(--muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.dictation-time.is-recording {
-  color: var(--error);
-}
-.dictation-preview {
-  margin-top: 22px;
-}
-.dictation-preview textarea {
-  width: 100%;
-  resize: vertical;
-  min-height: 140px;
-  max-height: 320px;
-  line-height: 1.65;
-}
-.dictation-privacy {
-  margin: 17px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.65;
-}
-.dictation-model-details {
-  margin-top: 16px;
-  color: var(--secondary);
-  font-size: 12px;
-}
-.dictation-model-details summary {
-  cursor: pointer;
-  width: fit-content;
-}
-.dictation-model-details .whistle-model {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-@media (max-width: 480px) {
-  .dictation-controls {
-    gap: 10px;
-  }
-  .dictation-controls select {
-    min-width: 0;
-    max-width: 100%;
-  }
-  .dictation-action-row .button {
-    flex-shrink: 0;
-  }
 }

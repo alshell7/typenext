@@ -13,7 +13,12 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import type { ContextSource, Note, RetrievedChunk } from '../types/notebook'
+import type {
+  ContextPackage,
+  ContextSource,
+  Note,
+  RetrievedChunk,
+} from '../types/notebook'
 import { retrieveContext } from '../services/retrieval'
 import { relativeDate, wordCount } from './model'
 import { Modal } from './Modal'
@@ -21,6 +26,8 @@ import { resolveNoteContext } from './note-context'
 import './ContextLibrary.css'
 
 const EMPTY_LIBRARY: ContextSource[] = []
+const EMPTY_PACKAGES: ContextPackage[] = []
+const EMPTY_NOTE_IDS = new Set<string>()
 
 function WordTotal({ text }: { text: string }) {
   const count = useMemo(() => wordCount(text), [text])
@@ -31,6 +38,7 @@ export function ContextPanel({
   note,
   notes,
   library = EMPTY_LIBRARY,
+  packages = EMPTY_PACKAGES,
   importing,
   onUpdate,
   onClose,
@@ -38,17 +46,20 @@ export function ContextPanel({
   onWebsite,
   onUseNote,
   onLibrary,
+  onDetachPackage,
 }: {
   note: Note
   notes: Note[]
   library?: ContextSource[]
+  packages?: ContextPackage[]
   importing: boolean
   onUpdate(patch: Partial<Note>): void
   onClose(): void
   onFiles(files: FileList | null): Promise<void>
   onWebsite(): void
   onUseNote(id: string): void
-  onLibrary?(): void
+  onLibrary?(packageId?: string): void
+  onDetachPackage?(id: string): void
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
@@ -65,16 +76,53 @@ export function ContextPanel({
     () => new Set(library.map(item => item.id)),
     [library]
   )
-  const noteIds = useMemo(() => new Set(notes.map(item => item.id)), [notes])
+  const noteIds = useMemo(
+    () =>
+      note.sources.some(source => source.kind === 'note')
+        ? new Set(notes.map(item => item.id))
+        : EMPTY_NOTE_IDS,
+    [note.sources, notes]
+  )
   function sourceIsAvailable(item: ContextSource) {
     return (
       (!item.libraryId || libraryIds.has(item.libraryId)) &&
-      (item.kind !== 'note' || noteIds.has(item.linkedNoteId ?? ''))
+      (item.kind !== 'note' ||
+        (item.linkedNoteId !== note.id && noteIds.has(item.linkedNoteId ?? '')))
     )
   }
   const resolved = useMemo(
-    () => resolveNoteContext(note, notes, library),
-    [note, notes, library]
+    () => resolveNoteContext(note, notes, library, packages),
+    [note, notes, library, packages]
+  )
+  const directSources = useMemo(() => {
+    if (!note.sources.length) return EMPTY_LIBRARY
+    const direct = resolveNoteContext(
+      { ...note, contextPackageIds: [] },
+      notes,
+      library
+    )
+    const byId = new Map(direct.sources.map(source => [source.id, source]))
+    return note.sources.map(
+      source => byId.get(source.id) ?? { ...source, text: '', enabled: false }
+    )
+  }, [note, notes, library])
+  const attachedPackages = useMemo(() => {
+    if (!note.contextPackageIds?.length) return EMPTY_PACKAGES
+    const byId = new Map(packages.map(context => [context.id, context]))
+    return note.contextPackageIds.map(
+      id =>
+        byId.get(id) ?? {
+          id,
+          name: 'Unavailable context',
+          sourceIds: [],
+          createdAt: 0,
+          updatedAt: 0,
+        }
+    )
+  }, [note.contextPackageIds, packages])
+  const packageIds = useMemo(
+    () => new Set(packages.map(context => context.id)),
+    [packages]
   )
   const retrievalSnapshot = [
     note.id,
@@ -91,7 +139,7 @@ export function ContextPanel({
     retrieval.snapshot.every(
       (value, index) => value === retrievalSnapshot[index]
     )
-  const source = resolved.sources.find(item => item.id === previewId)
+  const source = directSources.find(item => item.id === previewId)
   const enabled = resolved.sources.filter(item => item.enabled).length
   const availableNotes = useMemo(() => {
     if (!choosingNote) return []
@@ -190,15 +238,68 @@ export function ContextPanel({
           onChange={event => onUpdate({ context: event.target.value })}
         />
         <div className="sources-heading">
-          <h3>References</h3>
+          <h3>Contexts</h3>
           <span>
-            {note.sources.length
-              ? `${enabled} of ${note.sources.length} included`
+            {attachedPackages.length
+              ? `${attachedPackages.length} attached`
               : 'None yet'}
           </span>
         </div>
+        <div className="attached-context-list" aria-label="Attached contexts">
+          {attachedPackages.map(context => (
+            <div className="attached-context-item" key={context.id}>
+              <button
+                className="source-preview-button"
+                aria-label={`Manage ${context.name}`}
+                onClick={() => onLibrary?.(context.id)}
+              >
+                <LibraryBig size={16} />
+                <span>
+                  <strong title={context.name}>{context.name}</strong>
+                  <small>
+                    {packageIds.has(context.id)
+                      ? `${context.sourceIds.length} ${context.sourceIds.length === 1 ? 'source' : 'sources'} · Changes follow this note`
+                      : 'Unavailable · Detach it or choose another context'}
+                  </small>
+                </span>
+              </button>
+              <button
+                className="icon-button"
+                aria-label={`Detach ${context.name}`}
+                onClick={() =>
+                  onDetachPackage
+                    ? onDetachPackage(context.id)
+                    : onUpdate({
+                        contextPackageIds: note.contextPackageIds?.filter(
+                          id => id !== context.id
+                        ),
+                      })
+                }
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+        {onLibrary && (
+          <button
+            className="button secondary manage-contexts"
+            onClick={() => onLibrary()}
+          >
+            <LibraryBig size={15} /> Manage contexts
+          </button>
+        )}
+        {note.sources.length > 0 && (
+          <div className="sources-heading">
+            <h3>Direct references</h3>
+            <span>
+              {directSources.filter(source => source.enabled).length} of{' '}
+              {note.sources.length} included
+            </span>
+          </div>
+        )}
         <div className="source-list">
-          {resolved.sources.map(item => (
+          {directSources.map(item => (
             <div
               className={`source-item ${item.enabled ? '' : 'disabled'}`}
               key={item.id}
@@ -268,7 +369,13 @@ export function ContextPanel({
             </div>
           ))}
         </div>
-        {!note.sources.length && (
+        {!note.sources.length && !attachedPackages.length && onLibrary && (
+          <p className="field-help context-empty-copy">
+            Choose contexts with the files, websites, and notes behind your
+            writing.
+          </p>
+        )}
+        {!note.sources.length && !attachedPackages.length && !onLibrary && (
           <button
             className="context-empty drop-zone"
             onClick={() => input.current?.click()}
@@ -277,7 +384,9 @@ export function ContextPanel({
             <Paperclip size={25} strokeWidth={1.3} />
             <span>
               <strong>Bring the details that matter.</strong>
-              <small>Drop files here, or browse to attach.</small>
+              <small>
+                Choose named contexts with files, websites, or other notes.
+              </small>
             </span>
           </button>
         )}
@@ -302,44 +411,46 @@ export function ContextPanel({
             })
           }}
         />
-        <div className="source-actions">
-          {onLibrary && (
-            <button className="button secondary" onClick={onLibrary}>
-              <LibraryBig size={15} /> Choose from library
+        <details className="context-direct-attachments">
+          <summary>Attach a single reference</summary>
+          <p>
+            Keep a direct attachment for this note. Group reusable sources in a
+            context.
+          </p>
+          <div className="source-actions">
+            <button
+              className="button secondary"
+              disabled={importing}
+              onClick={() => input.current?.click()}
+            >
+              {importing ? (
+                <LoaderCircle size={15} className="spin" />
+              ) : (
+                <Upload size={15} />
+              )}
+              {importing ? 'Reading references…' : 'Attach files'}
             </button>
-          )}
-          <button
-            className="button secondary"
-            disabled={importing}
-            onClick={() => input.current?.click()}
-          >
-            {importing ? (
-              <LoaderCircle size={15} className="spin" />
-            ) : (
-              <Upload size={15} />
-            )}
-            {importing ? 'Reading references…' : 'Attach files'}
-          </button>
-          <button
-            className="button subtle"
-            disabled={importing}
-            onClick={onWebsite}
-          >
-            <Link size={15} />
-            Add a website
-          </button>
-          <button
-            className="button subtle"
-            disabled={importing}
-            onClick={() => {
-              setNoteQuery('')
-              setChoosingNote(true)
-            }}
-          >
-            <Notebook size={15} />
-            Use a note
-          </button>
-        </div>
+            <button
+              className="button subtle"
+              disabled={importing}
+              onClick={onWebsite}
+            >
+              <Link size={15} />
+              Add a website
+            </button>
+            <button
+              className="button subtle"
+              disabled={importing}
+              onClick={() => {
+                setNoteQuery('')
+                setChoosingNote(true)
+              }}
+            >
+              <Notebook size={15} />
+              Use a note
+            </button>
+          </div>
+        </details>
         <details className="context-attached-search">
           <summary>
             <Search size={14} /> Find in attached context

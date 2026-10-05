@@ -64,6 +64,16 @@ import {
   suggestionMenuField,
 } from './suggestion-menu'
 
+import {
+  dictationAnchorField,
+  dictationAnchorDecoration,
+  setDictationAnchor,
+  spaceDictation,
+  type DictationCapture,
+} from './dictation-anchor'
+
+let nextDictationId = 0
+
 export interface EditorStatus {
   state: 'idle' | 'loading' | 'suggestion' | 'error'
   kind?: 'document'
@@ -77,6 +87,7 @@ export interface EditorStatus {
 export interface MarkdownEditorHandle {
   focus(): void
   insert(text: string): void
+  captureDictation(): DictationCapture
   requestSuggestion(): void
   /** Request this provider once without changing the activated suggestion mode. */
   requestExternalSuggestion(provider: ProviderId): void
@@ -390,6 +401,84 @@ export const MarkdownEditor = forwardRef<
         view.focus()
         view.dispatch(insertion)
       },
+      captureDictation() {
+        const view = viewRef.current
+        if (!view) throw new Error('Open a note before dictating.')
+        if (!view.state.selection.main.empty)
+          throw new Error('Place the cursor where you want to dictate.')
+        controlsRef.current?.invalidate()
+        const id = ++nextDictationId
+        view.focus()
+        view.dispatch({
+          effects: setDictationAnchor.of({
+            id,
+            at: view.state.selection.main.head,
+            phase: 'listening',
+          }),
+        })
+        const anchor = (requirePosition = true) => {
+          const value =
+            viewRef.current === view
+              ? view.state.field(dictationAnchorField)
+              : null
+          if (
+            !value ||
+            value.id !== id ||
+            (requirePosition && value.at === null)
+          )
+            throw new Error(
+              'The dictation position changed. Place the cursor and insert your transcript below.'
+            )
+          return value
+        }
+        return {
+          cancel() {
+            if (
+              viewRef.current === view &&
+              view.state.field(dictationAnchorField)?.id === id
+            )
+              view.dispatch({ effects: setDictationAnchor.of(null) })
+          },
+          transcribing() {
+            // Finish recognition even if typing removed the insertion point.
+            // A later commit failure keeps the transcript available for recovery.
+            const value = anchor(false)
+            view.dispatch({
+              effects: setDictationAnchor.of({
+                ...value,
+                phase: 'transcribing',
+              }),
+            })
+          },
+          commit(text) {
+            const value = anchor()
+            const at = value.at!
+            const inserted = spaceDictation(
+              text,
+              view.state.sliceDoc(Math.max(0, at - 1), at),
+              view.state.sliceDoc(at, at + 1)
+            )
+            if (!inserted)
+              throw new Error('No words were heard. Try recording again.')
+            const transaction = view.state.update({
+              changes: { from: at, insert: inserted },
+              selection: EditorSelection.cursor(at + inserted.length),
+              effects: setDictationAnchor.of(null),
+              annotations: [
+                Transaction.userEvent.of('input.dictation'),
+                isolateHistory.of('full'),
+              ],
+              scrollIntoView: true,
+            })
+            if (!transaction.docChanged)
+              throw new Error(
+                'This note is full. Keep your transcript below and insert it into a shorter note.'
+              )
+            view.focus()
+            view.dispatch(transaction)
+          },
+        }
+      },
       requestSuggestion: () => controlsRef.current?.request(),
       requestExternalSuggestion: provider =>
         controlsRef.current?.request(provider),
@@ -454,7 +543,8 @@ export const MarkdownEditor = forwardRef<
       result: SuggestionResult,
       showMenu: boolean,
       manual: boolean,
-      provider: ProviderId
+      provider: ProviderId,
+      requestedChoices = false
     ) {
       const choices = suggestionChoices(result)
       const first = choices[0]
@@ -483,10 +573,14 @@ export const MarkdownEditor = forwardRef<
           ),
         ],
       })
-      emitSuggestionStatus()
+      emitSuggestionStatus(
+        requestedChoices && choices.length < 2
+          ? 'The model returned one distinct choice. Press Ctrl or Command + Space to try again.'
+          : undefined
+      )
     }
 
-    function emitSuggestionStatus() {
+    function emitSuggestionStatus(message?: string) {
       const ghost = view.state.field(inlineSuggestionField)
       const menu = view.state.field(suggestionMenuField)
       emitStatus(
@@ -497,12 +591,14 @@ export const MarkdownEditor = forwardRef<
               mode: ghost.mode,
               menuOpen: !!menu,
               choices: menu?.choices.length ?? 1,
+              ...(message ? { message } : {}),
             }
           : { state: 'idle' }
       )
     }
 
     function request(override?: ProviderId, manual = true) {
+      if (view.state.field(dictationAnchorField)) return
       if (manual) view.focus()
       // Focusing an empty page may schedule its initial automatic starter.
       // A manual request owns this interaction and cancels that focus timer.
@@ -511,6 +607,10 @@ export const MarkdownEditor = forwardRef<
       const settings = requestSettings(current.settings, override)
       const provider = settings.provider
       const showMenu = manual && override === undefined
+      const freshChoices =
+        showMenu &&
+        provider !== 'local' &&
+        settings.profiles[provider].protocol !== 'fim'
       const context = cursorContext(view)
       if (
         disposed ||
@@ -588,7 +688,7 @@ export const MarkdownEditor = forwardRef<
         )
       }
 
-      const cached = getCachedSuggestion(key)
+      const cached = freshChoices ? undefined : getCachedSuggestion(key)
       if (cached) {
         if (isCurrent()) showSuggestion(cached, showMenu, manual, provider)
         controller = null
@@ -601,15 +701,15 @@ export const MarkdownEditor = forwardRef<
         async run() {
           try {
             if (!isCurrent()) return
-            const result = await suggest(
-              { ...current.note, content: context.text },
-              context,
-              settings,
-              abort.signal
-            )
+            const note = { ...current.note, content: context.text }
+            const result = await (freshChoices
+              ? suggest(note, context, settings, abort.signal, {
+                  purpose: 'alternatives',
+                })
+              : suggest(note, context, settings, abort.signal))
             if (!isCurrent()) return
-            cacheSuggestion(key, result)
-            showSuggestion(result, showMenu, manual, provider)
+            if (!freshChoices) cacheSuggestion(key, result)
+            showSuggestion(result, showMenu, manual, provider, freshChoices)
           } catch (error) {
             if (!isCurrent()) return
             emitStatus({
@@ -627,6 +727,7 @@ export const MarkdownEditor = forwardRef<
     }
 
     function scheduleAutomatic() {
+      if (view.state.field(dictationAnchorField)) return
       const { settings } = propsRef.current
       if (
         disposed ||
@@ -713,6 +814,8 @@ export const MarkdownEditor = forwardRef<
     }
 
     const extensions: Extension[] = [
+      dictationAnchorField,
+      dictationAnchorDecoration,
       history(),
       retainedHistoryWeight,
       documentByteSize,

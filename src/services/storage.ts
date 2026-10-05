@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import type {
+  ContextPackage,
   ContextSource,
   Note,
   NotebookSettings,
@@ -22,6 +23,10 @@ export const STORAGE_LIMITS = {
   objectiveBytes: 65_536,
   notes: 10_000,
   sourcesPerNote: 256,
+  contextPackages: 256,
+  sourcesPerPackage: 256,
+  packagesPerNote: 64,
+  contextPackageNameBytes: 1024,
 } as const
 const MAX_WORKSPACE_BYTES = STORAGE_LIMITS.workspaceBytes
 const MAX_FILE_BYTES = STORAGE_LIMITS.noteBytes
@@ -194,6 +199,15 @@ function parseNote(value: unknown): Note {
     .filter(source => source.kind === 'note')
     .map(source => source.linkedNoteId)
   if (new Set(linkedIds).size !== linkedIds.length) return invalid()
+  const contextPackageIds =
+    note.contextPackageIds === undefined
+      ? undefined
+      : array(note.contextPackageIds, STORAGE_LIMITS.packagesPerNote).map(id)
+  if (
+    contextPackageIds &&
+    new Set(contextPackageIds).size !== contextPackageIds.length
+  )
+    return invalid()
   return {
     id: id(note.id),
     title: string(note.title, 4096),
@@ -201,6 +215,7 @@ function parseNote(value: unknown): Note {
     context: string(note.context, STORAGE_LIMITS.contextBytes),
     content: string(note.content),
     sources,
+    ...(contextPackageIds ? { contextPackageIds } : {}),
     createdAt: numeric(note.createdAt),
     updatedAt: numeric(note.updatedAt),
     filePath: optionalString(note.filePath, 32_768),
@@ -208,6 +223,24 @@ function parseNote(value: unknown): Note {
       note.exportedAt === undefined || note.exportedAt === null
         ? undefined
         : numeric(note.exportedAt),
+  }
+}
+
+function parseContextPackage(value: unknown): ContextPackage {
+  const context = record(value)
+  const name = string(context.name, STORAGE_LIMITS.contextPackageNameBytes)
+  if (!name.trim()) return invalid()
+  const sourceIds = array(
+    context.sourceIds,
+    STORAGE_LIMITS.sourcesPerPackage
+  ).map(id)
+  if (new Set(sourceIds).size !== sourceIds.length) return invalid()
+  return {
+    id: id(context.id),
+    name,
+    sourceIds,
+    createdAt: numeric(context.createdAt),
+    updatedAt: numeric(context.updatedAt),
   }
 }
 
@@ -335,6 +368,18 @@ export function validateWorkspace(value: unknown): Workspace {
   )
     return invalid()
   const notes = array(workspace.notes, STORAGE_LIMITS.notes).map(parseNote)
+  const contextPackages =
+    workspace.contextPackages == null
+      ? undefined
+      : array(workspace.contextPackages, STORAGE_LIMITS.contextPackages).map(
+          parseContextPackage
+        )
+  if (
+    contextPackages &&
+    new Set(contextPackages.map(context => context.id)).size !==
+      contextPackages.length
+  )
+    return invalid()
   const ids = new Set(notes.map(note => note.id))
   if (ids.size !== notes.length) return invalid()
   const openNoteIds = array(workspace.openNoteIds, STORAGE_LIMITS.notes).map(id)
@@ -350,6 +395,7 @@ export function validateWorkspace(value: unknown): Workspace {
   return {
     version: 1,
     contextLibrary,
+    ...(contextPackages ? { contextPackages } : {}),
     notes,
     openNoteIds,
     activeNoteId,
@@ -419,6 +465,9 @@ function measuredNote(note: Note, original: Note): number {
     note.updatedAt,
     note.filePath,
     note.exportedAt,
+    note.contextPackageIds?.length,
+    ...(note.contextPackageIds ?? []),
+    note.sources.length,
     ...note.sources.flatMap(source => [
       source.id,
       source.name,

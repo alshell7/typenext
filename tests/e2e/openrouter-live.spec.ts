@@ -37,7 +37,7 @@ async function openExternalSettings(page: Page): Promise<void> {
   await page.getByRole('tab', { name: 'External models' }).click()
 }
 
-test('live free model requires explicit consent and inserts only at the cursor', async ({
+test('live free model returns three fresh manual choices in one consented request and inserts only at the cursor', async ({
   page,
 }, testInfo) => {
   test.skip(
@@ -81,6 +81,7 @@ test('live free model requires explicit consent and inserts only at the cursor',
   let permittedRequests = 0
   let requestWasBounded = false
   let promptHadBothSides = false
+  let requestedJSONChoices = false
   const evidence: Record<string, unknown> = {
     model,
     mode: dryRun ? 'mock transport; no API request' : 'real API',
@@ -130,9 +131,14 @@ test('live free model requires explicit consent and inserts only at the cursor',
       body.model === model &&
       typeof body.max_tokens === 'number' &&
       body.max_tokens > 0 &&
-      body.max_tokens <= 64 &&
+      body.max_tokens <= 216 &&
       body.reasoning?.enabled === false &&
       body.reasoning.exclude === true
+    requestedJSONChoices = Boolean(
+      body.messages
+        ?.find(message => message.role === 'system')
+        ?.content?.includes('"insertions"')
+    )
     const writerData = JSON.parse(
       body.messages?.find(message => message.role === 'user')?.content ?? '{}'
     ) as {
@@ -141,7 +147,12 @@ test('live free model requires explicit consent and inserts only at the cursor',
     }
     promptHadBothSides =
       writerData.beforeCursor === prefix && writerData.afterCursor === suffix
-    if (!requestWasBounded || !promptHadBothSides) {
+    if (
+      !requestWasBounded ||
+      !promptHadBothSides ||
+      !requestedJSONChoices ||
+      JSON.stringify(body).includes(secret)
+    ) {
       await route.abort('blockedbyclient')
       return
     }
@@ -154,7 +165,15 @@ test('live free model requires explicit consent and inserts only at the cursor',
         body: JSON.stringify({
           choices: [
             {
-              message: { content: ' held the scent of morning rain' },
+              message: {
+                content: JSON.stringify({
+                  insertions: [
+                    ' held the scent of morning rain',
+                    ' breathed in the cool morning air',
+                    ' glistened with the night’s soft rain',
+                  ],
+                }),
+              },
               finish_reason: 'stop',
             },
           ],
@@ -166,6 +185,12 @@ test('live free model requires explicit consent and inserts only at the cursor',
 
   try {
     await page.goto('/')
+    // Acceptance must not schedule an accidental second hosted request.
+    await page.getByRole('button', { name: 'Preferences', exact: true }).click()
+    await page.getByRole('tab', { name: 'Local suggestions' }).click()
+    await page.getByRole('switch', { name: /^Suggest after a pause/ }).uncheck()
+    await page.getByLabel('Suggestion length').selectOption('adaptive')
+    await page.getByRole('button', { name: 'Done', exact: true }).click()
     await openExternalSettings(page)
     await page.getByLabel('Configure provider').selectOption('openrouter')
     await page.getByLabel('Model', { exact: true }).fill(model)
@@ -192,8 +217,7 @@ test('live free model requires explicit consent and inserts only at the cursor',
     await editor.fill(prefix + suffix)
     await editor.press('Control+End')
     for (let i = 0; i < suffix.length; i += 1) await editor.press('ArrowLeft')
-    // An automatic pause and the ordinary manual shortcut must stay local.
-    await page.waitForTimeout(1_350)
+    // Merely configuring a key leaves ordinary manual suggestions local.
     await editor.press('Control+Space')
     await page.waitForTimeout(200)
     expect(
@@ -269,19 +293,54 @@ test('live free model requires explicit consent and inserts only at the cursor',
     }
     evidence.finishReason =
       responseBody.choices?.[0]?.finish_reason ?? 'unknown'
-    if (typeof responseBody.usage?.cost === 'number')
+    if (typeof responseBody.usage?.cost === 'number') {
       evidence.reportedCost = responseBody.usage.cost
-    const ghost = page.locator('.cm-ghost-text')
-    await expect(ghost).toBeVisible({ timeout: 10_000 })
-    const insertion = (await ghost.textContent()) ?? ''
-    expect(
-      Boolean(insertion.trim()),
-      'A meaningful visible insertion is required.'
-    ).toBe(true)
-    if (insertion.includes(secret))
+      expect(
+        responseBody.usage.cost,
+        'The verified free smoke must cost zero.'
+      ).toBe(0)
+    }
+    const rawContent = responseBody.choices?.[0]?.message?.content ?? ''
+    if (
+      rawContent.includes(secret) ||
+      /sk-or-v1-[A-Za-z0-9_-]+/u.test(rawContent)
+    ) {
+      await page.goto('about:blank')
       throw new Error(
         'The provider output contained sensitive data and was discarded.'
       )
+    }
+    const ghost = page.locator('.cm-ghost-text')
+    await expect(ghost).toBeVisible({ timeout: 10_000 })
+    const list = page.getByRole('listbox', { name: 'Suggestions' })
+    await expect(list.getByRole('option')).toHaveCount(3)
+    const insertions: string[] = []
+    for (let index = 0; index < 3; index++) {
+      if (index) await editor.press('ArrowDown')
+      await expect(list.getByRole('option').nth(index)).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+      const candidate = (await ghost.textContent()) ?? ''
+      expect(
+        Boolean(candidate.trim()),
+        'Every choice must have meaningful visible text.'
+      ).toBe(true)
+      expect(
+        /^\s/u.test(candidate),
+        'An insertion after the complete word garden must preserve a word separator.'
+      ).toBe(true)
+      expect(candidate.trim().split(/\s+/u).length).toBeLessThanOrEqual(12)
+      insertions.push(candidate)
+    }
+    expect(new Set(insertions.map(insertion => insertion.trim())).size).toBe(3)
+    const insertion = insertions[2]!
+    evidence.choices = insertions
+    evidence.choiceWords = insertions.map(
+      candidate => candidate.trim().split(/\s+/u).length
+    )
+    evidence.choiceCount = insertions.length
+    evidence.acceptedChoice = 2
     evidence.insertion = insertion
     evidence.insertionWords = insertion.trim().split(/\s+/u).length
     evidence.prefix = prefix
@@ -304,8 +363,12 @@ test('live free model requires explicit consent and inserts only at the cursor',
     evidence.prefixAndSuffixPreserved = true
     expect(requestWasBounded).toBe(true)
     expect(promptHadBothSides).toBe(true)
+    expect(requestedJSONChoices).toBe(true)
     expect(permittedRequests).toBe(1)
     expect(hostedRequests).toBe(1)
+    await editor.press('Control+z')
+    await expect(editor).toHaveText(prefix + suffix)
+    evidence.undoPreservedBothSides = true
 
     await page.getByRole('button', { name: 'Choose suggestion engine' }).click()
     await page.getByRole('button', { name: /On this device/ }).click()
@@ -347,6 +410,7 @@ test('live free model requires explicit consent and inserts only at the cursor',
       .catch(() => undefined)
     evidence.hostedRequests = hostedRequests
     evidence.permittedRequests = permittedRequests
+    evidence.requestedJSONChoices = requestedJSONChoices
     evidence.trace = 'off'
     evidence.screenshot = 'off'
     evidence.video = 'off'

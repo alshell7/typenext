@@ -9,10 +9,10 @@ TypeNext gives you a quiet page, a small notebook of tabs, and context close to 
 ## Writing
 
 - Create a note with a title and a little background. Set an objective, or let the first line of the note provide it.
-- Keep folders, text, Markdown, searchable PDFs, DOCX files, websites and live note links in a reusable **Context library**. Attach multiple references to each note; shared text is stored once. Use another note as live context; its edits follow the link without copying its text. Preview and include only the references you want.
+- Create named, reusable contexts in **Contexts**, then attach several to a note. Each context can hold folder snapshots, text, Markdown, searchable PDFs, DOCX files, websites and live note links. Shared text is stored once; a linked note's own writing stays current without copying it. Preview sources and choose which contexts each note uses.
 - Accept a continuation with **Tab**, accept a word with **Ctrl/Command + Right**, or dismiss it with **Escape**. Accepted text can be undone normally.
 - Press **Ctrl/Command + Space** for a small menu at the cursor. Use the arrow keys to preview a choice, then Enter or Tab to accept. Suggestions also work without attached references.
-- Dictate on your device with optional **Whistle**: a 17 MB download, a short recording, and an editable transcript before insertion.
+- Dictate inline with optional **Whistle**, a one-time 17 MB download. **Ctrl/Command + Shift + D** starts and stops; **Escape** cancels. Choose your microphone and language, speak while typing, and let the transcript enter the note when you stop. Automatic suggestions resume after insertion when enabled.
 - Keep recent notes, switch tabs, use focus mode, and autosave locally. Open and save ordinary Markdown files.
 - Choose light, dark, or system appearance. Start with paper or neutral graphite, choose Pure black, Dark contrast, Light contrast or another curated palette, or set your own page, sidebar, and accent colours. Change the writing typeface and size.
 
@@ -35,7 +35,7 @@ Autosave keeps a recoverable previous version and saves during continuous typing
 
 </details>
 
-![The reusable context library with folder snapshots and references shared between notes](docs/screenshots/context-library.png)
+![Named reusable contexts with folder snapshots and references shared between notes](docs/screenshots/context-library.png)
 
 ## Suggestions and privacy
 
@@ -45,11 +45,13 @@ For new wording without another app, download the optional **SmolLM2-135M** mode
 
 OpenRouter, OpenAI, Anthropic, and custom endpoints are optional. Configure their keys and saved models independently, then use **Choose model** beside the editor. **Use continuously** explicitly activates external suggestions until you switch back to **On this device**. The chooser explains what is shared; the active provider remains visible. No local error triggers an external fallback. OpenRouter defaults to its free-model router, and its available-model list can filter for free models. Availability and account limits still apply.
 
+With an active hosted chat model, **Ctrl/Command + Space** asks for up to three fresh, distinct choices in one request. It refreshes the choices even at the same cursor. Arrow-key preview makes no further requests, and only the choice you accept enters the note. Local recall, writing starters and local models keep their offline paths.
+
 Set your own suggestion instructions and choose a few words, one sentence, or an adaptive length. **Find in attached context** lets you inspect the actual BM25 passages used to ground suggestions.
 
 Notes and extracted references are stored locally. Desktop keys can be remembered in the operating system credential vault; otherwise they stay in the session. Browser keys are session-only. Website import contacts the selected website, and optional Firecrawl import sends its URL to Firecrawl. Files are parsed locally.
 
-Both built-in models download only when requested. Whistle transcribes locally; microphone access requires pressing Record, recordings stop at 30 seconds, and audio is discarded after transcription. The text worker has bounded input/output, cancellation and idle unloading; downloaded weights are separate from notebook saves. Server models remain managed by your chosen server. Scanned PDFs need OCR, and legacy `.doc` files need conversion to `.docx` or text. The researched model/runtime choices and current boundaries are in [AI design](docs/ai-design.md).
+Both built-in models download only when requested. Whistle records and transcribes locally; microphone access starts only from a dictation or microphone-setup gesture. Recordings stop at 30 seconds, and captured audio is discarded after transcription or cancellation. Transcripts are inserted automatically at the recording position, which follows typing edits; an insertion failure keeps the transcript available to edit and recover. Dictated text uses the same suggestion mode as typed text, including an intentionally activated external provider. The text worker has bounded input/output, cancellation and idle unloading; downloaded weights are separate from notebook saves. Server models remain managed by your chosen server. Scanned PDFs need OCR, and legacy `.doc` files need conversion to `.docx` or text. The researched model/runtime choices and current boundaries are in [AI design](docs/ai-design.md).
 
 <details>
 <summary>Models, contrast themes, and dictation</summary>

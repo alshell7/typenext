@@ -24,6 +24,8 @@ pub struct Workspace {
     notes: Vec<Note>,
     #[serde(default)]
     context_library: Vec<ContextSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    context_packages: Option<Vec<ContextPackage>>,
     open_note_ids: Vec<String>,
     active_note_id: Option<String>,
     settings: Settings,
@@ -46,12 +48,24 @@ struct Note {
     context: String,
     content: String,
     sources: Vec<ContextSource>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    context_package_ids: Vec<String>,
     created_at: u64,
     updated_at: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     file_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     exported_at: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ContextPackage {
+    id: String,
+    name: String,
+    source_ids: Vec<String>,
+    created_at: u64,
+    updated_at: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -254,6 +268,16 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
         if note.sources.len() > 256 {
             return Err("A note exceeds the supported number of context sources".into());
         }
+        if note.context_package_ids.len() > 64 {
+            return Err("A note exceeds 64 context packages".into());
+        }
+        let mut package_ids = HashSet::new();
+        for package_id in &note.context_package_ids {
+            validate_id(package_id)?;
+            if !package_ids.insert(package_id) {
+                return Err("A note contains duplicate context packages".into());
+            }
+        }
         let mut source_ids = HashSet::new();
         let mut linked_ids = HashSet::new();
         for source in &note.sources {
@@ -324,6 +348,37 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
         }
         if let Some(folder) = &source.folder {
             bounded_text(folder, 4096, "Source folder")?;
+        }
+    }
+    if let Some(packages) = &workspace.context_packages {
+        if packages.len() > 256 {
+            return Err("The notebook exceeds 256 context packages".into());
+        }
+        let mut package_ids = HashSet::new();
+        for context in packages {
+            validate_id(&context.id)?;
+            if !package_ids.insert(&context.id) {
+                return Err("The notebook contains duplicate context packages".into());
+            }
+            bounded_text(&context.name, 1024, "Context name")?;
+            if context.name.trim().is_empty() {
+                return Err("A context needs a name".into());
+            }
+            if context.source_ids.len() > 256 {
+                return Err("A context exceeds 256 sources".into());
+            }
+            let mut source_ids = HashSet::new();
+            for source_id in &context.source_ids {
+                validate_id(source_id)?;
+                if !source_ids.insert(source_id) {
+                    return Err("A context contains duplicate sources".into());
+                }
+            }
+            if context.created_at > 9_007_199_254_740_991
+                || context.updated_at > 9_007_199_254_740_991
+            {
+                return Err("A context contains an invalid timestamp".into());
+            }
         }
     }
     let mut open_ids = HashSet::new();
@@ -987,6 +1042,117 @@ mod tests {
             enabled: true,
             added_at: 1,
         }
+    }
+
+    fn context_package(id: &str, source_ids: &[&str]) -> ContextPackage {
+        ContextPackage {
+            id: id.into(),
+            name: format!("Context {id}"),
+            source_ids: source_ids.iter().map(|id| (*id).into()).collect(),
+            created_at: 1,
+            updated_at: 2,
+        }
+    }
+
+    #[test]
+    fn context_packages_preserve_memberships_and_shared_sources_through_native_recovery() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut workspace = example("My independent writing");
+        let mut source = linked_source("shared", None);
+        source.kind = "markdown".into();
+        source.text = "One uniquely stored package body".into();
+        workspace.context_library.push(source);
+        workspace.context_packages = Some(vec![
+            context_package("research", &["shared"]),
+            context_package("voice", &["shared"]),
+        ]);
+        workspace.notes[0].context_package_ids = vec!["research".into(), "voice".into()];
+        persist_at_path(directory.path(), &workspace).unwrap();
+        let primary = paths(directory.path()).0;
+        assert_eq!(
+            fs::read_to_string(&primary)
+                .unwrap()
+                .matches("One uniquely stored package body")
+                .count(),
+            1
+        );
+        let first = read_workspace(&primary).unwrap();
+        assert_eq!(first.context_packages.as_ref().unwrap().len(), 2);
+        assert_eq!(
+            first.notes[0].context_package_ids,
+            vec!["research", "voice"]
+        );
+        assert!(first.notes[0].sources.is_empty());
+        workspace.context_packages.as_mut().unwrap()[0].name = "Updated research".into();
+        persist_at_path(directory.path(), &workspace).unwrap();
+        fs::write(&primary, "{torn package save").unwrap();
+        let (restored, recovered) = load_at_path(directory.path()).unwrap();
+        assert!(recovered);
+        let restored = restored.unwrap();
+        assert_eq!(
+            restored.context_packages.as_ref().unwrap()[0].name,
+            "Context research"
+        );
+        assert_eq!(
+            restored.notes[0].context_package_ids,
+            vec!["research", "voice"]
+        );
+        assert_eq!(restored.notes[0].content, "My independent writing");
+    }
+
+    #[test]
+    fn legacy_package_absence_survives_serialization_and_explicit_empty_packages_do_not_reappear() {
+        let legacy = example("My writing");
+        assert!(legacy.context_packages.is_none());
+        assert!(serde_json::to_value(&legacy)
+            .unwrap()
+            .get("contextPackages")
+            .is_none());
+        let mut value = serde_json::to_value(legacy).unwrap();
+        value["contextPackages"] = json!([]);
+        let empty: Workspace = serde_json::from_value(value).unwrap();
+        assert!(empty.context_packages.as_ref().unwrap().is_empty());
+        assert_eq!(
+            serde_json::to_value(empty).unwrap()["contextPackages"],
+            json!([])
+        );
+    }
+
+    #[test]
+    fn context_packages_validate_membership_counts_duplicates_utf8_names_and_recoverable_missing_ids(
+    ) {
+        let mut workspace = example("My writing");
+        workspace.context_packages = Some(vec![context_package("research", &["missing-source"])]);
+        workspace.notes[0].context_package_ids = vec!["missing-package".into()];
+        assert!(validate_workspace(&workspace).is_ok());
+        workspace.context_packages = Some(vec![
+            context_package("same", &[]),
+            context_package("same", &[]),
+        ]);
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.context_packages = Some(vec![context_package("research", &["same", "same"])]);
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.context_packages = Some(vec![context_package("research", &[])]);
+        workspace.context_packages.as_mut().unwrap()[0].name = "😀".repeat(257);
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.context_packages.as_mut().unwrap()[0].name = "  ".into();
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.context_packages = Some(vec![context_package("research", &[])]);
+        workspace.context_packages.as_mut().unwrap()[0].source_ids =
+            (0..257).map(|index| format!("source-{index}")).collect();
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.context_packages = Some(
+            (0..257)
+                .map(|index| context_package(&format!("context-{index}"), &[]))
+                .collect(),
+        );
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.context_packages = Some(vec![]);
+        workspace.notes[0].context_package_ids = vec!["same".into(), "same".into()];
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.notes[0].context_package_ids =
+            (0..65).map(|index| format!("context-{index}")).collect();
+        assert!(validate_workspace(&workspace).is_err());
     }
 
     #[test]

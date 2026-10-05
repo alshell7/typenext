@@ -1,5 +1,9 @@
 import workletUrl from './whistle-recorder.worklet.js?url&no-inline'
 import {
+  microphoneAccessError,
+  normalizedMicrophoneId,
+} from './whistle-microphones'
+import {
   WHISTLE_MAX_SECONDS,
   WHISTLE_SAMPLE_RATE,
   validateWhistleAudio,
@@ -13,7 +17,11 @@ export interface WhistleRecording {
 }
 export interface WhistleRecordingOptions {
   signal?: AbortSignal
+  /** An explicit device is required exactly; absent/default follows the OS. */
+  deviceId?: string
   onDuration?(seconds: number): void
+  /** Normalized RMS amplitude (0..1), emitted at most about five times/second. */
+  onLevel?(level: number): void
 }
 
 function aborted(): DOMException {
@@ -24,7 +32,9 @@ function aborted(): DOMException {
 export async function startWhistleRecording(
   options: WhistleRecordingOptions = {}
 ): Promise<WhistleRecording> {
-  if (options.signal?.aborted) throw aborted()
+  if (options.signal?.aborted || document.visibilityState === 'hidden')
+    throw aborted()
+  const selectedId = normalizedMicrophoneId(options.deviceId)
   if (
     !navigator.mediaDevices?.getUserMedia ||
     typeof AudioContext === 'undefined' ||
@@ -32,6 +42,14 @@ export async function startWhistleRecording(
   )
     throw new Error(
       'Microphone recording is unavailable here. Use TypeNext desktop or a browser over HTTPS or localhost.'
+    )
+  if (
+    selectedId &&
+    navigator.mediaDevices.getSupportedConstraints &&
+    !navigator.mediaDevices.getSupportedConstraints().deviceId
+  )
+    throw new Error(
+      'Microphone selection is not supported here. Choose System default.'
     )
   let context: AudioContext
   try {
@@ -51,6 +69,7 @@ export async function startWhistleRecording(
   let timer: ReturnType<typeof setTimeout> | null = null
   let stopTimer: ReturnType<typeof setTimeout> | null = null
   let cancelled = false
+  let stopping = false
   let cleaned = false
   let complete: ((pcm?: Float32Array, error?: Error) => void) | null = null
   let rejectStartup!: (error: Error) => void
@@ -85,6 +104,7 @@ export async function startWhistleRecording(
     }
     source?.disconnect()
     void context.close().catch(() => undefined)
+    options.onLevel?.(0)
   }
   function cancel() {
     cancelled = true
@@ -93,12 +113,15 @@ export async function startWhistleRecording(
     else cleanup()
   }
   options.signal?.addEventListener('abort', cancel, { once: true })
+  document.addEventListener('visibilitychange', visibilityChanged)
   try {
+    options.onLevel?.(0)
     // Start permission/resume while still inside the user's gesture. A late
     // permission grant after cancellation immediately stops its media tracks.
     const microphone = navigator.mediaDevices
       .getUserMedia({
         audio: {
+          ...(selectedId ? { deviceId: { exact: selectedId } } : {}),
           channelCount: 1,
           sampleRate: WHISTLE_SAMPLE_RATE,
           echoCancellation: true,
@@ -127,6 +150,7 @@ export async function startWhistleRecording(
       outputChannelCount: [1],
       channelCount: 1,
       channelCountMode: 'explicit',
+      processorOptions: { emitLevel: typeof options.onLevel === 'function' },
     })
     const finished = new Promise<Float32Array>((resolve, reject) => {
       let settled = false
@@ -153,6 +177,12 @@ export async function startWhistleRecording(
         options.onDuration?.(
           Math.min(WHISTLE_MAX_SECONDS, Math.max(0, event.data.seconds))
         )
+      if (
+        !stopping &&
+        event.data?.type === 'progress' &&
+        Number.isFinite(event.data.level)
+      )
+        options.onLevel?.(Math.min(1, Math.max(0, event.data.level)))
       if (event.data?.type === 'complete') {
         try {
           validateWhistleAudio(event.data.samples)
@@ -175,13 +205,13 @@ export async function startWhistleRecording(
     tracks.forEach(track =>
       track.addEventListener('ended', ended, { once: true })
     )
-    document.addEventListener('visibilitychange', visibilityChanged)
     source.connect(node)
     // The worklet writes no output samples, so the microphone is never played
     // through speakers. Connecting keeps its capture graph active on Safari.
     node.connect(context.destination)
     const stop = () => {
       if (!complete || stopTimer !== null) return
+      stopping = true
       node?.port.postMessage({ type: 'stop' })
       // Stop the physical microphone immediately, including at the duration
       // limit; do not keep listening while waiting for the worklet to flush.
@@ -189,6 +219,7 @@ export async function startWhistleRecording(
         track.removeEventListener('ended', ended)
         track.stop()
       }
+      options.onLevel?.(0)
       stopTimer = setTimeout(
         () =>
           complete?.(
@@ -206,19 +237,7 @@ export async function startWhistleRecording(
     if (stream)
       (stream as MediaStream).getTracks().forEach(track => track.stop())
     cleanup()
-    const errorName =
-      error && typeof error === 'object' && 'name' in error ? error.name : ''
     if (wasCancelled) throw aborted()
-    if (errorName === 'AbortError')
-      throw new Error(
-        'Microphone setup was interrupted. Check device permissions and record again.'
-      )
-    if (errorName === 'NotAllowedError')
-      throw new Error(
-        'Microphone access was denied. Allow it in your browser or system privacy settings, then record again.'
-      )
-    if (errorName === 'NotFoundError')
-      throw new Error('No microphone was found. Connect one and record again.')
-    throw error
+    throw microphoneAccessError(error, selectedId)
   }
 }

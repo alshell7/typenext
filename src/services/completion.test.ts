@@ -990,3 +990,459 @@ describe('explicit provider requests and connection tests', () => {
     expect(request?.[1]?.headers?.Authorization).toBeUndefined()
   })
 })
+
+describe('model word-boundary spacing', () => {
+  it.each([
+    {
+      name: 'missing separator before an existing space',
+      prefix: 'At dawn, the garden',
+      suffix: ' while the city was still asleep.',
+      raw: 'held its breath',
+      expected: ' held its breath',
+    },
+    {
+      name: 'explicit leading separator',
+      prefix: 'At dawn, the garden',
+      suffix: ' while the city was still asleep.',
+      raw: ' held its breath',
+      expected: ' held its breath',
+    },
+    {
+      name: 'multiple intentional leading spaces',
+      prefix: 'At dawn, the garden',
+      suffix: ' while the city was still asleep.',
+      raw: '  held its breath',
+      expected: '  held its breath',
+    },
+    {
+      name: 'the writer already supplied a separator',
+      prefix: 'At dawn, the garden ',
+      suffix: ' while the city was still asleep.',
+      raw: 'held its breath',
+      expected: 'held its breath',
+    },
+    {
+      name: 'punctuation immediately after the preceding word',
+      prefix: 'At dawn, the garden',
+      suffix: ' while the city was still asleep.',
+      raw: ', bright with rain,',
+      expected: ', bright with rain,',
+    },
+    {
+      name: 'a fragment between existing word characters',
+      prefix: 'It was wond',
+      suffix: 'ful.',
+      raw: 'er',
+      expected: 'er',
+    },
+    {
+      name: 'a fragment before punctuation',
+      prefix: 'It was wond',
+      suffix: '.',
+      raw: 'erful',
+      expected: 'erful',
+    },
+    {
+      name: 'an ambiguous fragment at the end of the note',
+      prefix: 'It was wond',
+      suffix: '',
+      raw: 'erful.',
+      expected: 'erful.',
+    },
+    {
+      name: 'a script that does not use word separators',
+      prefix: '庭園',
+      suffix: ' は静かだ。',
+      raw: 'に雨が降る',
+      expected: 'に雨が降る',
+    },
+    {
+      name: 'a decomposed Latin word',
+      prefix: 'Le cafe\u0301',
+      suffix: ' encore.',
+      raw: 'brille',
+      expected: ' brille',
+    },
+    {
+      name: 'a Cyrillic word boundary with a tab',
+      prefix: 'Сад',
+      suffix: '\tутром.',
+      raw: 'дышит',
+      expected: ' дышит',
+    },
+    {
+      name: 'a Greek word boundary with a non-breaking space',
+      prefix: 'Ο κήπος',
+      suffix: '\u00a0ήσυχα.',
+      raw: 'ανασαίνει',
+      expected: ' ανασαίνει',
+    },
+  ])('preserves $name without changing either cursor side', async fixture => {
+    const text = fixture.prefix + fixture.suffix
+    vi.mocked(requestJson).mockResolvedValue(completion(fixture.raw))
+    const result = await suggest(
+      note(text),
+      cursor(text, fixture.prefix.length),
+      settings()
+    )
+    expect(result.text).toBe(fixture.expected)
+    expect(fixture.prefix + result.text + fixture.suffix).toBe(
+      fixture.prefix + fixture.expected + fixture.suffix
+    )
+    expect(result.mode).toBe('model')
+    expect(requestJson).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['code', 'native FIM'] as const)(
+    'keeps the exact model fragment for %s',
+    async kind => {
+      const config = settings()
+      if (kind === 'native FIM') config.profiles.local.protocol = 'fim'
+      const draft = note('wond ')
+      vi.mocked(requestJson).mockResolvedValue(
+        kind === 'native FIM' ? { content: 'erful' } : completion('erful')
+      )
+      const context = cursor(draft.content, 4)
+      if (kind === 'code') context.inCode = true
+      expect((await suggest(draft, context, config)).text).toBe('erful')
+      expect(draft.content).toBe('wond ')
+      expect(requestJson).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('counts a repaired separator within the existing per-insertion size bound', async () => {
+    const config = { ...settings(), suggestionLength: 'short' as const }
+    const prefix = 'The garden'
+    const suffix = ' while it rained.'
+    vi.mocked(requestJson).mockResolvedValue(
+      completion('unhurried '.repeat(80))
+    )
+    const result = await suggest(
+      note(prefix + suffix),
+      cursor(prefix + suffix, prefix.length),
+      config
+    )
+    expect(result.text.startsWith(' ')).toBe(true)
+    expect(result.text.length).toBeLessThanOrEqual(110)
+    expect(result.text.trim().split(/\s+/u)).toHaveLength(8)
+  })
+})
+
+describe('fresh manual hosted choices', () => {
+  const options = { purpose: 'alternatives' as const }
+
+  it('repairs the exact recorded real-model choices without another generation request', async () => {
+    const config = { ...settings(), provider: 'openrouter' as const }
+    vi.mocked(getSecret).mockResolvedValue('fixture-key')
+    vi.mocked(requestJson).mockResolvedValue(
+      completion(
+        JSON.stringify({
+          insertions: [
+            'exhaled cool air',
+            'smelled of rain',
+            'held its breath',
+          ],
+        })
+      )
+    )
+    const prefix = 'At dawn, the garden'
+    const suffix = ' while the city was still asleep.'
+    const result = await suggest(
+      note(prefix + suffix),
+      cursor(prefix + suffix, prefix.length),
+      config,
+      undefined,
+      options
+    )
+    expect(
+      [result, ...result.alternatives!].map(candidate => candidate.text)
+    ).toEqual([' exhaled cool air', ' smelled of rain', ' held its breath'])
+    expect(prefix + result.alternatives![1]!.text + suffix).toBe(
+      'At dawn, the garden held its breath while the city was still asleep.'
+    )
+    expect(requestJson).toHaveBeenCalledTimes(1)
+    expect(generateBuiltinInsertion).not.toHaveBeenCalled()
+  })
+
+  it.each(['openrouter', 'openai', 'anthropic'] as const)(
+    'requests three %s choices in one ordinary JSON-prompted POST and preserves both cursor sides',
+    async provider => {
+      const config = { ...settings(), provider }
+      vi.mocked(getSecret).mockResolvedValue('fixture-key')
+      const text = 'The river beneath the bridge.'
+      const content = JSON.stringify({
+        insertions: [
+          ' runs quietly beneath the bridge.',
+          ' rests beside the stones beneath the bridge.',
+          ' bends toward the light beneath the bridge.',
+        ],
+      })
+      vi.mocked(requestJson).mockResolvedValue(
+        provider === 'anthropic'
+          ? { content: [{ type: 'text', text: content }] }
+          : completion(content)
+      )
+      const result = await suggest(
+        note(text),
+        cursor(text, 9),
+        config,
+        undefined,
+        options
+      )
+      expect(
+        [result, ...result.alternatives!].map(candidate => candidate.text)
+      ).toEqual([
+        ' runs quietly',
+        ' rests beside the stones',
+        ' bends toward the light',
+      ])
+      expect(
+        [result, ...result.alternatives!].every(
+          candidate => candidate.mode === 'model'
+        )
+      ).toBe(true)
+      expect(requestJson).toHaveBeenCalledTimes(1)
+      expect(getSecret).toHaveBeenCalledExactlyOnceWith(`provider:${provider}`)
+      const body = requestBody()
+      expect(body.max_tokens).toBe(3 * 40 + 24)
+      expect(body.max_tokens).toBeLessThanOrEqual(384)
+      expect(body).not.toHaveProperty('response_format')
+      expect(body).not.toHaveProperty('n')
+      const messages = body.messages as { role: string; content: string }[]
+      const system =
+        provider === 'anthropic' ? body.system : messages[0]?.content
+      expect(system).toContain('"insertions"')
+      expect(system).toContain('three distinct')
+      const data = JSON.parse(messages.at(-1)!.content)
+      expect(data.beforeCursor).toBe('The river')
+      expect(data.afterCursor).toBe(' beneath the bridge.')
+      expect(data).not.toHaveProperty('apiKey')
+    }
+  )
+
+  it('bypasses the inline cache on every choices request and never replaces its cached plain insertion', async () => {
+    const config = { ...settings(), provider: 'openrouter' as const }
+    vi.mocked(getSecret).mockResolvedValue('fixture-key')
+    const draft = note('The river')
+    vi.mocked(requestJson)
+      .mockResolvedValueOnce(completion(' flows quietly.'))
+      .mockResolvedValueOnce(
+        completion(
+          JSON.stringify({
+            insertions: [' rests quietly.', ' bends slowly.', ' turns gently.'],
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        completion(
+          JSON.stringify({
+            insertions: [
+              ' moves softly.',
+              ' follows the light.',
+              ' runs through the valley.',
+            ],
+          })
+        )
+      )
+    expect((await suggest(draft, cursor(draft.content), config)).text).toBe(
+      ' flows quietly.'
+    )
+    const first = await suggest(
+      draft,
+      cursor(draft.content),
+      config,
+      undefined,
+      options
+    )
+    const second = await suggest(
+      draft,
+      cursor(draft.content),
+      config,
+      undefined,
+      options
+    )
+    expect(first.text).toBe(' rests quietly.')
+    expect(second.text).toBe(' moves softly.')
+    expect(first.alternatives).toHaveLength(2)
+    expect(second.alternatives).toHaveLength(2)
+    expect((await suggest(draft, cursor(draft.content), config)).text).toBe(
+      ' flows quietly.'
+    )
+    expect(requestJson).toHaveBeenCalledTimes(3)
+    const firstBody = vi.mocked(requestJson).mock.calls[0]?.[1]?.body as {
+      messages: { content: string }[]
+    }
+    expect(firstBody.messages[0]?.content).not.toContain('"insertions"')
+  })
+
+  it('sanitizes and deduplicates before the three-choice cap without substituting offline text', async () => {
+    const config = { ...settings(), provider: 'openai' as const }
+    config.suggestionLength = 'short'
+    vi.mocked(getSecret).mockResolvedValue('fixture-key')
+    vi.mocked(requestJson).mockResolvedValue(
+      completion(
+        JSON.stringify({
+          insertions: [
+            null,
+            { text: 'unsupported object' },
+            '\ud800',
+            '',
+            'Suggestion: careful',
+            'careful',
+            'patient. Another sentence is excluded.',
+            'steady '.repeat(50),
+            'steady '.repeat(80),
+            'another ignored choice',
+          ],
+        })
+      )
+    )
+    const draft = note('The  ending.')
+    const result = await suggest(
+      draft,
+      cursor(draft.content, 4),
+      config,
+      undefined,
+      options
+    )
+    const candidates = [result, ...result.alternatives!]
+    expect(candidates).toHaveLength(3)
+    expect(candidates.map(candidate => candidate.text)).toEqual([
+      'careful',
+      'patient.',
+      'steady steady steady steady steady steady steady steady',
+    ])
+    expect(
+      candidates.every(
+        candidate => candidate.text.length <= 110 && candidate.mode === 'model'
+      )
+    ).toBe(true)
+    expect(candidates.every(candidate => candidate.sources.length === 0)).toBe(
+      true
+    )
+    expect(requestJson).toHaveBeenCalledTimes(1)
+  })
+
+  it('accepts a fenced JSON list while keeping leading whitespace, partial-word text and Unicode intact', async () => {
+    const config = { ...settings(), provider: 'openrouter' as const }
+    vi.mocked(getSecret).mockResolvedValue('fixture-key')
+    vi.mocked(requestJson).mockResolvedValue(
+      completion('```json\n["er", "er", ""]\n```')
+    )
+    const text = 'It was wondful.'
+    const result = await suggest(
+      note(text),
+      cursor(text, 11),
+      config,
+      undefined,
+      options
+    )
+    expect(result).toEqual({ text: 'er', sources: [], mode: 'model' })
+    expect(text.slice(0, 11) + result.text + text.slice(11)).toBe(
+      'It was wonderful.'
+    )
+    vi.mocked(requestJson).mockResolvedValue(
+      completion(
+        JSON.stringify({
+          insertions: [' 🌱 grows quietly.', ' 🌿 stirs softly.'],
+        })
+      )
+    )
+    const draft = note('A seed')
+    const unicode = await suggest(
+      draft,
+      cursor(draft.content),
+      config,
+      undefined,
+      options
+    )
+    expect(unicode.text).toBe(' 🌱 grows quietly.')
+    expect(unicode.alternatives?.[0]?.text).toBe(' 🌿 stirs softly.')
+  })
+
+  it.each([
+    {
+      content: 'Here are your choices: careful or patient.',
+      error: 'valid suggestion choices',
+    },
+    { content: '{"text":"careful"}', error: 'list of suggestion choices' },
+    { content: 'x'.repeat(12_001), error: 'too much choice text' },
+  ])(
+    'rejects malformed or oversized provider choices without a retry or fallback: $error',
+    async ({ content, error }) => {
+      const config = { ...settings(), provider: 'openai' as const }
+      vi.mocked(getSecret).mockResolvedValue('fixture-key')
+      vi.mocked(requestJson).mockResolvedValue(completion(content))
+      const draft = note('I want to')
+      await expect(
+        suggest(draft, cursor(draft.content), config, undefined, options)
+      ).rejects.toThrow(error)
+      expect(requestJson).toHaveBeenCalledTimes(1)
+      expect(generateBuiltinInsertion).not.toHaveBeenCalled()
+    }
+  )
+
+  it('returns an honest empty model result when the provider has no meaningful distinct strings', async () => {
+    const config = { ...settings(), provider: 'openai' as const }
+    vi.mocked(getSecret).mockResolvedValue('fixture-key')
+    vi.mocked(requestJson).mockResolvedValue(
+      completion('{"insertions":["",null,"\\ud800"]}')
+    )
+    const draft = note('I want to')
+    expect(
+      await suggest(draft, cursor(draft.content), config, undefined, options)
+    ).toEqual({ text: '', sources: [], mode: 'model' })
+    expect(requestJson).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps cancellation and the global one-generation guard for fresh choices', async () => {
+    const config = { ...settings(), provider: 'openrouter' as const }
+    const draft = note()
+    vi.mocked(getSecret).mockResolvedValue('fixture-key')
+    let finish!: (value: unknown) => void
+    vi.mocked(requestJson).mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finish = resolve
+        })
+    )
+    const controller = new AbortController()
+    const pending = suggest(
+      draft,
+      cursor(draft.content),
+      config,
+      controller.signal,
+      options
+    )
+    await vi.waitFor(() => expect(requestJson).toHaveBeenCalledTimes(1))
+    await expect(
+      suggest(draft, cursor(draft.content), config, undefined, options)
+    ).rejects.toThrow('Another suggestion')
+    controller.abort()
+    finish(completion('{"insertions":[" stale."," stale too."]}'))
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(requestJson).toHaveBeenCalledTimes(1)
+    vi.mocked(requestJson).mockResolvedValue(
+      completion('{"insertions":[" fresh."," fresh again."]}')
+    )
+    expect(
+      (await suggest(draft, cursor(draft.content), config, undefined, options))
+        .text
+    ).toBe(' fresh.')
+    expect(requestJson).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves offline recall/starters private and ignores alternative-purpose routing for local mode', async () => {
+    const config = { ...settings(), localEngine: 'recall' as const }
+    config.profiles.local.endpoint = 'unused endpoint'
+    const draft = note('I want to')
+    const ordinary = await suggest(draft, cursor(draft.content), config)
+    expect(
+      await suggest(draft, cursor(draft.content), config, undefined, options)
+    ).toEqual(ordinary)
+    expect(ordinary.mode).toBe('starter')
+    expect(getSecret).not.toHaveBeenCalled()
+    expect(requestJson).not.toHaveBeenCalled()
+    expect(generateBuiltinInsertion).not.toHaveBeenCalled()
+  })
+})

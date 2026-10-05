@@ -10,6 +10,7 @@ const code = readFileSync(
 interface Output {
   type: 'progress' | 'complete'
   seconds?: number
+  level?: number
   samples?: Float32Array
 }
 interface Recorder {
@@ -17,9 +18,11 @@ interface Recorder {
   samples: Float32Array | null
   port: { onmessage(event: { data: { type: string } }): void }
 }
-function create(sampleRate: number) {
+function create(sampleRate: number, meter = false) {
   const messages: Output[] = []
-  let Constructor!: new () => Recorder
+  let Constructor!: new (options?: {
+    processorOptions: { emitLevel: boolean }
+  }) => Recorder
   class Processor {
     port = {
       onmessage: null,
@@ -30,15 +33,36 @@ function create(sampleRate: number) {
     Float32Array,
     AudioWorkletProcessor: Processor,
     sampleRate,
-    registerProcessor: (name: string, value: new () => Recorder) => {
+    registerProcessor: (name: string, value: typeof Constructor) => {
       expect(name).toBe('typenext-whistle-recorder')
       Constructor = value
     },
   })
-  return { recorder: new Constructor(), messages }
+  return {
+    recorder: new Constructor({ processorOptions: { emitLevel: meter } }),
+    messages,
+  }
 }
 
 describe('fixed-size on-device audio worklet', () => {
+  it('adds RMS levels only when requested and bounds them to the existing five-hertz progress stream', () => {
+    const enabled = create(16_000, true)
+    const disabled = create(16_000)
+    const input = new Float32Array(128).fill(0.25)
+    for (let index = 0; index < 125; index++) {
+      enabled.recorder.process([[input]])
+      disabled.recorder.process([[input]])
+    }
+    expect(enabled.messages).toHaveLength(5)
+    expect(disabled.messages).toHaveLength(5)
+    expect(enabled.messages.every(message => message.level === 0.25)).toBe(true)
+    expect(
+      disabled.messages.every(message => message.level === undefined)
+    ).toBe(true)
+    const silent = create(16_000, true)
+    silent.recorder.process([[new Float32Array(3_200)]])
+    expect(silent.messages[0]?.level).toBe(0)
+  })
   it('averages channels, bounds amplitude, leaves inputs unchanged and wipes its capture buffer on stop', () => {
     const { recorder, messages } = create(16_000)
     const retained = recorder.samples!

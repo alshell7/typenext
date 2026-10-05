@@ -65,9 +65,7 @@ describe('explicit attached-context search', () => {
         onLibrary={onLibrary}
       />
     )
-    await user.click(
-      screen.getByRole('button', { name: 'Choose from library' })
-    )
+    await user.click(screen.getByRole('button', { name: 'Manage contexts' }))
     expect(onLibrary).toHaveBeenCalledTimes(1)
     await user.click(screen.getByText('Find in attached context'))
     expect(
@@ -93,6 +91,67 @@ describe('explicit attached-context search', () => {
     )
     expect(spy).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('heading', { name: 'Garden.md' })).toBeNull()
+  })
+
+  it('prioritizes named packages and retrieves their shared sources once while keeping direct editing raw', async () => {
+    const spy = vi.spyOn(retrieval, 'retrieveContext')
+    const user = userEvent.setup()
+    const current = { ...note([]), contextPackageIds: ['research', 'voice'] }
+    const packages = [
+      {
+        id: 'research',
+        name: 'Research',
+        sourceIds: ['garden'],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      {
+        id: 'voice',
+        name: 'Voice',
+        sourceIds: ['garden'],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]
+    const onLibrary = vi.fn()
+    const onUpdate = vi.fn()
+    const onDetachPackage = vi.fn()
+    render(
+      <ContextPanel
+        note={current}
+        notes={[current]}
+        packages={packages}
+        library={library}
+        importing={false}
+        onUpdate={onUpdate}
+        onClose={vi.fn()}
+        onFiles={vi.fn().mockResolvedValue(undefined)}
+        onWebsite={vi.fn()}
+        onUseNote={vi.fn()}
+        onLibrary={onLibrary}
+        onDetachPackage={onDetachPackage}
+      />
+    )
+    expect(
+      screen.getByRole('button', { name: 'Manage Research' })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Attach files' }).closest('details')
+    ).not.toHaveAttribute('open')
+    await user.click(screen.getByRole('button', { name: 'Manage Voice' }))
+    expect(onLibrary).toHaveBeenCalledWith('voice')
+    await user.click(screen.getByRole('button', { name: 'Detach Voice' }))
+    expect(onDetachPackage).toHaveBeenCalledWith('voice')
+    expect(onUpdate).not.toHaveBeenCalled()
+    await user.click(screen.getByText('Find in attached context'))
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Search attached references' }),
+      'blue lavender'
+    )
+    await user.click(screen.getByRole('button', { name: 'Find passages' }))
+    expect(spy.mock.calls[0]?.[0].sources).toHaveLength(1)
+    expect(screen.getByText('1 matching passage')).toBeVisible()
+    expect(current.sources).toEqual([])
   })
 
   it('invalidates visible passages when included source text changes and does not rerun retrieval automatically', async () => {

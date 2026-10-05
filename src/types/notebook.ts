@@ -56,6 +56,14 @@ export interface ContextSource {
   addedAt: number
 }
 
+export interface ContextPackage {
+  id: string
+  name: string
+  sourceIds: string[]
+  createdAt: number
+  updatedAt: number
+}
+
 export interface Note {
   id: string
   title: string
@@ -63,6 +71,7 @@ export interface Note {
   context: string
   content: string
   sources: ContextSource[]
+  contextPackageIds?: string[]
   createdAt: number
   updatedAt: number
   filePath?: string
@@ -72,6 +81,7 @@ export interface Note {
 export interface Workspace {
   version: 1
   contextLibrary?: ContextSource[]
+  contextPackages?: ContextPackage[]
   notes: Note[]
   openNoteIds: string[]
   activeNoteId: string | null
@@ -102,4 +112,9 @@ export interface SuggestionCandidate {
 export interface SuggestionResult extends SuggestionCandidate {
   /** At most two additional distinct insertions at the same cursor. */
   alternatives?: SuggestionCandidate[]
+}
+
+export interface SuggestionRequestOptions {
+  /** Manual hosted choices use one fresh request; ordinary inline text stays plain. */
+  purpose?: 'inline' | 'alternatives'
 }
