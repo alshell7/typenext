@@ -192,6 +192,15 @@ try {
   await editor.focus()
   await editor.press('Control+Space')
   await expect(page.locator('.cm-ghost-text')).toHaveText(' held its breath')
+  const suggestions = page.getByRole('listbox', {
+    name: 'Suggestions',
+    exact: true,
+  })
+  await expect(suggestions).toBeVisible()
+  await expect(editor).toBeFocused()
+  await expect(
+    suggestions.getByRole('option', { selected: true })
+  ).toContainText('held its breath')
   const original = await editor.evaluate(element => {
     const clone = element.cloneNode(true)
     clone
@@ -201,6 +210,7 @@ try {
   })
   expect(original).toBe(prefix + suffix)
   await editor.press('Tab')
+  await expect(suggestions).toHaveCount(0)
   const accepted = prefix + ' held its breath' + suffix
   await expect(editor).toHaveText(accepted)
   await expect(page.getByText('Saved locally', { exact: true })).toBeVisible()
@@ -208,7 +218,7 @@ try {
   expect(saved().settings.provider).toBe('local')
   expect(generationRequests).toHaveLength(1)
   observations.push(
-    'Real WebView2 editor -> native Rust localhost HTTP -> ghost -> Tab -> atomic native workspace autosave passed.'
+    'Real WebView2 editor -> native Rust localhost HTTP -> inline preview and suggestion menu -> Tab -> atomic native workspace autosave passed.'
   )
 
   const deniedPath = join(out, 'not-granted.md')

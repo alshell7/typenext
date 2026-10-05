@@ -16,6 +16,8 @@ These history weights are estimates, not exact heap-byte limits. Protected immed
 
 The suggestion cache contains at most 16 results and 500,000 combined key/result/source-label characters. Document and identity lookup maps are weak maps. View destruction clears inference debounce timers, queued completion work, and accepted-highlight timers.
 
+Manual suggestions now expose at most three distinct choices in one CodeMirror tooltip. Alternatives count towards that same cache bound. Arrow-key preview reuses the existing tooltip and makes no inference request; only explicit acceptance changes the document. A rare history rebuild closes the tooltip while keeping its inline preview. The popup and automatic blank-page hint use short, cancellable timers, with no polling or continuous animation.
+
 Notes have an exact 8 MiB UTF-8 limit matching durable storage. An incremental transaction filter measures changed spans with their surrogate boundaries; it does not scan the entire document on each edit. An oversized insertion is rejected as a whole and reports an actionable document error. Existing writing is preserved, and the application does not alter the clipboard.
 
 ## Controlled browser comparison

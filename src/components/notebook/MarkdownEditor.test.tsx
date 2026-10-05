@@ -28,6 +28,11 @@ import {
   setAcceptedRange,
   setInlineSuggestion,
 } from './editor-extensions'
+import {
+  suggestionChoices,
+  suggestionMenuField,
+  suggestionOrigin,
+} from './suggestion-menu'
 
 vi.mock('../../services/completion', () => ({ suggest: vi.fn() }))
 
@@ -150,6 +155,283 @@ beforeEach(() => {
     value: () => new DOMRect(),
   })
   vi.spyOn(window, 'scrollBy').mockImplementation(() => undefined)
+})
+
+describe('manual suggestion choices', () => {
+  const choices: SuggestionResult = {
+    text: 'I want to notice the small things.',
+    sources: [],
+    mode: 'starter',
+    alternatives: [
+      { text: 'What matters today is patience.', sources: [], mode: 'starter' },
+      { text: 'A useful next step is to begin.', sources: [], mode: 'starter' },
+    ],
+  }
+
+  it('lets a blank note preview and navigate bounded choices without modifying the writing', async () => {
+    vi.mocked(suggest).mockResolvedValue(choices)
+    const { ref, view, content, onChange, onStatus } = mountEditor(makeNote(''))
+    await act(async () => ref.current?.requestSuggestion())
+    expect(suggest).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(suggest).mock.calls[0]?.[1]).toEqual({
+      text: '',
+      cursor: 0,
+      selectionEmpty: true,
+    })
+    const menu = screen.getByRole('listbox', { name: 'Suggestions' })
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(3)
+    expect(content).toHaveFocus()
+    expect(content).toHaveAttribute('data-suggestion-preview', 'true')
+    expect(content).toHaveAttribute('aria-controls', menu.id)
+    expect(content).toHaveAttribute('aria-activedescendant', options[0]!.id)
+    expect(options[0]).toHaveAttribute('aria-selected', 'true')
+    expect(view.state.doc.toString()).toBe('')
+    expect(onChange).not.toHaveBeenCalled()
+    act(() => fireEvent.keyDown(content, { key: 'ArrowDown' }))
+    expect(view.state.field(inlineSuggestionField)?.text).toBe(
+      choices.alternatives![0]!.text
+    )
+    expect(options[1]).toHaveAttribute('aria-selected', 'true')
+    expect(content).toHaveAttribute('aria-activedescendant', options[1]!.id)
+    act(() => fireEvent.keyDown(content, { key: 'ArrowUp' }))
+    expect(view.state.field(inlineSuggestionField)?.text).toBe(choices.text)
+    act(() => fireEvent.keyDown(content, { key: 'ArrowUp' }))
+    expect(view.state.field(inlineSuggestionField)?.text).toBe(
+      choices.alternatives![1]!.text
+    )
+    expect(onStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        state: 'suggestion',
+        mode: 'starter',
+        menuOpen: true,
+        choices: 3,
+      })
+    )
+    act(() => fireEvent.keyDown(content, { key: 'Enter' }))
+    expect(view.state.doc.toString()).toBe(choices.alternatives![1]!.text)
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(content).not.toHaveAttribute('aria-activedescendant')
+    expect(content).not.toHaveAttribute('data-suggestion-preview')
+    expect(view.state.field(inlineSuggestionField)).toBeNull()
+    expect(undoDepth(view.state)).toBe(1)
+    act(() => expect(undo(view)).toBe(true))
+    expect(view.state.doc.toString()).toBe('')
+  })
+
+  it('offers a focused blank page a debounced ghost, and opens choices only on manual request', async () => {
+    vi.mocked(suggest).mockResolvedValue(choices)
+    const { view, ref } = mountEditor(makeNote(''))
+    await act(async () => vi.advanceTimersByTime(2000))
+    expect(suggest).not.toHaveBeenCalled()
+    act(() => view.focus())
+    await act(async () => vi.advanceTimersByTime(499))
+    expect(suggest).not.toHaveBeenCalled()
+    await act(async () => vi.advanceTimersByTime(1))
+    expect(suggest).toHaveBeenCalledTimes(1)
+    expect(view.state.field(inlineSuggestionField)?.text).toBe(choices.text)
+    expect(screen.queryByRole('listbox')).toBeNull()
+    await act(async () => ref.current?.requestSuggestion())
+    expect(suggest).toHaveBeenCalledTimes(1)
+    expect(screen.getAllByRole('option')).toHaveLength(3)
+  })
+
+  it('restores the blank-page placeholder after dismissing its ghost preview', async () => {
+    vi.mocked(suggest).mockResolvedValue(choices)
+    const { ref, content, view } = mountEditor(makeNote(''))
+    expect(content).not.toHaveAttribute('data-suggestion-preview')
+    await act(async () => ref.current?.requestSuggestion())
+    expect(content).toHaveAttribute('data-suggestion-preview', 'true')
+    await act(async () => fireEvent.keyDown(content, { key: 'Escape' }))
+    expect(content).not.toHaveAttribute('data-suggestion-preview')
+    expect(content.querySelector('.cm-placeholder')).not.toBeNull()
+    expect(view.state.doc.toString()).toBe('')
+  })
+
+  it('keeps a manual blank-page menu open through the automatic focus debounce', async () => {
+    vi.mocked(suggest).mockResolvedValue(choices)
+    const { ref, view } = mountEditor(makeNote(''))
+    expect(view.hasFocus).toBe(false)
+    await act(async () => ref.current?.requestSuggestion())
+    expect(screen.getByRole('listbox', { name: 'Suggestions' })).toBeVisible()
+    await act(async () => vi.advanceTimersByTime(1500))
+    expect(screen.getByRole('listbox', { name: 'Suggestions' })).toBeVisible()
+    expect(suggest).toHaveBeenCalledTimes(1)
+  })
+
+  it('accepts an alternate by pointer without moving focus or overwriting the suffix', async () => {
+    vi.mocked(suggest).mockResolvedValue({
+      text: 'careful',
+      sources: ['This note'],
+      mode: 'recall',
+      alternatives: [
+        { text: 'patient', sources: ['Research.md'], mode: 'recall' },
+      ],
+    })
+    const { view, ref, content } = mountEditor(makeNote('The  ending.'))
+    act(() => view.dispatch({ selection: EditorSelection.cursor(4) }))
+    await act(async () => ref.current?.requestSuggestion())
+    expect(screen.getByRole('listbox')).toHaveTextContent('From this note')
+    const alternate = screen.getAllByRole('option')[1]!
+    expect(alternate).toHaveTextContent('From Research.md')
+    act(() => {
+      fireEvent.pointerDown(alternate)
+      fireEvent.mouseDown(alternate)
+      fireEvent.click(alternate)
+    })
+    expect(content).toHaveFocus()
+    expect(view.state.doc.toString()).toBe('The patient ending.')
+    expect(view.state.field(suggestionMenuField)).toBeNull()
+    act(() => expect(undo(view)).toBe(true))
+    expect(view.state.doc.toString()).toBe('The  ending.')
+  })
+
+  it('closes the menu on word acceptance while retaining the starter label and remaining ghost', async () => {
+    vi.mocked(suggest).mockResolvedValue(choices)
+    const { ref, view, content, onStatus } = mountEditor(makeNote(''))
+    await act(async () => ref.current?.requestSuggestion())
+    act(() => fireEvent.keyDown(content, { key: 'ArrowRight', ctrlKey: true }))
+    expect(view.state.doc.toString()).toBe('I ')
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(view.state.field(inlineSuggestionField)).toEqual({
+      at: 2,
+      text: 'want to notice the small things.',
+      sources: [],
+      mode: 'starter',
+    })
+    expect(onStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mode: 'starter', menuOpen: false, choices: 1 })
+    )
+  })
+
+  it('dismisses both menu and ghost on Escape, edits, cursor movement, blur and composition', async () => {
+    vi.mocked(suggest).mockResolvedValue(choices)
+    const { ref, view, content } = mountEditor()
+    async function request() {
+      await act(async () => ref.current?.requestSuggestion())
+      expect(screen.getByRole('listbox')).toBeVisible()
+    }
+    function dismissed() {
+      expect(screen.queryByRole('listbox')).toBeNull()
+      expect(view.state.field(inlineSuggestionField)).toBeNull()
+      expect(content).not.toHaveAttribute('aria-controls')
+    }
+    await request()
+    await act(async () => fireEvent.keyDown(content, { key: 'Escape' }))
+    dismissed()
+    await request()
+    act(() => view.dispatch({ changes: { from: 0, insert: 'My ' } }))
+    dismissed()
+    await request()
+    act(() => view.dispatch({ selection: EditorSelection.cursor(4) }))
+    dismissed()
+    await request()
+    await act(async () => content.blur())
+    dismissed()
+    await request()
+    await act(async () => fireEvent.compositionStart(content))
+    dismissed()
+    await act(async () => ref.current?.requestSuggestion())
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('keeps explicit external requests as a single ghost', async () => {
+    vi.mocked(suggest).mockResolvedValue({ ...choices, mode: 'model' })
+    const { ref, view, onStatus } = mountEditor()
+    await act(async () => ref.current?.requestExternalSuggestion('openai'))
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(view.state.field(inlineSuggestionField)?.text).toBe(choices.text)
+    expect(onStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mode: 'model', menuOpen: false, choices: 1 })
+    )
+    expect(vi.mocked(suggest).mock.calls[0]?.[2].provider).toBe('openai')
+  })
+
+  it('never accepts a detached stale option after cursor movement dismisses its menu', async () => {
+    vi.mocked(suggest).mockResolvedValue(choices)
+    const { ref, view } = mountEditor()
+    await act(async () => ref.current?.requestSuggestion())
+    const oldOption = screen.getAllByRole('option')[1]!
+    act(() => view.dispatch({ selection: EditorSelection.cursor(2) }))
+    expect(screen.queryByRole('listbox')).toBeNull()
+    act(() => fireEvent.click(oldOption))
+    expect(view.state.doc.toString()).toBe('A thought in progress')
+    expect(view.state.field(inlineSuggestionField)).toBeNull()
+  })
+
+  it('includes alternative text in the existing completion-cache memory limit', async () => {
+    vi.mocked(suggest).mockResolvedValue({
+      text: 'A short preview.',
+      sources: [],
+      alternatives: [{ text: 'x'.repeat(260_000), sources: [] }],
+    })
+    const { ref } = mountEditor()
+    await act(async () => ref.current?.requestSuggestion())
+    await act(async () => ref.current?.requestSuggestion())
+    // A result larger than half the shared character budget is displayed,
+    // but cannot displace the bounded cache with its additional choices.
+    expect(suggest).toHaveBeenCalledTimes(2)
+    expect(screen.getAllByRole('option')).toHaveLength(2)
+  })
+
+  it('gives clear paused and empty-result feedback without displaying a menu', async () => {
+    const settings = makeSettings()
+    const editor = mountEditor(makeNote(''), {
+      ...settings,
+      suggestionsEnabled: false,
+    })
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(suggest).not.toHaveBeenCalled()
+    expect(editor.onStatus).toHaveBeenLastCalledWith({
+      state: 'idle',
+      message: 'Suggestions are paused. Turn on Local suggestions to continue.',
+    })
+    editor.rerender(
+      <MarkdownEditor {...editor.props} settings={settings} ref={editor.ref} />
+    )
+    vi.mocked(suggest).mockResolvedValue({ text: '', sources: [] })
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(editor.onStatus).toHaveBeenLastCalledWith({
+      state: 'idle',
+      message:
+        'Try a new line for a writing starter, or connect a local model in Preferences.',
+    })
+  })
+
+  it('passes existing Markdown syntax context for inline and fenced code', async () => {
+    const editor = mountEditor(
+      makeNote('`some code`\n\n```js\nconst value = 1\n```')
+    )
+    for (const cursor of [5, 25]) {
+      act(() =>
+        editor.view.dispatch({ selection: EditorSelection.cursor(cursor) })
+      )
+      await act(async () => editor.ref.current?.requestSuggestion())
+      expect(vi.mocked(suggest).mock.lastCall?.[1]).toEqual(
+        expect.objectContaining({ inCode: true, cursor })
+      )
+    }
+  })
+
+  it('caps and deduplicates choices and labels their actual origins', () => {
+    expect(
+      suggestionChoices({
+        ...choices,
+        alternatives: [
+          { text: ` ${choices.text} `, sources: [] },
+          { text: '', sources: [] },
+          { text: 'A fourth choice is ignored.', sources: [] },
+        ],
+      })
+    ).toEqual([{ text: choices.text, sources: [], mode: 'starter' }])
+    expect(suggestionOrigin({ text: 'x', sources: [], mode: 'model' })).toBe(
+      'Local model'
+    )
+    expect(
+      suggestionOrigin({ text: 'x', sources: ['Current note'], mode: 'recall' })
+    ).toBe('From this note')
+  })
 })
 
 afterEach(async () => {

@@ -17,11 +17,13 @@ import {
 } from '@codemirror/view'
 import { isolateHistory } from '@codemirror/commands'
 import { syntaxTree } from '@codemirror/language'
+import type { SuggestionCandidate } from '../../types/notebook'
 
 export interface InlineSuggestion {
   at: number
   text: string
   sources: string[]
+  mode?: SuggestionCandidate['mode']
 }
 
 /** External file updates must not echo back through React's onChange. */
@@ -243,7 +245,7 @@ export const inlineSuggestionField = StateField.define<InlineSuggestion | null>(
       }
       return suggestion
     },
-    provide: field =>
+    provide: field => [
       EditorView.decorations.from(field, suggestion =>
         suggestion
           ? Decoration.set([
@@ -254,6 +256,12 @@ export const inlineSuggestionField = StateField.define<InlineSuggestion | null>(
             ])
           : Decoration.none
       ),
+      EditorView.contentAttributes.from(
+        field,
+        (suggestion): Record<string, string> =>
+          suggestion ? { 'data-suggestion-preview': 'true' } : {}
+      ),
+    ],
   }
 )
 
@@ -353,6 +361,7 @@ export function acceptInlineSuggestion(
   if (
     !suggestion ||
     view.composing ||
+    view.compositionStarted ||
     selection.ranges.length !== 1 ||
     !selection.main.empty ||
     selection.main.head !== suggestion.at
@@ -374,9 +383,7 @@ export function acceptInlineSuggestion(
     selection: EditorSelection.cursor(nextCursor),
     effects: [
       setInlineSuggestion.of(
-        remaining
-          ? { at: nextCursor, text: remaining, sources: suggestion.sources }
-          : null
+        remaining ? { ...suggestion, at: nextCursor, text: remaining } : null
       ),
       setAcceptedRange.of({ from: suggestion.at, to: nextCursor }),
     ],

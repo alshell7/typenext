@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import {
   MarkdownEditor,
+  type EditorStatus,
   type MarkdownEditorHandle,
 } from './components/notebook/MarkdownEditor'
 import { useNotebook } from './notebook/useNotebook'
@@ -58,13 +59,6 @@ import {
 import { importContextFile, importWebsite } from './services/sources'
 import type { ContextSource, Note, ProviderId } from './types/notebook'
 import './App.css'
-
-type EditorStatus = {
-  state: 'idle' | 'loading' | 'suggestion' | 'error'
-  message?: string
-  sources?: string[]
-  kind?: 'document'
-}
 
 const MAX_STORED_CONTEXT_CHARACTERS = 2_000_000
 
@@ -1001,23 +995,17 @@ function App() {
                     {!note.content && (
                       <div className="blank-page-hint">
                         <Keyboard size={14} />
-                        {hasLocalModel ||
-                        note.sources.some(source => source.enabled) ? (
+                        {settings.suggestionsEnabled ? (
                           <span>
-                            Write a thought. Pause for a local suggestion, or
-                            press <kbd>Ctrl / ⌘ Space</kbd>.
+                            {settings.autoSuggest
+                              ? 'Write a thought. Pause for a suggestion, or press '
+                              : 'Write a thought. Press '}
+                            <kbd>Ctrl / ⌘ Space</kbd> to explore a few ways
+                            forward.
                           </span>
                         ) : (
                           <span>
-                            Your page is ready. For suggestions,{' '}
-                            <button onClick={() => setContextVisible(true)}>
-                              attach a reference
-                            </button>{' '}
-                            or{' '}
-                            <button onClick={() => showPreferences('local')}>
-                              connect a local model
-                            </button>
-                            .
+                            Your page is ready. Write at your own pace.
                           </span>
                         )}
                       </div>
@@ -1045,7 +1033,7 @@ function App() {
                       {settings.suggestionsEnabled
                         ? hasLocalModel
                           ? 'Local model'
-                          : 'Local recall'
+                          : 'Local suggestions'
                         : 'Suggestions paused'}
                     </span>
                   </button>
@@ -1060,12 +1048,22 @@ function App() {
                         <span>Finding a continuation…</span>
                       </>
                     ) : status.state === 'suggestion' ? (
-                      <span className="acceptance-help">
+                      <span
+                        className={`acceptance-help${status.menuOpen ? ' choices-open' : ''}`}
+                      >
+                        {status.mode === 'starter' && 'Writing starter · '}
+                        {status.menuOpen && (
+                          <>
+                            <kbd>↑ ↓</kbd> choose ·{' '}
+                          </>
+                        )}
                         <kbd>Tab</kbd> accept
-                        <span className="word-accept-help">
-                          {' '}
-                          · <kbd>Ctrl / ⌘ →</kbd> a word
-                        </span>{' '}
+                        {!status.menuOpen && (
+                          <span className="word-accept-help">
+                            {' '}
+                            · <kbd>Ctrl / ⌘ →</kbd> a word
+                          </span>
+                        )}{' '}
                         · <kbd>Esc</kbd> dismiss
                       </span>
                     ) : status.state === 'error' &&
@@ -1351,7 +1349,7 @@ function App() {
           }
         }}
         title="Ask a model outside this device?"
-        description={`This request sends the objective, background, nearby writing, and relevant enabled-source excerpts to ${PROVIDERS[externalProvider]}. Its privacy and billing terms apply. This permission covers one suggestion.`}
+        description={`This request sends the note title, objective, background, nearby writing, and relevant enabled-source excerpts to ${PROVIDERS[externalProvider]}. Its privacy and billing terms apply. This permission covers one suggestion.`}
       >
         <div className="external-request-summary">
           <Cloud size={20} />

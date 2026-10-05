@@ -772,6 +772,9 @@ kbd {
   color: var(--ghost);
   opacity: 1;
 }
+.markdown-editor .cm-content[data-suggestion-preview='true'] .cm-placeholder {
+  display: none;
+}
 .cm-ghost-accept {
   border: 1px solid var(--line);
   color: var(--secondary);
@@ -791,6 +794,84 @@ kbd {
 }
 .cm-suggestion-accepted {
   animation: accepted-word 240ms ease-out both;
+}
+.markdown-editor .cm-tooltip.cm-suggestion-tooltip {
+  background: transparent;
+  border: 0;
+  z-index: 30;
+}
+.cm-suggestion-menu {
+  width: min(360px, calc(100vw - 24px));
+  overflow: hidden;
+  margin-top: 5px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font:
+    13px/1.5 'Source Sans Pro',
+    'Segoe UI',
+    sans-serif;
+  animation: suggestion-menu-appear 150ms ease-out both;
+}
+.cm-suggestion-options {
+  max-height: min(260px, 50dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+}
+.cm-suggestion-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.cm-suggestion-option:hover {
+  background: var(--hover);
+}
+.cm-suggestion-option[aria-selected='true'] {
+  background: var(--accent-soft);
+  box-shadow: inset 1px 0 var(--accent);
+}
+.cm-suggestion-option-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.cm-suggestion-option-origin {
+  overflow: hidden;
+  color: var(--secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cm-suggestion-menu-hint {
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+@keyframes suggestion-menu-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm-suggestion-menu {
+    animation: none;
+    transform: none;
+  }
 }
 .blank-page-hint {
   display: flex;
@@ -1853,6 +1934,14 @@ kbd {
   }
   .suggestion-message {
     justify-content: flex-end;
+  }
+  .acceptance-help {
+    white-space: normal;
+    text-align: right;
+    line-height: 1.45;
+  }
+  .acceptance-help.choices-open {
+    display: none;
   }
   .suggestion-message > button {
     font-size: 10px;

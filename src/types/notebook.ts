@@ -75,6 +75,8 @@ export interface CursorContext {
   text: string
   cursor: number
   selectionEmpty: boolean
+  /** Editor syntax can rule out starters inside a fenced or inline code span. */
+  inCode?: boolean
 }
 
 export interface RetrievedChunk {
@@ -84,8 +86,13 @@ export interface RetrievedChunk {
   score: number
 }
 
-export interface SuggestionResult {
+export interface SuggestionCandidate {
   text: string
   sources: string[]
-  mode?: 'model' | 'recall'
+  mode?: 'model' | 'recall' | 'starter'
+}
+
+export interface SuggestionResult extends SuggestionCandidate {
+  /** At most two additional distinct insertions at the same cursor. */
+  alternatives?: SuggestionCandidate[]
 }

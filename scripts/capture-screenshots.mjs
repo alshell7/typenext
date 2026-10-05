@@ -28,6 +28,7 @@ const settled = async target => {
   await target.waitForTimeout(500)
 }
 mkdirSync('docs/screenshots', { recursive: true })
+mkdirSync('artifacts/ui', { recursive: true })
 try {
   await page.goto('http://127.0.0.1:1420/')
   await page.getByRole('button', { name: 'Start a note' }).click()
@@ -67,13 +68,13 @@ try {
     'Some mornings, the work begins with making a little space. A clear desk. A quiet page. Enough time to follow a thought without asking it to become something useful straight away.\n\n## A quieter kind of tool\n\nI keep returning to the same question: what would it feel like if our tools helped us stay with an idea, instead of pulling us away from it?\n\nThere is a difference between being offered a thought and being given room to finish your own. I want the second kind of help. Something small, at the moment I need it.\n\nThe best tools leave room for'
   )
   await editor.press('Control+End')
-  await editor.press('Control+Space')
+  await editor.press('Space')
   await page.locator('.cm-ghost-suggestion').waitFor({ state: 'visible' })
   await settled(page)
   await page.screenshot({ path: 'docs/screenshots/writing-light.png' })
   await page.getByRole('button', { name: 'Toggle light and dark mode' }).click()
   await editor.focus()
-  await editor.press('Control+Space')
+  await editor.press('Backspace')
   await page.locator('.cm-ghost-suggestion').waitFor({ state: 'visible' })
   await settled(page)
   await page.screenshot({ path: 'docs/screenshots/writing-dark.png' })
@@ -158,6 +159,45 @@ try {
   await settled(mobile)
   await mobile.screenshot({ path: 'docs/screenshots/palette-narrow.png' })
   await mobileContext.close()
+  for (const [name, viewport] of [
+    ['suggestions-dark', { width: 1440, height: 960 }],
+    ['suggestions-narrow', { width: 390, height: 844 }],
+  ]) {
+    const suggestionContext = await browser.newContext({
+      viewport,
+      colorScheme: 'dark',
+    })
+    const suggestionPage = await suggestionContext.newPage()
+    await suggestionPage.goto('http://127.0.0.1:1420/')
+    await suggestionPage.getByRole('button', { name: 'Start a note' }).click()
+    await suggestionPage
+      .getByLabel('Title', { exact: true })
+      .fill('A slower morning')
+    await suggestionPage.getByRole('button', { name: 'Create note' }).click()
+    const writing = suggestionPage.getByRole('textbox', {
+      name: 'Note content',
+    })
+    await writing.fill(
+      'Some mornings, it helps to leave a little room for a thought to find its shape.\n\nI want to'
+    )
+    await writing.press('Control+End')
+    await writing.press('Control+Space')
+    await suggestionPage
+      .getByRole('listbox', { name: 'Suggestions', exact: true })
+      .waitFor()
+    await settled(suggestionPage)
+    await suggestionPage.screenshot({ path: `docs/screenshots/${name}.png` })
+    if (name === 'suggestions-narrow') {
+      await writing.press('Escape')
+      await writing.press('Space')
+      await suggestionPage.locator('.cm-ghost-suggestion').waitFor()
+      await settled(suggestionPage)
+      await suggestionPage.screenshot({
+        path: 'artifacts/ui/suggestions-inline-narrow.png',
+      })
+    }
+    await suggestionContext.close()
+  }
   console.log(
     'Saved real app screenshots using synthetic writing in docs/screenshots.'
   )

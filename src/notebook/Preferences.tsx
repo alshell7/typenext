@@ -443,8 +443,9 @@ export function Preferences({
               <ShieldCheck size={18} />
               <p>
                 Everyday suggestions stay on this device. With no model
-                connected, local recall can complete a phrase found in your
-                attached sources.
+                connected, TypeNext offers short writing starters and recalls
+                phrases from your writing or references. Attachments are
+                optional.
               </p>
             </div>
             <label className="setting-row">
@@ -464,7 +465,7 @@ export function Preferences({
             <label className="setting-row">
               <span>
                 <strong>Suggest after a pause</strong>
-                <small>You can always ask with Ctrl / ⌘ Space.</small>
+                <small>Use Ctrl / ⌘ Space to choose a continuation.</small>
               </span>
               <input
                 type="checkbox"

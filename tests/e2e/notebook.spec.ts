@@ -359,7 +359,7 @@ test('attached text controls exact private recall, word acceptance, Tab, undo, a
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-suggestion')).toHaveCount(0)
   await expect(page.locator('.suggestion-message')).toContainText(
-    'Attach reference material'
+    'Try a new line'
   )
   await panel
     .getByRole('checkbox', {
@@ -425,7 +425,7 @@ test('exact local recall withholds a sentence before an unrelated lowercase suff
   await cursorAt(content, prefix.length)
   await requestLocal(page)
   await expect(page.locator('.suggestion-message')).toContainText(
-    'Attach reference material'
+    'Try a new line'
   )
   await expect(page.locator('.cm-ghost-suggestion')).toHaveCount(0)
   await expect(content).toHaveText(original)
@@ -1835,7 +1835,7 @@ test('another note provides live private context that follows edits, persists as
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-suggestion')).toHaveCount(0)
   await expect(page.locator('.suggestion-message')).toContainText(
-    'Attach reference material'
+    'Try a new line'
   )
   await reloadedInclusion.check()
   await content.press('Control+End')

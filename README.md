@@ -11,6 +11,7 @@ TypeNext gives you a quiet page, a small notebook of tabs, and context close to 
 - Create a note with a title and a little background. Set an objective, or let the first line of the note provide it.
 - Attach multiple text, Markdown, searchable PDF, DOCX, or website references. Use another note as live context; its edits follow the link without copying its text. Preview and include only the references you want.
 - Accept a continuation with **Tab**, accept a word with **Ctrl/Command + Right**, or dismiss it with **Escape**. Accepted text can be undone normally.
+- Press **Ctrl/Command + Space** for a small menu at the cursor. Use the arrow keys to preview a choice, then Enter or Tab to accept. Suggestions also work without attached references.
 - Keep recent notes, switch tabs, use focus mode, and autosave locally. Open and save ordinary Markdown files.
 - Choose light, dark, or system appearance. Start with paper or neutral graphite, choose a curated palette, or set your own page, sidebar, and accent colours. Change the writing typeface and size.
 
@@ -29,11 +30,13 @@ Autosave keeps a recoverable previous version and saves during continuous typing
 
 ![Choosing light and dark colour palettes](docs/screenshots/palette-presets.png)
 
+![Choosing an offline writing starter without attached references](docs/screenshots/suggestions-dark.png)
+
 </details>
 
 ## Suggestions and privacy
 
-Ordinary suggestions stay on your device. With no model connected, **local recall** can complete a matching phrase from enabled references or earlier writing. It is conservative: it repeats relevant existing language and leaves the page alone when there is no match.
+Ordinary suggestions stay on your device. With no model connected, **local recall** can complete a matching phrase from enabled references or earlier writing. When there is no matching phrase, **writing starters** offer short, optional English prompts using the note's own context. These lightweight starters are labelled separately from model-generated continuations; they do not invent facts. Attached references are optional.
 
 For new wording, connect a local instruction model through LM Studio, Jan, Lemonade, or llama.cpp in **Preferences → Local suggestions**. TypeNext retrieves relevant passages with BM25 and sends a bounded objective, background, and cursor prefix/suffix to that local server. Native llama.cpp FIM is available for models trained for infill.
 
