@@ -8,6 +8,7 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
+import { assertEmbeddedWindowsIcon, assertMacIcon } from './native-icons.mjs'
 import {
   ROOT,
   assertBinaryArchitecture,
@@ -84,6 +85,10 @@ async function add(source, name, role) {
 if (info.os === 'win32') {
   const executable = join(release, 'typenext.exe')
   await assertBinaryArchitecture(executable, target)
+  await assertEmbeddedWindowsIcon(
+    executable,
+    join(ROOT, 'src-tauri/icons/icon.ico')
+  )
   await copyFile(executable, join(payload, 'TypeNext.exe'))
   await writeFile(
     join(payload, 'START-HERE.txt'),
@@ -92,6 +97,10 @@ if (info.os === 'win32') {
   const installer = await bundleFile(join(release, 'bundle/nsis'), '.exe')
   // NSIS commonly uses an i386 launcher even for a verified x64 application.
   await assertInstallerContainer(installer)
+  await assertEmbeddedWindowsIcon(
+    installer,
+    join(ROOT, 'src-tauri/icons/icon.ico')
+  )
   await add(installer, `${prefix}_setup.exe`, 'installer-exe')
   await add(
     await bundleFile(join(release, 'bundle/msi'), '.msi'),
@@ -109,6 +118,10 @@ if (info.os === 'win32') {
   const app = join(release, 'bundle/macos/TypeNext.app')
   const executable = join(app, 'Contents/MacOS/typenext')
   await assertBinaryArchitecture(executable, target)
+  await assertMacIcon(
+    join(app, 'Contents/Resources/icon.icns'),
+    join(ROOT, 'src-tauri/icons/icon.icns')
+  )
   const bundleVersion = execFileSync(
     '/usr/libexec/PlistBuddy',
     [

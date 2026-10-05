@@ -34,6 +34,17 @@ const config = JSON.parse(
 for (const file of config.bundle.icon)
   if (!Object.hasOwn(manifest.icons, `src-tauri/${file}`))
     fail(`Unverified bundle icon: ${file}`)
+if (
+  config.bundle.windows?.nsis?.installerIcon !== 'icons/icon.ico' ||
+  config.bundle.windows?.nsis?.installerHooks !== 'icons/nsis-branding.nsh'
+)
+  fail('Windows installer and uninstaller must explicitly use the shared icon.')
+const nsisBranding = await readFile(
+  new URL('src-tauri/icons/nsis-branding.nsh', root),
+  'utf8'
+)
+if (!nsisBranding.includes('!define MUI_UNICON "${__FILEDIR__}\\icon.ico"'))
+  fail('The NSIS uninstaller must select the canonical icon beside its hook.')
 for (const [file, expected] of Object.entries(manifest.icons)) {
   if (!/^src-tauri\/icons\/[\w@.]+$/u.test(file))
     fail('Invalid icon manifest path.')

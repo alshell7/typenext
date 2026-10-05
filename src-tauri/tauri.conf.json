@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TypeNext",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.typenext.ai",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -54,6 +54,12 @@
     "shortDescription": "Your thoughts, with a little room to keep going.",
     "longDescription": "A local-first Markdown notepad for Windows, macOS and Linux. Write in your own voice with short, optional suggestions grounded in your objective and context.",
     "copyright": "Copyright © TypeNext contributors. MIT.",
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "icons/nsis-branding.nsh"
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "10.15",
       "entitlements": "Entitlements.plist"

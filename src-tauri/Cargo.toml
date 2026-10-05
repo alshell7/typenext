@@ -1,6 +1,6 @@
 [package]
 name = "typenext"
-version = "0.1.1"
+version = "0.1.2"
 description = "A calm, local-first Markdown notepad with contextual suggestions"
 authors = ["TypeNext contributors"]
 license = "MIT"

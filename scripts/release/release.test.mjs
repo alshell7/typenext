@@ -16,6 +16,7 @@ import {
   releaseVersion,
 } from './lib.mjs'
 import { collectNativeNotices } from './collect-rust-notices.mjs'
+import { publishRelease, selectDraftRelease } from './publish.mjs'
 
 const tag = 'v0.1.0',
   commit = 'a'.repeat(40),
@@ -42,6 +43,239 @@ function manifests() {
     })),
   }))
 }
+
+async function publisherFixture(t, { existing = true, afterUpload } = {}) {
+  const directory = await temporary(t)
+  const assets = [
+    ...assertManifestSet(manifests(), { tag, commit }),
+    { name: 'SHA256SUMS.txt', role: 'checksums' },
+  ]
+  for (const asset of assets) {
+    const body = `Synthetic release fixture: ${asset.name}`
+    await writeFile(join(directory, asset.name), body)
+    asset.bytes = Buffer.byteLength(body)
+    asset.sha256 = digest(body)
+  }
+  await writeFile(
+    join(directory, 'verified-assets.json'),
+    JSON.stringify({ schema: 1, tag, commit, assets })
+  )
+  const state = {
+    release: existing
+      ? { id: 404133245, tag_name: tag, draft: true, assets: [] }
+      : null,
+    remoteCommit: commit,
+    calls: [],
+  }
+  const gh = args => {
+    state.calls.push(args)
+    const [command, path] = args
+    if (command === 'api') {
+      if (path === 'repos/example/typenext/git/ref/tags/' + tag)
+        return JSON.stringify({
+          object: { type: 'commit', sha: state.remoteCommit },
+        })
+      if (path === 'repos/example/typenext/releases?per_page=100') {
+        assert.deepEqual(args.slice(2), ['--paginate', '--slurp'])
+        return JSON.stringify([
+          [{ id: 12, tag_name: 'v0.0.1', draft: false, assets: [] }],
+          state.release ? [state.release] : [],
+        ])
+      }
+      if (path === 'repos/example/typenext/releases/404133245') {
+        if (args.includes('PATCH')) {
+          assert.deepEqual(args.slice(2), [
+            '--method',
+            'PATCH',
+            '--field',
+            'draft=false',
+            '--raw-field',
+            'make_latest=true',
+          ])
+          state.release.draft = false
+        }
+        return JSON.stringify(state.release)
+      }
+    }
+    if (command === 'release' && path === 'create') {
+      assert.equal(state.release, null)
+      assert.ok(args.includes('--draft'))
+      assert.ok(args.includes('--verify-tag'))
+      state.release = { id: 404133245, tag_name: tag, draft: true, assets: [] }
+      return ''
+    }
+    if (command === 'release' && path === 'upload') {
+      assert.equal(state.release.draft, true)
+      for (const asset of assets)
+        assert.ok(args.includes(join(directory, asset.name)))
+      state.release.assets = assets.map(asset => ({
+        name: asset.name,
+        size: asset.bytes,
+        digest: `sha256:${asset.sha256}`,
+        state: 'uploaded',
+      }))
+      afterUpload?.(state)
+      return ''
+    }
+    throw new Error(`Unexpected fixture command: ${args.join(' ')}`)
+  }
+  return {
+    assets,
+    directory,
+    state,
+    options: {
+      tag,
+      commit,
+      repository: 'example/typenext',
+      token: 'synthetic-test-token',
+      directory,
+      gh,
+    },
+  }
+}
+
+test('an authenticated paginated draft is resumed, verified and published by the same numeric ID', async t => {
+  const fixture = await publisherFixture(t)
+  assert.equal(await publishRelease(fixture.options), 404133245)
+  assert.equal(fixture.state.release.draft, false)
+  assert.equal(fixture.state.release.assets.length, 8)
+  assert.equal(
+    fixture.state.calls.filter(
+      args => args[0] === 'release' && args[1] === 'create'
+    ).length,
+    0
+  )
+  assert.equal(
+    fixture.state.calls.filter(
+      args => args[0] === 'release' && args[1] === 'upload'
+    ).length,
+    1
+  )
+  assert.equal(
+    fixture.state.calls.some(args =>
+      String(args[1]).includes('/releases/tags/')
+    ),
+    false
+  )
+  assert.ok(fixture.state.calls.at(-1).includes('PATCH'))
+  assert.equal(
+    fixture.state.calls.at(-2)[1],
+    `repos/example/typenext/git/ref/tags/${tag}`
+  )
+})
+
+test('a first publication creates one private draft then discovers its ID without a by-tag read', async t => {
+  const fixture = await publisherFixture(t, { existing: false })
+  assert.equal(await publishRelease(fixture.options), 404133245)
+  assert.equal(
+    fixture.state.calls.filter(args => args[1] === 'create').length,
+    1
+  )
+  assert.equal(
+    fixture.state.calls.filter(args => args.includes('PATCH')).length,
+    1
+  )
+})
+
+test('draft discovery refuses ambiguous, public and malformed releases', () => {
+  const draft = { id: 404133245, tag_name: tag, draft: true, assets: [] }
+  assert.equal(selectDraftRelease([[], [draft]], tag), draft)
+  assert.equal(selectDraftRelease([[]], tag), null)
+  for (const pages of [
+    null,
+    [draft],
+    [[draft, { ...draft, id: 404133246 }]],
+    [[{ ...draft, draft: false }]],
+    [[{ ...draft, id: '404133245' }]],
+    [[{ ...draft, id: 0 }]],
+    [[{ ...draft, assets: undefined }]],
+  ])
+    assert.throws(() => selectDraftRelease(pages, tag))
+})
+
+test('a published release or manually added draft asset is never changed', async t => {
+  for (const scenario of ['public', 'unexpected-asset']) {
+    const fixture = await publisherFixture(t)
+    if (scenario === 'public') fixture.state.release.draft = false
+    else fixture.state.release.assets.push({ name: 'manual-extra.zip' })
+    await assert.rejects(
+      publishRelease(fixture.options),
+      /already public|unexpected assets/u
+    )
+    assert.equal(
+      fixture.state.calls.some(
+        args => args[0] === 'release' || args.includes('PATCH')
+      ),
+      false
+    )
+  }
+})
+
+test('changed local release bytes fail before any GitHub operation', async t => {
+  const fixture = await publisherFixture(t)
+  await writeFile(join(fixture.directory, fixture.assets[0].name), 'Changed')
+  await assert.rejects(
+    publishRelease(fixture.options),
+    /changed after validation/u
+  )
+  assert.deepEqual(fixture.state.calls, [])
+})
+
+test('remote hash, upload, identity and tag drift leave the draft private', async t => {
+  for (const change of [
+    state => {
+      state.release.assets[0].digest = null
+    },
+    state => {
+      state.release.assets[0].size++
+    },
+    state => {
+      state.release.assets[0].state = 'new'
+    },
+    state => {
+      state.release.assets.pop()
+    },
+    state => {
+      state.release.id++
+    },
+    state => {
+      state.release.tag_name = 'v0.1.1'
+    },
+    state => {
+      state.remoteCommit = 'f'.repeat(40)
+    },
+    state => {
+      state.release.draft = false
+    },
+  ]) {
+    const fixture = await publisherFixture(t, { afterUpload: change })
+    await assert.rejects(publishRelease(fixture.options))
+    assert.equal(
+      fixture.state.calls.some(args => args.includes('PATCH')),
+      false
+    )
+  }
+})
+
+test('release-list authentication failures are not mistaken for an absent draft', async t => {
+  const fixture = await publisherFixture(t)
+  const gh = fixture.options.gh
+  fixture.options.gh = args => {
+    if (args[1] === 'repos/example/typenext/releases?per_page=100')
+      throw new Error('Synthetic authenticated list failure')
+    return gh(args)
+  }
+  await assert.rejects(
+    publishRelease(fixture.options),
+    /authenticated list failure/u
+  )
+  assert.equal(
+    fixture.state.calls.some(
+      args => args[0] === 'release' || args.includes('PATCH')
+    ),
+    false
+  )
+})
 test('only explicit stable semantic version tags are accepted', () => {
   assert.equal(releaseVersion(tag), '0.1.0')
   for (const value of [
