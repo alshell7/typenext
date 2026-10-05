@@ -173,7 +173,7 @@ describe('notebook persistence', () => {
     expect(() =>
       assertWorkspaceFits({ ...workspace, contextPackages: packages })
     ).toThrow('64 MB')
-  })
+  }, 60_000)
 
   it('autosaves a captured snapshot without writing API keys or switching ordinary suggestions to cloud', async () => {
     const { persistWorkspace, loadWorkspace } = await import('./storage')

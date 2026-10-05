@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "auditedAt": "2026-10-06",
   "lockfile": "package-lock.json",
-  "lockfileSha256": "3827f7b12dc64abf33c414394f20d1e9cdf702512f81fef6fab75d829676f74e",
+  "lockfileSha256": "a6e23535fc7ea3099ef5c3413bba225991a805c49917f032c2927febbecae98b",
   "scope": "Installed non-dev npm packages, including conservative notices for supporting/Node-only packages. TypeNext ships a browser/Tauri frontend, not Node, sharp/libvips, onnxruntime-node or native canvas binaries. Models download separately.",
   "packages": [
     {

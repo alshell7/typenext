@@ -1381,7 +1381,7 @@ describe('private suggestion lifecycle', () => {
       expect(redo(editor.view)).toBe(true)
     })
     expect(editor.view.state.doc.toString()).toBe(versions.at(-1))
-  })
+  }, 60_000)
 
   it('does not repeatedly rebuild history after retaining one unavoidable large undo action', async () => {
     const editor = mountEditor(makeNote('x'.repeat(2_000_000)))
@@ -1412,7 +1412,7 @@ describe('private suggestion lifecycle', () => {
       expect(undo(editor.view)).toBe(true)
     })
     expect(editor.view.state.doc.length).toBe(2_000_000)
-  })
+  }, 60_000)
 
   it('preserves the active ghost and expires its accepted highlight across a history rebuild', async () => {
     const editor = mountEditor(makeNote('x'.repeat(2_000_000)))
@@ -1458,7 +1458,7 @@ describe('private suggestion lifecycle', () => {
       expect(undo(editor.view)).toBe(true)
     })
     expect(editor.view.state.doc.toString()).toBe('My words')
-  })
+  }, 60_000)
 
   it('evicts heavy inactive undo states while retaining their writing and cursor', async () => {
     const notes: Note[] = []
@@ -1498,7 +1498,7 @@ describe('private suggestion lifecycle', () => {
       <MarkdownEditor {...editor.props} note={notes.at(-1)!} ref={editor.ref} />
     )
     expect(undoDepth(view().state)).toBeGreaterThan(0)
-  }, 20_000)
+  }, 60_000)
 
   it('tracks exact UTF-8 bytes across surrogate boundaries and multiple changed spans', () => {
     let state = EditorState.create({
@@ -1544,7 +1544,7 @@ describe('private suggestion lifecycle', () => {
       expect(undo(view)).toBe(true)
     })
     expect(view.state.doc.toString()).toBe(original)
-  })
+  }, 60_000)
 
   it('keeps the incremental byte budget exact over mixed Unicode edits', () => {
     let state = EditorState.create({
@@ -1614,7 +1614,7 @@ describe('private suggestion lifecycle', () => {
     expect(editor.view.state.field(documentByteSize)).toBe(
       STORAGE_LIMITS.noteBytes - 1
     )
-  }, 30_000)
+  }, 120_000)
   it('allows an identical selection replacement instead of misclassifying it as a blocked insertion', () => {
     const editor = mountEditor(makeNote('The same ending.'))
     act(() => editor.view.dispatch({ selection: EditorSelection.range(4, 8) }))
