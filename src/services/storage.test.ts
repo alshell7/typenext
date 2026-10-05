@@ -474,3 +474,88 @@ describe('notebook persistence', () => {
     }
   )
 })
+
+describe('context library and explicit engine preferences', () => {
+  it('stores one canonical source, empty note references, all provider profiles and intentional continuous mode', async () => {
+    const { persistWorkspace, loadWorkspace } = await import('./storage')
+    const workspace = openNote(emptyWorkspace(), newNote('Draft'))
+    const source = {
+      id: 'reference',
+      name: 'Research.txt',
+      kind: 'text' as const,
+      text: 'Shared reference only stored once',
+      enabled: true,
+      addedAt: 1,
+      folder: 'Research/Ideas',
+    }
+    workspace.contextLibrary = [source]
+    workspace.notes[0]!.sources = [{ ...source, libraryId: source.id }]
+    workspace.settings = {
+      ...workspace.settings,
+      provider: 'openai',
+      externalAutoEnabled: true,
+      suggestionInstructions: 'Preserve my voice.',
+      localEngine: 'embedded',
+    }
+    workspace.settings.profiles.openai = {
+      ...workspace.settings.profiles.openai,
+      model: 'writer-a',
+      savedModels: ['writer-a', 'writer-b'],
+    }
+    workspace.settings.palette.dark = 'black'
+    await persistWorkspace(workspace)
+    const restored = await loadWorkspace()
+    expect(restored?.contextLibrary).toEqual([source])
+    expect(restored?.notes[0]?.sources[0]?.text).toBe('')
+    expect(restored?.notes[0]?.sources[0]?.libraryId).toBe('reference')
+    expect(restored?.settings).toMatchObject({
+      provider: 'openai',
+      externalAutoEnabled: true,
+      suggestionInstructions: 'Preserve my voice.',
+      localEngine: 'embedded',
+      palette: { dark: 'black' },
+    })
+    expect(restored?.settings.profiles.openai.savedModels).toEqual([
+      'writer-a',
+      'writer-b',
+    ])
+    const raw = localStorage.getItem('typenext.workspace.v1')!
+    expect(raw.split(source.text)).toHaveLength(2)
+  })
+  it('rejects nested or duplicate library entries and oversized instructions before saving', async () => {
+    const { validateWorkspace } = await import('./storage')
+    const workspace = emptyWorkspace()
+    const source = {
+      id: 'one',
+      name: 'Source',
+      kind: 'text' as const,
+      text: 'Words',
+      enabled: true,
+      addedAt: 1,
+    }
+    expect(() =>
+      validateWorkspace({ ...workspace, contextLibrary: [source, source] })
+    ).toThrow()
+    expect(() =>
+      validateWorkspace({
+        ...workspace,
+        contextLibrary: [{ ...source, libraryId: 'other' }],
+      })
+    ).toThrow()
+    expect(() =>
+      validateWorkspace({
+        ...workspace,
+        settings: {
+          ...workspace.settings,
+          suggestionInstructions: 'x'.repeat(8001),
+        },
+      })
+    ).toThrow()
+    expect(() =>
+      validateWorkspace({
+        ...workspace,
+        settings: { ...workspace.settings, externalAutoEnabled: 'yes' },
+      })
+    ).toThrow()
+  })
+})

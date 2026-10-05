@@ -16,9 +16,12 @@ const choices = {
     { id: 'paper', name: 'Paper', colors: LIGHT_PALETTES.paper },
     { id: 'linen', name: 'Linen', colors: LIGHT_PALETTES.linen },
     { id: 'mist', name: 'Mist', colors: LIGHT_PALETTES.mist },
+    { id: 'contrast', name: 'Light contrast', colors: LIGHT_PALETTES.contrast },
   ],
   dark: [
     { id: 'graphite', name: 'Graphite', colors: DARK_PALETTES.graphite },
+    { id: 'black', name: 'Pure black', colors: DARK_PALETTES.black },
+    { id: 'contrast', name: 'Dark contrast', colors: DARK_PALETTES.contrast },
     { id: 'midnight', name: 'Midnight', colors: DARK_PALETTES.midnight },
     { id: 'forest', name: 'Forest', colors: DARK_PALETTES.forest },
   ],
@@ -141,7 +144,6 @@ function PaletteGroup({
   const choose = (palette: NotebookSettings['palette'][Appearance]) =>
     onChange({
       ...settings,
-      provider: 'local',
       theme: appearance,
       palette: { ...settings.palette, [appearance]: palette },
     })
@@ -186,7 +188,6 @@ function PaletteGroup({
                 onChange={value =>
                   onChange({
                     ...settings,
-                    provider: 'local',
                     theme: appearance,
                     palette: {
                       ...settings.palette,

@@ -8,11 +8,16 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { getSecret, isDesktop, setSecret } from '../services/native'
-import { testProvider } from '../services/completion'
+import {
+  testProvider,
+  getProviderModels,
+  type ProviderModel,
+} from '../services/completion'
 import type { NotebookSettings, ProviderId } from '../types/notebook'
 import { FONTS, PROVIDERS } from './model'
 import { Modal } from './Modal'
 import { PalettePicker } from './PalettePicker'
+import { BuiltinModelPanel } from './BuiltinModelPanel'
 
 export type PreferencePane = 'writing' | 'local' | 'external'
 
@@ -110,19 +115,47 @@ function Connection({
   onChange(settings: NotebookSettings): void
 }) {
   const profile = settings.profiles[provider]
-  const [models, setModels] = useState<string[]>([])
+  const [models, setModels] = useState<ProviderModel[]>([])
+  const [freeOnly, setFreeOnly] = useState(true)
+  const request = useRef<AbortController | null>(null)
+  useEffect(() => {
+    request.current?.abort()
+    request.current = null
+    setTesting(false)
+    setModels([])
+    setStatus('')
+    return () => {
+      request.current?.abort()
+      request.current = null
+    }
+  }, [provider, profile.endpoint])
   const [status, setStatus] = useState('')
   const [testing, setTesting] = useState(false)
   const update = (patch: Partial<typeof profile>) =>
     onChange({
       ...settings,
+      ...(provider === 'local' && patch.model?.trim()
+        ? { localEngine: 'server' as const }
+        : {}),
       profiles: { ...settings.profiles, [provider]: { ...profile, ...patch } },
     })
   const test = async () => {
     setTesting(true)
     setStatus('')
+    request.current?.abort()
+    const controller = new AbortController()
+    request.current = controller
     try {
-      const available = await testProvider({ ...settings, provider })
+      const available =
+        provider === 'local' || provider === 'custom'
+          ? (
+              await testProvider({ ...settings, provider }, controller.signal)
+            ).map(id => ({
+              id,
+              name: id,
+            }))
+          : await getProviderModels(provider, profile, controller.signal)
+      if (request.current !== controller || controller.signal.aborted) return
       setModels(available)
       setStatus(
         available.length
@@ -130,9 +163,13 @@ function Connection({
           : 'Connection is ready.'
       )
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error))
+      if (request.current === controller && !controller.signal.aborted)
+        setStatus(error instanceof Error ? error.message : String(error))
     } finally {
-      setTesting(false)
+      if (request.current === controller) {
+        request.current = null
+        setTesting(false)
+      }
     }
   }
   return (
@@ -182,14 +219,54 @@ function Connection({
         }
       />
       <datalist id={`models-${provider}`}>
-        {models.map(model => (
-          <option value={model} key={model} />
-        ))}
+        {models
+          .filter(model => provider !== 'openrouter' || !freeOnly || model.free)
+          .map(model => (
+            <option value={model.id} key={model.id}>
+              {model.name}
+            </option>
+          ))}
       </datalist>
+      {provider === 'openrouter' && (
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={freeOnly}
+            onChange={event => setFreeOnly(event.target.checked)}
+          />{' '}
+          Show free models in the model list
+        </label>
+      )}
+      <div className="saved-models">
+        {(profile.savedModels ?? []).map(model => (
+          <button
+            key={model}
+            className={profile.model === model ? 'selected' : ''}
+            onClick={() => update({ model })}
+          >
+            {model}
+          </button>
+        ))}
+        <button
+          disabled={!profile.model.trim()}
+          onClick={() =>
+            update({
+              savedModels: [
+                ...new Set([
+                  profile.model.trim(),
+                  ...(profile.savedModels ?? []),
+                ]),
+              ].slice(0, 32),
+            })
+          }
+        >
+          Save this model
+        </button>
+      </div>
       <p className="field-help">
         {provider === 'local'
           ? 'Start your local server, test the connection, then choose a loaded model. A small instruction model is a good starting point.'
-          : 'Use the identifier supported by your account. Each external suggestion is requested separately.'}
+          : 'Use the identifier supported by your account. Configure every provider here; your keys and saved models remain available when you switch.'}
       </p>
       <KeyField
         key={provider}
@@ -239,7 +316,11 @@ function Connection({
           ) : (
             <Monitor size={15} />
           )}{' '}
-          {testing ? 'Connecting…' : 'Test connection'}
+          {testing
+            ? 'Connecting…'
+            : provider === 'local' || provider === 'custom'
+              ? 'Test connection'
+              : 'Load available models'}
         </button>
         <p role="status">{status}</p>
       </div>
@@ -267,8 +348,10 @@ export function Preferences({
     local: null,
     external: null,
   })
+  const latestSettings = useRef(settings)
+  latestSettings.current = settings
   const update = (patch: Partial<NotebookSettings>) =>
-    onChange({ ...settings, ...patch, provider: 'local' })
+    onChange({ ...latestSettings.current, ...patch })
   return (
     <Modal
       open={open}
@@ -534,6 +617,58 @@ export function Preferences({
               <span>Stay close</span>
               <span>Explore a little</span>
             </div>
+            <h3 className="form-section-title">Suggestion instructions</h3>
+            <label className="field-label" htmlFor="suggestion-instructions">
+              How should the model continue your writing?
+            </label>
+            <textarea
+              id="suggestion-instructions"
+              rows={4}
+              maxLength={2000}
+              value={settings.suggestionInstructions}
+              onChange={event =>
+                update({ suggestionInstructions: event.target.value })
+              }
+              placeholder="Keep my voice. Prefer concrete language. For a few words, finish the phrase; for a line, add one concise sentence."
+            />
+            <p className="field-help">
+              Applied to local and external models with the chosen suggestion
+              length. These instructions never change your text by themselves.
+            </p>
+            <BuiltinModelPanel
+              active={
+                settings.localEngine === 'embedded' &&
+                settings.provider === 'local'
+              }
+              onUse={() =>
+                update({
+                  localEngine: 'embedded',
+                  provider: 'local',
+                  externalAutoEnabled: false,
+                })
+              }
+              onDisable={() => update({ localEngine: 'recall' })}
+            />
+            <h3 className="form-section-title">Local engine</h3>
+            <label className="field-label" htmlFor="local-engine">
+              Use on this device
+            </label>
+            <select
+              id="local-engine"
+              value={settings.localEngine}
+              onChange={event =>
+                update({
+                  localEngine: event.target
+                    .value as NotebookSettings['localEngine'],
+                })
+              }
+            >
+              <option value="recall">
+                Writing starters & reference recall
+              </option>
+              <option value="embedded">Downloaded model inside TypeNext</option>
+              <option value="server">Connect a local server</option>
+            </select>
             <h3 className="form-section-title">Connect a local model</h3>
             <Connection
               provider="local"
@@ -558,13 +693,30 @@ export function Preferences({
             <div className="privacy-note">
               <ShieldCheck size={18} />
               <p>
-                External models are optional. TypeNext asks before sending
-                nearby writing, the objective, and relevant context. Automatic
-                suggestions always stay local.
+                Configure providers independently, then choose a model beside
+                the editor. Enabling an external model keeps it active for
+                automatic and manual suggestions until you switch back to local.
               </p>
             </div>
+            <label className="field-label" htmlFor="external-instructions">
+              Suggestion instructions
+            </label>
+            <textarea
+              id="external-instructions"
+              rows={3}
+              maxLength={2000}
+              value={settings.suggestionInstructions}
+              onChange={event =>
+                update({ suggestionInstructions: event.target.value })
+              }
+              placeholder="Keep my voice. Suggest only a few words or one concise line."
+            />
+            <p className="field-help">
+              Applies to every model. Choose a few words or a sentence in Local
+              suggestions.
+            </p>
             <label className="field-label" htmlFor="external-provider">
-              Provider for an explicit external suggestion
+              Configure provider
             </label>
             <select
               id="external-provider"

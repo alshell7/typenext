@@ -35,3 +35,10 @@ CREDENTIALS.txt
 *.njsproj
 *.sln
 *.sw?
+
+# Generated from the pinned local inference runtime dependency
+public/runtime/builtin/
+
+# Python training helpers
+__pycache__/
+*.pyc

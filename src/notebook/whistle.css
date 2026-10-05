@@ -1,0 +1,115 @@
+.whistle-model {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.whistle-model-heading,
+.whistle-model-actions,
+.dictation-action-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.whistle-model-heading {
+  justify-content: space-between;
+}
+.whistle-model h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.whistle-model > p {
+  margin: 9px 0 13px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--secondary);
+}
+.whistle-model-state,
+.dictation-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.whistle-model .whistle-model-message {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.whistle-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.whistle-progress progress {
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  accent-color: var(--accent);
+}
+.dictation-controls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px 0 16px;
+}
+.dictation-controls select {
+  min-width: 185px;
+}
+.dictation-time {
+  padding-bottom: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dictation-time.is-recording {
+  color: var(--error);
+}
+.dictation-preview {
+  margin-top: 22px;
+}
+.dictation-preview textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 140px;
+  max-height: 320px;
+  line-height: 1.65;
+}
+.dictation-privacy {
+  margin: 17px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.dictation-model-details {
+  margin-top: 16px;
+  color: var(--secondary);
+  font-size: 12px;
+}
+.dictation-model-details summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.dictation-model-details .whistle-model {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+@media (max-width: 480px) {
+  .dictation-controls {
+    gap: 10px;
+  }
+  .dictation-controls select {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .dictation-action-row .button {
+    flex-shrink: 0;
+  }
+}

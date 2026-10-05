@@ -1,4 +1,5 @@
 import type { Note, NotebookSettings, Workspace } from '../types/notebook'
+import { migrateContextLibrary } from './context-library'
 
 export const FONTS = [
   { name: 'Merriweather', family: "'Merriweather', Georgia, serif" },
@@ -43,6 +44,9 @@ export function defaultSettings(): NotebookSettings {
     maxTokens: 64,
     suggestionLength: 'adaptive',
     provider: 'local',
+    externalAutoEnabled: false,
+    suggestionInstructions: '',
+    localEngine: 'recall',
     externalProvider: 'openrouter',
     websiteImporter: 'direct',
     profiles: {
@@ -75,6 +79,7 @@ export function emptyWorkspace(): Workspace {
   return {
     version: 1,
     notes: [],
+    contextLibrary: [],
     openNoteIds: [],
     activeNoteId: null,
     settings: defaultSettings(),
@@ -86,7 +91,12 @@ export function normalizeWorkspace(value: Workspace): Workspace {
   const settings = {
     ...defaults,
     ...value.settings,
-    provider: 'local' as const,
+    provider: value.settings?.externalAutoEnabled
+      ? value.settings.provider
+      : ('local' as const),
+    localEngine:
+      value.settings?.localEngine ??
+      (value.settings?.profiles?.local?.model ? 'server' : 'recall'),
     profiles: { ...defaults.profiles, ...value.settings?.profiles },
   }
   settings.fontSize = Math.min(
@@ -103,12 +113,14 @@ export function normalizeWorkspace(value: Workspace): Workspace {
       context: note.context ?? '',
       objective: note.objective ?? '',
     }))
+  const migrated = migrateContextLibrary(notes, value.contextLibrary)
   const ids = new Set(notes.map(note => note.id))
   const openNoteIds = [...new Set(value.openNoteIds)].filter(id => ids.has(id))
   return {
     ...value,
     version: 1,
-    notes,
+    notes: migrated.notes,
+    contextLibrary: migrated.library,
     openNoteIds,
     activeNoteId:
       value.activeNoteId && openNoteIds.includes(value.activeNoteId)

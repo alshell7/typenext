@@ -5,16 +5,22 @@ import {
   Globe,
   Link,
   LoaderCircle,
+  LibraryBig,
   Notebook,
   Paperclip,
   ShieldCheck,
+  Search,
   Upload,
   X,
 } from 'lucide-react'
-import type { Note } from '../types/notebook'
+import type { ContextSource, Note, RetrievedChunk } from '../types/notebook'
+import { retrieveContext } from '../services/retrieval'
 import { relativeDate, wordCount } from './model'
 import { Modal } from './Modal'
 import { resolveNoteContext } from './note-context'
+import './ContextLibrary.css'
+
+const EMPTY_LIBRARY: ContextSource[] = []
 
 function WordTotal({ text }: { text: string }) {
   const count = useMemo(() => wordCount(text), [text])
@@ -24,21 +30,25 @@ function WordTotal({ text }: { text: string }) {
 export function ContextPanel({
   note,
   notes,
+  library = EMPTY_LIBRARY,
   importing,
   onUpdate,
   onClose,
   onFiles,
   onWebsite,
   onUseNote,
+  onLibrary,
 }: {
   note: Note
   notes: Note[]
+  library?: ContextSource[]
   importing: boolean
   onUpdate(patch: Partial<Note>): void
   onClose(): void
   onFiles(files: FileList | null): Promise<void>
   onWebsite(): void
   onUseNote(id: string): void
+  onLibrary?(): void
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
@@ -46,7 +56,41 @@ export function ContextPanel({
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [choosingNote, setChoosingNote] = useState(false)
   const [noteQuery, setNoteQuery] = useState('')
-  const resolved = useMemo(() => resolveNoteContext(note, notes), [note, notes])
+  const [contextQuery, setContextQuery] = useState('')
+  const [retrieval, setRetrieval] = useState<{
+    snapshot: (string | boolean)[]
+    results: RetrievedChunk[]
+  } | null>(null)
+  const libraryIds = useMemo(
+    () => new Set(library.map(item => item.id)),
+    [library]
+  )
+  const noteIds = useMemo(() => new Set(notes.map(item => item.id)), [notes])
+  function sourceIsAvailable(item: ContextSource) {
+    return (
+      (!item.libraryId || libraryIds.has(item.libraryId)) &&
+      (item.kind !== 'note' || noteIds.has(item.linkedNoteId ?? ''))
+    )
+  }
+  const resolved = useMemo(
+    () => resolveNoteContext(note, notes, library),
+    [note, notes, library]
+  )
+  const retrievalSnapshot = [
+    note.id,
+    ...resolved.sources.flatMap(source => [
+      source.id,
+      source.name,
+      source.text,
+      source.enabled,
+    ]),
+  ]
+  const retrievalCurrent =
+    retrieval &&
+    retrieval.snapshot.length === retrievalSnapshot.length &&
+    retrieval.snapshot.every(
+      (value, index) => value === retrievalSnapshot[index]
+    )
   const source = resolved.sources.find(item => item.id === previewId)
   const enabled = resolved.sources.filter(item => item.enabled).length
   const availableNotes = useMemo(() => {
@@ -68,10 +112,7 @@ export function ContextPanel({
       candidate.title.toLocaleLowerCase().includes(query)
     )
   }, [availableNotes, noteQuery])
-  const sourceAvailable =
-    !source ||
-    source.kind !== 'note' ||
-    notes.some(candidate => candidate.id === source.linkedNoteId)
+  const sourceAvailable = !source || sourceIsAvailable(source)
 
   return (
     <>
@@ -165,10 +206,7 @@ export function ContextPanel({
               <input
                 type="checkbox"
                 checked={item.enabled}
-                disabled={
-                  item.kind === 'note' &&
-                  !notes.some(candidate => candidate.id === item.linkedNoteId)
-                }
+                disabled={!sourceIsAvailable(item)}
                 aria-label={`Use ${item.name} as context`}
                 onChange={event =>
                   onUpdate({
@@ -196,9 +234,7 @@ export function ContextPanel({
                   <strong title={item.name}>{item.name}</strong>
                   <small>
                     {item.kind === 'note'
-                      ? notes.some(
-                          candidate => candidate.id === item.linkedNoteId
-                        )
+                      ? sourceIsAvailable(item)
                         ? 'Linked note · Live context'
                         : 'Linked note · Unavailable'
                       : item.kind === 'website'
@@ -209,6 +245,9 @@ export function ContextPanel({
                             ? 'Text'
                             : item.kind.toUpperCase()}{' '}
                     · <WordTotal text={item.text} />
+                    {item.libraryId &&
+                      !libraryIds.has(item.libraryId) &&
+                      ' · Unavailable'}
                     {!item.enabled && ' · Left out'}
                   </small>
                 </span>
@@ -264,6 +303,11 @@ export function ContextPanel({
           }}
         />
         <div className="source-actions">
+          {onLibrary && (
+            <button className="button secondary" onClick={onLibrary}>
+              <LibraryBig size={15} /> Choose from library
+            </button>
+          )}
           <button
             className="button secondary"
             disabled={importing}
@@ -296,6 +340,75 @@ export function ContextPanel({
             Use a note
           </button>
         </div>
+        <details className="context-attached-search">
+          <summary>
+            <Search size={14} /> Find in attached context
+          </summary>
+          <p>
+            BM25 finds relevant passages on this device; model receives only
+            matching excerpts.
+          </p>
+          <form
+            onSubmit={event => {
+              event.preventDefault()
+              if (!contextQuery.trim() || !enabled) return
+              setRetrieval({
+                snapshot: retrievalSnapshot,
+                results: retrieveContext(resolved, contextQuery, 4),
+              })
+            }}
+          >
+            <label className="field-label" htmlFor="attached-context-search">
+              Search attached references
+            </label>
+            <input
+              id="attached-context-search"
+              type="search"
+              value={contextQuery}
+              placeholder="A detail, phrase, or topic"
+              maxLength={4000}
+              onChange={event => {
+                setContextQuery(event.target.value)
+                setRetrieval(null)
+              }}
+            />
+            <button
+              type="submit"
+              className="button secondary"
+              disabled={!contextQuery.trim() || !enabled}
+            >
+              Find passages
+            </button>
+          </form>
+          {!enabled && (
+            <p className="context-attached-empty">
+              Include a reference above to search its text.
+            </p>
+          )}
+          {retrievalCurrent && (
+            <div
+              className="context-attached-results"
+              aria-label="Matching context passages"
+            >
+              <p role="status">
+                {retrieval.results.length
+                  ? `${retrieval.results.length} matching ${retrieval.results.length === 1 ? 'passage' : 'passages'}`
+                  : 'No matching passages. Try another phrase.'}
+              </p>
+              {retrieval.results.map((passage, index) => (
+                <article key={`${passage.sourceId}-${index}`}>
+                  <h4>{passage.sourceName}</h4>
+                  <p>{passage.text}</p>
+                </article>
+              ))}
+            </div>
+          )}
+          {retrieval && !retrievalCurrent && (
+            <p role="status" className="context-attached-empty">
+              References changed. Search again for current passages.
+            </p>
+          )}
+        </details>
         <p className="context-privacy">
           <ShieldCheck size={14} />
           <span>
@@ -338,11 +451,13 @@ export function ContextPanel({
             </div>
             <div className="source-preview-text" tabIndex={0}>
               {source.text ||
-                (source.kind === 'note'
-                  ? sourceAvailable
-                    ? 'This note is empty. Its writing will appear here as you add it.'
-                    : 'This note is no longer in your notebook. Remove this reference or link another note.'
-                  : '')}
+                (!sourceAvailable && source.libraryId && source.kind !== 'note'
+                  ? 'This reference is no longer in your library. Remove it from this note or choose another reference.'
+                  : source.kind === 'note'
+                    ? sourceAvailable
+                      ? 'This note is empty. Its writing will appear here as you add it.'
+                      : 'This note is no longer in your notebook. Remove this reference or link another note.'
+                    : '')}
             </div>
             <div className="dialog-footer">
               <label className="check-label">

@@ -20,6 +20,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test:run
+      - run: python3 -m unittest discover -s training -p "test_*.py"
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

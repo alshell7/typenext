@@ -24,6 +24,10 @@ import {
 import { markdown } from '@codemirror/lang-markdown'
 import { syntaxTree } from '@codemirror/language'
 import { suggest } from '../../services/completion'
+import {
+  getBuiltinState,
+  subscribeBuiltinState,
+} from '../../services/builtin-engine'
 import { STORAGE_LIMITS } from '../../services/storage'
 import type {
   CursorContext,
@@ -74,7 +78,7 @@ export interface MarkdownEditorHandle {
   focus(): void
   insert(text: string): void
   requestSuggestion(): void
-  /** The caller must obtain explicit consent for each external request. */
+  /** Request this provider once without changing the activated suggestion mode. */
   requestExternalSuggestion(provider: ProviderId): void
 }
 
@@ -269,9 +273,14 @@ function cursorContext(view: EditorView): CursorContext {
   }
 }
 
-function requestSettings(settings: NotebookSettings, provider: ProviderId) {
-  // Selecting a cloud provider in preferences never changes ordinary typing
-  // into a cloud request. External inference has a separate explicit action.
+function requestSettings(settings: NotebookSettings, override?: ProviderId) {
+  // Legacy workspaces may remember a cloud profile without deliberate automatic
+  // activation. One-off requests are explicit; routine inference uses this guard.
+  const provider =
+    override ??
+    (settings.provider === 'local' || settings.externalAutoEnabled
+      ? settings.provider
+      : 'local')
   return { ...settings, provider }
 }
 
@@ -288,6 +297,9 @@ function configurationSnapshot(
     note.objective,
     note.context,
     settings.provider,
+    settings.externalAutoEnabled,
+    settings.localEngine,
+    settings.suggestionInstructions,
     settings.temperature,
     settings.maxTokens,
     settings.suggestionLength,
@@ -314,7 +326,8 @@ function completionKey(
   doc: Text,
   context: CursorContext,
   configuration: CompletionConfiguration,
-  provider: ProviderId
+  provider: ProviderId,
+  engineIdentity: string
 ) {
   return JSON.stringify([
     noteId,
@@ -324,6 +337,7 @@ function completionKey(
     context.selectionEmpty,
     !!context.inCode,
     provider,
+    engineIdentity,
   ])
 }
 
@@ -356,9 +370,12 @@ export const MarkdownEditor = forwardRef<
       focus: () => viewRef.current?.focus(),
       insert(text) {
         const view = viewRef.current
-        if (!view || !text) return
-        view.focus()
-        view.dispatch({
+        if (!text) return
+        if (!view)
+          throw new Error(
+            'The note editor is no longer open. Reopen the note and try inserting again.'
+          )
+        const insertion = view.state.update({
           ...view.state.replaceSelection(text),
           annotations: [
             Transaction.userEvent.of('input.paste'),
@@ -366,6 +383,12 @@ export const MarkdownEditor = forwardRef<
           ],
           scrollIntoView: true,
         })
+        if (!insertion.docChanged)
+          throw new Error(
+            'This note can hold up to 8 MiB. Insert the transcript into another note; your existing writing is unchanged.'
+          )
+        view.focus()
+        view.dispatch(insertion)
       },
       requestSuggestion: () => controlsRef.current?.request(),
       requestExternalSuggestion: provider =>
@@ -429,6 +452,7 @@ export const MarkdownEditor = forwardRef<
 
     function showSuggestion(
       result: SuggestionResult,
+      showMenu: boolean,
       manual: boolean,
       provider: ProviderId
     ) {
@@ -440,17 +464,16 @@ export const MarkdownEditor = forwardRef<
           ...(manual
             ? {
                 message:
-                  'Try a new line for a writing starter, or connect a local model in Preferences.',
+                  provider === 'local'
+                    ? 'Try a new line for a writing starter, or connect a local model in Preferences.'
+                    : 'The model returned no continuation. Try another cursor position or adjust your instructions.',
               }
             : {}),
         })
         return
       }
       const at = view.state.selection.main.head
-      const menu =
-        manual && provider === 'local'
-          ? createSuggestionMenu(at, choices)
-          : null
+      const menu = showMenu ? createSuggestionMenu(at, choices, provider) : null
       view.dispatch({
         effects: [
           setInlineSuggestion.of({ at, ...first }),
@@ -479,18 +502,21 @@ export const MarkdownEditor = forwardRef<
       )
     }
 
-    function request(provider: ProviderId = 'local', manual = true) {
+    function request(override?: ProviderId, manual = true) {
       if (manual) view.focus()
       // Focusing an empty page may schedule its initial automatic starter.
       // A manual request owns this interaction and cancels that focus timer.
       invalidate()
       const current = propsRef.current
-      const settings = requestSettings(current.settings, provider)
+      const settings = requestSettings(current.settings, override)
+      const provider = settings.provider
+      const showMenu = manual && override === undefined
       const context = cursorContext(view)
       if (
         disposed ||
         current.note.id !== noteId ||
         !view.hasFocus ||
+        view.dom.ownerDocument.visibilityState === 'hidden' ||
         view.composing ||
         view.compositionStarted ||
         composing
@@ -501,21 +527,15 @@ export const MarkdownEditor = forwardRef<
         if (manual)
           emitStatus({
             state: 'idle',
-            message:
-              'Suggestions are paused. Turn on Local suggestions to continue.',
+            message: 'Suggestions are paused. Turn on suggestions to continue.',
           })
         return
       }
-      if (
-        !context.selectionEmpty ||
-        (provider !== 'local' && !context.text.trim())
-      ) {
+      if (!context.selectionEmpty) {
         if (manual) {
           emitStatus({
             state: 'idle',
-            message: context.selectionEmpty
-              ? 'Write a little first, then request a suggestion.'
-              : 'Place your cursor where you would like a suggestion.',
+            message: 'Place your cursor where you would like a suggestion.',
           })
         }
         return
@@ -530,12 +550,17 @@ export const MarkdownEditor = forwardRef<
       }
 
       const requestConfiguration = configurationRef.current
+      const engineIdentity =
+        provider === 'local' && settings.localEngine === 'embedded'
+          ? getBuiltinState().identity
+          : ''
       const key = completionKey(
         noteId,
         view.state.doc,
         context,
         requestConfiguration,
-        provider
+        provider,
+        engineIdentity
       )
       const requestRevision = revision
       const requestedDoc = view.state.doc
@@ -552,18 +577,20 @@ export const MarkdownEditor = forwardRef<
           latest.note.id === noteId &&
           latest.settings.suggestionsEnabled &&
           view.hasFocus &&
+          view.dom.ownerDocument.visibilityState !== 'hidden' &&
           !composing &&
           !view.composing &&
           !view.compositionStarted &&
           view.state.doc === requestedDoc &&
           view.state.selection.eq(requestedSelection) &&
+          (!engineIdentity || getBuiltinState().identity === engineIdentity) &&
           configurationRef.current === requestConfiguration
         )
       }
 
       const cached = getCachedSuggestion(key)
       if (cached) {
-        if (isCurrent()) showSuggestion(cached, manual, provider)
+        if (isCurrent()) showSuggestion(cached, showMenu, manual, provider)
         controller = null
         return
       }
@@ -582,7 +609,7 @@ export const MarkdownEditor = forwardRef<
             )
             if (!isCurrent()) return
             cacheSuggestion(key, result)
-            showSuggestion(result, manual, provider)
+            showSuggestion(result, showMenu, manual, provider)
           } catch (error) {
             if (!isCurrent()) return
             emitStatus({
@@ -606,6 +633,7 @@ export const MarkdownEditor = forwardRef<
         !settings.suggestionsEnabled ||
         !settings.autoSuggest ||
         !view.hasFocus ||
+        view.dom.ownerDocument.visibilityState === 'hidden' ||
         composing ||
         view.composing ||
         view.compositionStarted
@@ -616,7 +644,7 @@ export const MarkdownEditor = forwardRef<
       timer = setTimeout(
         () => {
           timer = null
-          request('local', false)
+          request(undefined, false)
         },
         Math.max(300, settings.suggestionDelay)
       )
@@ -720,7 +748,7 @@ export const MarkdownEditor = forwardRef<
         'aria-label': 'Note content',
         'aria-multiline': 'true',
         'aria-description':
-          'Write in Markdown. Control or Command plus Space opens private suggestions. Up and Down choose; Tab or Enter accepts; Escape dismisses.',
+          'Write in Markdown. Control or Command plus Space opens suggestion choices. Up and Down choose; Tab or Enter accepts; Escape dismisses.',
         spellcheck: 'true',
         autocapitalize: 'sentences',
       }),
@@ -801,7 +829,12 @@ export const MarkdownEditor = forwardRef<
           const accepted = update.transactions.some(transaction =>
             transaction.isUserEvent('input.complete')
           )
-          if (update.docChanged && !external && !accepted) scheduleAutomatic()
+          if (
+            update.docChanged &&
+            !external &&
+            (!accepted || !update.state.field(inlineSuggestionField))
+          )
+            scheduleAutomatic()
           if (update.docChanged && historyNeedsTrimming(update.state))
             boundHistory()
         }
@@ -840,6 +873,23 @@ export const MarkdownEditor = forwardRef<
     viewRef.current = view
     documentStrings.set(view.state.doc, content)
     controlsRef.current = { invalidate, request }
+    const document = view.dom.ownerDocument
+    const visibilityChanged = () => {
+      if (document.visibilityState === 'hidden') invalidate()
+    }
+    document.addEventListener('visibilitychange', visibilityChanged)
+    let builtinIdentity = getBuiltinState().identity
+    const unsubscribeBuiltin = subscribeBuiltinState(() => {
+      const identity = getBuiltinState().identity
+      if (identity === builtinIdentity) return
+      builtinIdentity = identity
+      const settings = propsRef.current.settings
+      if (
+        requestSettings(settings).provider === 'local' &&
+        settings.localEngine === 'embedded'
+      )
+        invalidate()
+    })
     if (cachedEditor) {
       view.scrollDOM.scrollTop = cachedEditor.scrollTop
       view.scrollDOM.scrollLeft = cachedEditor.scrollLeft
@@ -849,6 +899,8 @@ export const MarkdownEditor = forwardRef<
 
     return () => {
       disposed = true
+      document.removeEventListener('visibilitychange', visibilityChanged)
+      unsubscribeBuiltin()
       revision += 1
       if (controller) {
         cancelQueuedCompletion(controller.signal)

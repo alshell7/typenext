@@ -4,3 +4,7 @@
 *.ttf binary
 *.woff binary
 *.woff2 binary
+
+# Keep pinned upstream runtime bytes identical across Windows/macOS checkouts.
+public/runtime/whistle/needle.js -text
+*.wasm binary

@@ -7,9 +7,11 @@ import {
   type TooltipView,
 } from '@codemirror/view'
 import type {
+  ProviderId,
   SuggestionCandidate,
   SuggestionResult,
 } from '../../types/notebook'
+import { PROVIDERS } from '../../notebook/model'
 import {
   acceptInlineSuggestion,
   setInlineSuggestion,
@@ -20,6 +22,7 @@ export interface SuggestionMenu {
   choices: SuggestionCandidate[]
   selected: number
   id: string
+  provider: ProviderId
   tooltip: Tooltip
 }
 
@@ -39,9 +42,12 @@ export function suggestionChoices(result: SuggestionResult) {
     .map(({ text, sources, mode }) => ({ text, sources, mode }))
 }
 
-export function suggestionOrigin(candidate: SuggestionCandidate) {
+export function suggestionOrigin(
+  candidate: SuggestionCandidate,
+  provider: ProviderId = 'local'
+) {
   if (candidate.mode === 'starter') return 'Writing starter'
-  if (candidate.mode === 'model') return 'Local model'
+  if (candidate.mode === 'model') return PROVIDERS[provider]
   const source = candidate.sources[0]
   if (!source || /^(this|current) note$/i.test(source)) return 'From this note'
   return `From ${source}`
@@ -49,11 +55,13 @@ export function suggestionOrigin(candidate: SuggestionCandidate) {
 
 export function createSuggestionMenu(
   at: number,
-  choices: SuggestionCandidate[]
+  choices: SuggestionCandidate[],
+  provider: ProviderId = 'local'
 ): SuggestionMenu {
   return {
     at,
     choices,
+    provider,
     selected: 0,
     id: `cm-suggestions-${++nextMenuId}`,
     // Retain this object while navigating so the panel does not remount or
@@ -159,7 +167,7 @@ function createMenuTooltip(view: EditorView): TooltipView {
     text.textContent = choice.text.trim()
     const origin = option.appendChild(ownerDocument.createElement('span'))
     origin.className = 'cm-suggestion-option-origin'
-    origin.textContent = suggestionOrigin(choice)
+    origin.textContent = suggestionOrigin(choice, menu.provider)
     option.addEventListener('click', event => {
       event.preventDefault()
       event.stopPropagation()

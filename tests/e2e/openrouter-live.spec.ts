@@ -167,9 +167,7 @@ test('live free model requires explicit consent and inserts only at the cursor',
   try {
     await page.goto('/')
     await openExternalSettings(page)
-    await page
-      .getByLabel('Provider for an explicit external suggestion')
-      .selectOption('openrouter')
+    await page.getByLabel('Configure provider').selectOption('openrouter')
     await page.getByLabel('Model', { exact: true }).fill(model)
     await setSessionKey(page.getByLabel('API key', { exact: true }), secret)
     await page.getByRole('button', { name: 'Save key', exact: true }).click()
@@ -204,22 +202,22 @@ test('live free model requires explicit consent and inserts only at the cursor',
     ).toBe(0)
 
     await page
-      .getByRole('button', { name: 'Ask an external model', exact: true })
+      .getByRole('button', { name: 'Choose suggestion engine', exact: true })
       .click()
     await expect(
-      page.getByRole('dialog', { name: 'Ask a model outside this device?' })
+      page.getByRole('dialog', { name: 'Choose your suggestion engine' })
     ).toBeVisible()
     expect(
       hostedRequests,
       'Opening the consent dialog must not send writing.'
     ).toBe(0)
     await page
-      .getByRole('button', { name: 'Keep writing locally', exact: true })
+      .getByRole('button', { name: 'Close dialog', exact: true })
       .click()
     expect(hostedRequests, 'Cancelling must not send writing.').toBe(0)
 
     await page
-      .getByRole('button', { name: 'Ask an external model', exact: true })
+      .getByRole('button', { name: 'Choose suggestion engine', exact: true })
       .click()
     const responsePromise = page.waitForResponse(
       response =>
@@ -229,8 +227,10 @@ test('live free model requires explicit consent and inserts only at the cursor',
     )
     const started = Date.now()
     await page
-      .getByRole('button', { name: 'Request one suggestion', exact: true })
+      .getByRole('button', { name: 'Use OpenRouter continuously', exact: true })
       .click()
+    await editor.focus()
+    await editor.press('Control+Space')
     const response = await responsePromise
     evidence.httpStatus = response.status()
     evidence.latencyMs = Date.now() - started
@@ -307,12 +307,14 @@ test('live free model requires explicit consent and inserts only at the cursor',
     expect(permittedRequests).toBe(1)
     expect(hostedRequests).toBe(1)
 
+    await page.getByRole('button', { name: 'Choose suggestion engine' }).click()
+    await page.getByRole('button', { name: /On this device/ }).click()
     await editor.press('Control+End')
     await editor.press('Control+Space')
     await page.waitForTimeout(200)
     expect(
       hostedRequests,
-      'An explicit external request must not change the routine provider.'
+      'Switching back to local must stop hosted requests.'
     ).toBe(1)
     const keyPersisted = await page.evaluate(
       value => Object.values(localStorage).some(item => item.includes(value)),

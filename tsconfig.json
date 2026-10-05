@@ -38,7 +38,9 @@
     "src/services/completion.ts",
     "src/services/retrieval.ts",
     "src/services/sources.ts",
-    "src/services/*.test.ts"
+    "src/services/*.test.ts",
+    "src/services/builtin-engine.worker.ts",
+    "src/services/whistle.worker.ts"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

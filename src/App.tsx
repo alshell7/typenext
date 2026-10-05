@@ -11,6 +11,7 @@ import {
   Maximize2,
   Minus,
   Moon,
+  Mic,
   PanelLeft,
   Plus,
   Search,
@@ -42,6 +43,14 @@ import {
 } from './notebook/model'
 import { Modal } from './notebook/Modal'
 import { ContextPanel } from './notebook/ContextPanel'
+import { ModelChooser } from './notebook/ModelChooser'
+import { DictationDialog } from './notebook/DictationDialog'
+import { ContextLibrary } from './notebook/ContextLibrary'
+import {
+  contextFolder,
+  findLibrarySource,
+  libraryReference,
+} from './notebook/context-library'
 import {
   linkNoteSource,
   resolveNoteContext,
@@ -57,7 +66,7 @@ import {
   STORAGE_LIMITS,
 } from './services/storage'
 import { importContextFile, importWebsite } from './services/sources'
-import type { ContextSource, Note, ProviderId } from './types/notebook'
+import type { ContextSource, Note } from './types/notebook'
 import './App.css'
 
 const MAX_STORED_CONTEXT_CHARACTERS = 2_000_000
@@ -85,6 +94,9 @@ function App() {
     () => window.innerWidth >= 760
   )
   const [contextVisible, setContextVisible] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [dictationOpen, setDictationOpen] = useState(false)
+  const dictationNoteId = useRef<string | null>(null)
   const [focusMode, setFocusMode] = useState(false)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<EditorStatus>({ state: 'idle' })
@@ -106,7 +118,6 @@ function App() {
   const fileAutosaveRunning = useRef(false)
   const [fileSaveEpoch, setFileSaveEpoch] = useState(0)
   const nativeHandlers = useRef<Record<string, () => void>>({})
-  const pendingExternalProvider = useRef<ProviderId | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const recentSearch = useRef<HTMLInputElement>(null)
@@ -114,12 +125,18 @@ function App() {
     const active = workspace.notes.find(
       item => item.id === workspace.activeNoteId
     )
-    return active ? resolveNoteContext(active, workspace.notes) : undefined
-  }, [workspace.notes, workspace.activeNoteId])
+    return active
+      ? resolveNoteContext(active, workspace.notes, workspace.contextLibrary)
+      : undefined
+  }, [workspace.notes, workspace.activeNoteId, workspace.contextLibrary])
   const settings = workspace.settings
   const font = FONTS.find(item => item.name === settings.fontFamily) ?? FONTS[0]
-  const externalProvider = settings.externalProvider
-  const hasLocalModel = Boolean(settings.profiles.local.model.trim())
+  const hasLocalModel =
+    settings.localEngine === 'embedded' ||
+    (settings.localEngine === 'server' &&
+      Boolean(settings.profiles.local.model.trim()))
+  const usingExternal =
+    settings.provider !== 'local' && settings.externalAutoEnabled
   const visibleNotes = useMemo(() => {
     const recent = [...workspace.notes].sort(
       (a, b) => b.updatedAt - a.updatedAt
@@ -140,8 +157,15 @@ function App() {
   const notesVisible = sidebarVisible && !focusMode
   const toggleNotes = useCallback(() => {
     setSidebarVisible(!notesVisible)
+    if (window.innerWidth <= 760) setContextVisible(false)
     setFocusMode(false)
   }, [notesVisible])
+
+  const toggleContext = useCallback(() => {
+    setContextVisible(value => !value)
+    if (window.innerWidth <= 760) setSidebarVisible(false)
+    setFocusMode(false)
+  }, [])
 
   const notify = useCallback((message: string) => setNotice(message), [])
   useEffect(() => {
@@ -445,6 +469,14 @@ function App() {
       )
         return
       const key = event.key.toLowerCase()
+      if (document.querySelector('[role="dialog"]')) {
+        if (
+          ['n', 'o', 's', ',', 'b', 'p'].includes(key) ||
+          (key === 'f' && event.shiftKey)
+        )
+          event.preventDefault()
+        return
+      }
       if (key === 'n') {
         event.preventDefault()
         setNewNoteOpen(true)
@@ -485,7 +517,7 @@ function App() {
     'menu-preferences': () => showPreferences(),
     'menu-toggle-left-sidebar': toggleNotes,
     'menu-toggle-right-sidebar': () => {
-      setContextVisible(value => !value)
+      toggleContext()
       setFocusMode(false)
     },
     'native-close-requested': requestClose,
@@ -524,49 +556,82 @@ function App() {
     }
   }
 
-  const appendContext = (activeId: string, source: ContextSource) => {
+  const appendContext = (activeId: string | null, source: ContextSource) => {
     let added = false
     setWorkspace(value => {
+      const library = value.contextLibrary ?? []
+      const existing = findLibrarySource(library, source)
+      const canonical = existing ?? {
+        ...source,
+        libraryId: undefined,
+        enabled: true,
+      }
+      if (!existing && library.length >= 2048)
+        throw new Error(
+          'Your library has 2,048 references. Remove unused references before adding more.'
+        )
       const active = value.notes.find(item => item.id === activeId)
-      if (!active) return value
-      if (
-        source.kind === 'note' &&
-        (source.linkedNoteId === active.id ||
-          active.sources.some(
-            item => item.linkedNoteId === source.linkedNoteId
-          ))
+      const attach =
+        active &&
+        !(canonical.kind === 'note' && canonical.linkedNoteId === active.id) &&
+        !active.sources.some(
+          item =>
+            item.libraryId === canonical.id ||
+            (canonical.kind === 'note' &&
+              item.linkedNoteId === canonical.linkedNoteId)
+        )
+      const reenable = active?.sources.some(
+        item => item.libraryId === canonical.id && !item.enabled
       )
-        return value
-      const sources = [...active.sources, source]
-      if (sources.length > STORAGE_LIMITS.sourcesPerNote)
+      const sources = attach
+        ? [...active.sources, libraryReference(canonical)]
+        : reenable
+          ? active?.sources.map(item =>
+              item.libraryId === canonical.id
+                ? { ...item, enabled: true }
+                : item
+            )
+          : active?.sources
+      const nextLibrary = existing ? library : [...library, canonical]
+      if (sources && sources.length > STORAGE_LIMITS.sourcesPerNote)
         throw new Error(
           'This note has too many references. Remove one before attaching another.'
         )
       if (
-        sources.reduce(
-          (length, item) =>
-            length + (item.kind === 'note' ? 0 : item.text.length),
+        active &&
+        sources &&
+        resolveNoteContext(
+          { ...active, sources },
+          value.notes,
+          nextLibrary
+        ).sources.reduce(
+          (total, item) =>
+            total + (item.kind === 'note' ? 0 : item.text.length),
           0
         ) > MAX_STORED_CONTEXT_CHARACTERS
       )
         throw new Error(
-          'These references are too large to keep this note responsive. Attach a smaller excerpt or remove a reference and try again.'
+          'These references are too large for one note. Choose smaller excerpts or detach a reference.'
         )
       const next = {
         ...value,
-        notes: value.notes.map(item =>
-          item.id === activeId
-            ? {
-                ...item,
-                sources,
-                updatedAt: Math.max(
-                  Date.now(),
-                  item.updatedAt + 1,
-                  (item.exportedAt ?? 0) + 1
-                ),
-              }
-            : item
-        ),
+        contextLibrary: nextLibrary,
+        notes:
+          attach || reenable
+            ? value.notes.map(item =>
+                item.id === activeId
+                  ? {
+                      ...item,
+                      sources: sources!,
+                      updatedAt: Math.max(
+                        Date.now(),
+                        item.updatedAt + 1,
+                        (item.exportedAt ?? 0) + 1
+                      ),
+                    }
+                  : item
+              )
+            : value.notes,
       }
       assertWorkspaceFits(next)
       added = true
@@ -574,10 +639,61 @@ function App() {
     })
     return added
   }
+  const attachLibrary = (id: string) => {
+    const current = getWorkspace()
+    const source = current.contextLibrary?.find(item => item.id === id)
+    if (!source) return
+    try {
+      appendContext(current.activeNoteId, source)
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error))
+    }
+  }
+  const detachLibrary = (id: string) => {
+    const current = getWorkspace()
+    const active = current.notes.find(item => item.id === current.activeNoteId)
+    if (active)
+      updateNote(active.id, {
+        sources: active.sources.filter(source => source.libraryId !== id),
+      })
+  }
+  const removeLibrary = (id: string) =>
+    setWorkspace(value => ({
+      ...value,
+      contextLibrary: value.contextLibrary?.filter(source => source.id !== id),
+      notes: value.notes.map(item =>
+        item.sources.some(source => source.libraryId === id)
+          ? {
+              ...item,
+              sources: item.sources.filter(source => source.libraryId !== id),
+              updatedAt: Math.max(
+                Date.now(),
+                item.updatedAt + 1,
+                (item.exportedAt ?? 0) + 1
+              ),
+            }
+          : item
+      ),
+    }))
 
   const addSources = async (files: FileList | null) => {
     const activeId = getWorkspace().activeNoteId
-    if (!files?.length || !activeId) return
+    if (!files?.length) return
+    const selectedFiles = Array.from(files).filter(
+      file =>
+        !file.webkitRelativePath ||
+        /\.(txt|text|md|markdown|mdown|pdf|docx)$/i.test(file.name)
+    )
+    if (!selectedFiles.length) {
+      notify('This folder has no supported text, Markdown, PDF or Word files.')
+      return
+    }
+    if (selectedFiles.length > 256) {
+      notify(
+        'Choose up to 256 files at a time. Split a large folder into smaller selections.'
+      )
+      return
+    }
     if (importController.current) {
       notify('A reference is still being read. Try again when it finishes.')
       return
@@ -586,10 +702,13 @@ function App() {
     importController.current = controller
     setImporting(true)
     try {
-      for (const file of Array.from(files)) {
+      for (const file of selectedFiles) {
         if (controller.signal.aborted) break
         try {
-          const source = await importContextFile(file, controller.signal)
+          const source = {
+            ...(await importContextFile(file, controller.signal)),
+            folder: contextFolder(file),
+          }
           if (!controller.signal.aborted && !appendContext(activeId, source))
             controller.abort()
         } catch (error) {
@@ -608,7 +727,6 @@ function App() {
 
   const addWebsite = async () => {
     const activeId = getWorkspace().activeNoteId
-    if (!activeId) return
     if (importController.current) return
     const controller = new AbortController()
     importController.current = controller
@@ -636,8 +754,7 @@ function App() {
   const useNoteAsContext = (id: string) => {
     const current = getWorkspace()
     const target = current.notes.find(item => item.id === id)
-    if (!target || target.id === current.activeNoteId) return
-    if (!current.activeNoteId) return
+    if (!target) return
     try {
       appendContext(current.activeNoteId, linkNoteSource(target))
     } catch (error) {
@@ -722,6 +839,10 @@ function App() {
             Open a Markdown file
             <ArrowUpRight size={14} />
           </button>
+          <button className="sidebar-open" onClick={() => setLibraryOpen(true)}>
+            <Paperclip size={16} /> Context library{' '}
+            <span>{workspace.contextLibrary?.length ?? 0}</span>
+          </button>
         </div>
         <label className="note-search">
           <Search size={15} />
@@ -779,9 +900,16 @@ function App() {
         </div>
         <div className="sidebar-bottom">
           <div className="local-promise">
-            <ShieldCheck size={16} />
+            {usingExternal ? <Cloud size={16} /> : <ShieldCheck size={16} />}
             <span>
-              Local by default<small>Your writing stays with you.</small>
+              {usingExternal
+                ? `${PROVIDERS[settings.provider]} active`
+                : 'Local by default'}
+              <small>
+                {usingExternal
+                  ? 'Context is shared for suggestions.'
+                  : 'Your writing stays with you.'}
+              </small>
             </span>
           </div>
           <div className="sidebar-utilities">
@@ -839,7 +967,7 @@ function App() {
                   title="Note context"
                   aria-pressed={contextVisible}
                   onClick={() => {
-                    setContextVisible(value => !value)
+                    toggleContext()
                     setFocusMode(false)
                   }}
                 >
@@ -848,6 +976,17 @@ function App() {
                   {note.sources.length > 0 && (
                     <span className="source-count">{note.sources.length}</span>
                   )}
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="Dictate on this device"
+                  title="Dictate on this device"
+                  onClick={() => {
+                    dictationNoteId.current = note.id
+                    setDictationOpen(true)
+                  }}
+                >
+                  <Mic size={17} />
                 </button>
                 <button
                   className="icon-button"
@@ -1026,14 +1165,20 @@ function App() {
                       }))
                     }
                     aria-pressed={settings.suggestionsEnabled}
-                    title="Toggle local suggestions"
+                    title="Pause or resume suggestions"
                   >
-                    <ShieldCheck size={14} />
+                    {usingExternal ? (
+                      <Cloud size={14} />
+                    ) : (
+                      <ShieldCheck size={14} />
+                    )}
                     <span>
                       {settings.suggestionsEnabled
-                        ? hasLocalModel
-                          ? 'Local model'
-                          : 'Local suggestions'
+                        ? usingExternal
+                          ? PROVIDERS[settings.provider]
+                          : hasLocalModel
+                            ? 'Local model'
+                            : 'Local suggestions'
                         : 'Suggestions paused'}
                     </span>
                   </button>
@@ -1071,14 +1216,18 @@ function App() {
                       <span title={status.message}>{status.message}</span>
                     ) : status.state === 'error' ? (
                       <button
-                        onClick={() => showPreferences('local')}
+                        onClick={() =>
+                          showPreferences(usingExternal ? 'external' : 'local')
+                        }
                         title={status.message}
                       >
                         {status.message || 'Check your local model connection'}
                       </button>
                     ) : status.message ? (
                       <button
-                        onClick={() => showPreferences('local')}
+                        onClick={() =>
+                          showPreferences(usingExternal ? 'external' : 'local')
+                        }
                         title={status.message}
                       >
                         {status.message}
@@ -1094,11 +1243,15 @@ function App() {
                   <button
                     className="external-suggestion-button"
                     onClick={() => setExternalOpen(true)}
-                    disabled={!settings.suggestionsEnabled}
-                    title="Request a stronger external suggestion"
+                    aria-label="Choose suggestion engine"
+                    title="Choose suggestion engine"
                   >
                     <Cloud size={14} />
-                    <span>Ask an external model</span>
+                    <span>
+                      {usingExternal
+                        ? settings.profiles[settings.provider].model
+                        : 'Choose model'}
+                    </span>
                     <ArrowUpRight size={12} />
                   </button>
                 </div>
@@ -1135,6 +1288,8 @@ function App() {
                   key={note.id}
                   note={note}
                   notes={workspace.notes}
+                  library={workspace.contextLibrary}
+                  onLibrary={() => setLibraryOpen(true)}
                   onUseNote={useNoteAsContext}
                   importing={importing}
                   onClose={() => setContextVisible(false)}
@@ -1242,7 +1397,7 @@ function App() {
           />
           <p className="field-help">
             Keep the first line for your objective if that helps. Context stays
-            local unless you explicitly ask an external model.
+            local unless you enable an external model.
           </p>
           <div className="dialog-footer">
             <button
@@ -1263,6 +1418,37 @@ function App() {
           </div>
         </form>
       </Modal>
+      <DictationDialog
+        open={dictationOpen}
+        onOpenChange={setDictationOpen}
+        onInsert={text => {
+          if (
+            getWorkspace().activeNoteId !== dictationNoteId.current ||
+            !editorRef.current
+          )
+            throw new Error(
+              'Return to the note where you started dictation before inserting this transcript.'
+            )
+          editorRef.current.insert(text)
+        }}
+      />
+      <ContextLibrary
+        open={libraryOpen}
+        onOpenChange={setLibraryOpen}
+        library={workspace.contextLibrary ?? []}
+        notes={workspace.notes}
+        activeNote={note ?? null}
+        importing={importing}
+        onAttach={attachLibrary}
+        onDetach={detachLibrary}
+        onRemove={removeLibrary}
+        onFiles={addSources}
+        onWebsite={() => {
+          setLibraryOpen(false)
+          setWebsiteOpen(true)
+        }}
+        onUseNote={useNoteAsContext}
+      />
       <Preferences
         open={preferencesOpen}
         onOpenChange={setPreferencesOpen}
@@ -1272,7 +1458,7 @@ function App() {
         onChange={next =>
           setWorkspace(value => ({
             ...value,
-            settings: { ...next, provider: 'local' },
+            settings: next,
           }))
         }
       />
@@ -1337,61 +1523,15 @@ function App() {
           </div>
         </form>
       </Modal>
-      <Modal
+      <ModelChooser
         open={externalOpen}
         onOpenChange={setExternalOpen}
-        onCloseAutoFocus={event => {
-          const provider = pendingExternalProvider.current
-          pendingExternalProvider.current = null
-          if (provider) {
-            event.preventDefault()
-            editorRef.current?.requestExternalSuggestion(provider)
-          }
-        }}
-        title="Ask a model outside this device?"
-        description={`This request sends the note title, objective, background, nearby writing, and relevant enabled-source excerpts to ${PROVIDERS[externalProvider]}. Its privacy and billing terms apply. This permission covers one suggestion.`}
-      >
-        <div className="external-request-summary">
-          <Cloud size={20} />
-          <span>
-            <strong>{PROVIDERS[externalProvider]}</strong>
-            <small>
-              {settings.profiles[externalProvider].model ||
-                'No model configured yet'}
-            </small>
-          </span>
-        </div>
-        <div className="dialog-footer">
-          <button
-            className="button subtle"
-            onClick={() => setExternalOpen(false)}
-          >
-            Keep writing locally
-          </button>
-          {settings.profiles[externalProvider].model ? (
-            <button
-              className="button primary"
-              onClick={() => {
-                pendingExternalProvider.current = externalProvider
-                setExternalOpen(false)
-              }}
-            >
-              Request one suggestion
-              <ArrowUpRight size={14} />
-            </button>
-          ) : (
-            <button
-              className="button primary"
-              onClick={() => {
-                setExternalOpen(false)
-                showPreferences('external')
-              }}
-            >
-              Set up external model
-            </button>
-          )}
-        </div>
-      </Modal>
+        settings={settings}
+        onChange={next => setWorkspace(value => ({ ...value, settings: next }))}
+        onConfigure={() => showPreferences('external')}
+        onConfigureLocal={() => showPreferences('local')}
+        onActivated={() => editorRef.current?.focus()}
+      />
       <Modal
         open={closeOpen}
         onOpenChange={open => {

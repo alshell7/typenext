@@ -37,6 +37,10 @@ let saveSequence = 0
 let browserCommittedSequence = 0
 let knownPrimary: { raw: string; sanitized: string } | undefined
 const noteSizes = new WeakMap<object, { signature: unknown[]; size: number }>()
+const sourceSizes = new WeakMap<
+  object,
+  { signature: unknown[]; size: number }
+>()
 
 interface BrowserWritable {
   write(value: string): Promise<void>
@@ -174,6 +178,8 @@ function parseSource(value: unknown): ContextSource {
     ...(linkedNoteId ? { linkedNoteId } : {}),
     enabled: boolean(source.enabled),
     addedAt: numeric(source.addedAt),
+    libraryId: source.libraryId == null ? undefined : id(source.libraryId),
+    folder: optionalString(source.folder, 4096),
   }
 }
 
@@ -226,8 +232,21 @@ function parsePalette(value: unknown): NotebookSettings['palette'] {
     }
   }
   return {
-    light: choice(palette.light, ['paper', 'linen', 'mist', 'custom']),
-    dark: choice(palette.dark, ['graphite', 'midnight', 'forest', 'custom']),
+    light: choice(palette.light, [
+      'paper',
+      'linen',
+      'mist',
+      'contrast',
+      'custom',
+    ]),
+    dark: choice(palette.dark, [
+      'graphite',
+      'midnight',
+      'forest',
+      'black',
+      'contrast',
+      'custom',
+    ]),
     customLight: colors(palette.customLight),
     customDark: colors(palette.customDark),
   }
@@ -245,6 +264,17 @@ function parseSettings(value: unknown): NotebookSettings {
           endpoint: string(profile.endpoint, 4096),
           model: string(profile.model, 256),
           protocol: choice(profile.protocol, ['chat', 'fim']),
+          ...(profile.savedModels === undefined
+            ? {}
+            : {
+                savedModels: [
+                  ...new Set(
+                    array(profile.savedModels, 32).map(value =>
+                      string(value, 256)
+                    )
+                  ),
+                ],
+              }),
         },
       ]
     })
@@ -265,7 +295,22 @@ function parseSettings(value: unknown): NotebookSettings {
       'short',
       'sentence',
     ]),
-    provider: 'local',
+    provider:
+      settings.externalAutoEnabled === true
+        ? choice(settings.provider, PROVIDERS)
+        : 'local',
+    externalAutoEnabled:
+      settings.externalAutoEnabled === undefined
+        ? false
+        : boolean(settings.externalAutoEnabled),
+    suggestionInstructions:
+      settings.suggestionInstructions === undefined
+        ? ''
+        : string(settings.suggestionInstructions, 8000),
+    localEngine: choice(
+      settings.localEngine ?? (profiles.local.model ? 'server' : 'recall'),
+      ['recall', 'embedded', 'server']
+    ),
     externalProvider: choice(
       settings.externalProvider ??
         (settings.provider === 'local' ? 'openrouter' : settings.provider),
@@ -280,6 +325,15 @@ function parseSettings(value: unknown): NotebookSettings {
 export function validateWorkspace(value: unknown): Workspace {
   const workspace = record(value)
   if (workspace.version !== 1) return invalid()
+  const contextLibrary = stripLinkedText(
+    array(workspace.contextLibrary ?? [], 2048).map(parseSource)
+  )
+  if (
+    new Set(contextLibrary.map(source => source.id)).size !==
+      contextLibrary.length ||
+    contextLibrary.some(source => source.libraryId)
+  )
+    return invalid()
   const notes = array(workspace.notes, STORAGE_LIMITS.notes).map(parseNote)
   const ids = new Set(notes.map(note => note.id))
   if (ids.size !== notes.length) return invalid()
@@ -295,6 +349,7 @@ export function validateWorkspace(value: unknown): Workspace {
     return invalid()
   return {
     version: 1,
+    contextLibrary,
     notes,
     openNoteIds,
     activeNoteId,
@@ -371,6 +426,8 @@ function measuredNote(note: Note, original: Note): number {
       source.text,
       source.origin,
       source.linkedNoteId,
+      source.libraryId,
+      source.folder,
       source.enabled,
       source.addedAt,
     ]),
@@ -389,7 +446,21 @@ function measuredNote(note: Note, original: Note): number {
 
 function captureWorkspace(workspace: Workspace): Workspace {
   const snapshot = validateWorkspace(workspace)
-  let bytes = jsonSize({ ...snapshot, notes: [] })
+  let bytes = jsonSize({ ...snapshot, notes: [], contextLibrary: [] })
+  snapshot.contextLibrary?.forEach((source, index) => {
+    const original = workspace.contextLibrary?.[index]
+    const signature = Object.values(source)
+    const cached = original ? sourceSizes.get(original) : undefined
+    const size =
+      cached &&
+      cached.signature.length === signature.length &&
+      signature.every((part, index) => part === cached.signature[index])
+        ? cached.size
+        : jsonSize(source)
+    if (original) sourceSizes.set(original, { signature, size })
+    bytes += (index ? 1 : 0) + size
+    if (bytes > MAX_WORKSPACE_BYTES) tooLarge()
+  })
   snapshot.notes.forEach((note, index) => {
     bytes += (index ? 1 : 0) + measuredNote(note, workspace.notes[index]!)
     if (bytes > MAX_WORKSPACE_BYTES) tooLarge()

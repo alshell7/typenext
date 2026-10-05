@@ -5,6 +5,7 @@ export type CompletionProtocol = 'chat' | 'fim'
 export interface ProviderProfile {
   endpoint: string
   model: string
+  savedModels?: string[]
   protocol: CompletionProtocol
 }
 
@@ -15,8 +16,8 @@ export interface PaletteColors {
 }
 
 export interface PalettePreferences {
-  light: 'paper' | 'linen' | 'mist' | 'custom'
-  dark: 'graphite' | 'midnight' | 'forest' | 'custom'
+  light: 'paper' | 'linen' | 'mist' | 'contrast' | 'custom'
+  dark: 'graphite' | 'midnight' | 'forest' | 'black' | 'contrast' | 'custom'
   customLight: PaletteColors
   customDark: PaletteColors
 }
@@ -33,6 +34,9 @@ export interface NotebookSettings {
   suggestionDelay: number
   maxTokens: number
   suggestionLength: 'adaptive' | 'short' | 'sentence'
+  externalAutoEnabled: boolean
+  suggestionInstructions: string
+  localEngine: 'recall' | 'embedded' | 'server'
   provider: ProviderId
   externalProvider: Exclude<ProviderId, 'local'>
   profiles: Record<ProviderId, ProviderProfile>
@@ -46,6 +50,8 @@ export interface ContextSource {
   text: string
   origin?: string
   linkedNoteId?: string
+  libraryId?: string
+  folder?: string
   enabled: boolean
   addedAt: number
 }
@@ -65,6 +71,7 @@ export interface Note {
 
 export interface Workspace {
   version: 1
+  contextLibrary?: ContextSource[]
   notes: Note[]
   openNoteIds: string[]
   activeNoteId: string | null

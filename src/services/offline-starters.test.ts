@@ -14,6 +14,7 @@ vi.mock('./native', () => ({ getSecret: vi.fn(), requestJson: vi.fn() }))
 function local() {
   const settings = defaultSettings()
   settings.theme = 'light'
+  settings.localEngine = 'server'
   settings.profiles.local.model = ''
   return settings
 }

@@ -1,0 +1,24 @@
+Whistle speech model and Needle browser runtime
+Upstream authors: Cactus Compute contributors
+License: Apache License, Version 2.0 (see LICENSE in this directory)
+
+Runtime: Cactus-Compute/needle3
+Pinned revision: c7c415a3d1b3d929014bc6e866d51ebb971f7089
+Original needle.js SHA-256:
+f3f7366dcad9555b792ee519d2518f3c506038bcb2ffd179e76e850000749359
+needle.wasm SHA-256:
+c19b9ddf9c7de4eb4f37e5f1811c5bbea9f099041d2a27284daf89789ee8523d
+
+TypeNext appends only an ES module export to the upstream needle.js file:
+export default createNeedle;
+No engine code was changed. The runtime is supplied its local WASM bytes;
+it does not download model files or send audio over the network.
+
+Model: Cactus-Compute/whistle (not bundled; explicitly downloaded by the user)
+Pinned revision: b358ddadd89b7a713b5aa131f23032d3cca1b251
+whistle.cact SHA-256:
+b6e02f048568ac5d01a2042556c658061e699acbc0aa2a1439f52f3d461dffeb
+
+Source repository: https://github.com/cactus-compute/needle
+Upstream license retrieved at source revision:
+9571a58b0ad3d0e4500afa6f4e00cffb8d6d1818

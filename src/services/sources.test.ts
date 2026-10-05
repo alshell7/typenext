@@ -39,6 +39,9 @@ function settings(): NotebookSettings {
     protocol: 'chat' as const,
   }
   return {
+    externalAutoEnabled: false,
+    suggestionInstructions: '',
+    localEngine: 'recall',
     theme: 'light',
     palette: defaultSettings().palette,
     fontFamily: 'Segoe UI',

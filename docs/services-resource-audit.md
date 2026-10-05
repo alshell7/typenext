@@ -48,3 +48,26 @@ A later diagnostic found that `wordCount` created an array and substring for eve
 Single-call heap snapshots before explicit collection grew by 8,376,264 and 66,163,008 bytes for the two ASCII regex cases, versus 10,416 and 7,144 bytes for the scanner. These are allocation diagnostics including measurement overhead, not total allocated bytes or retained-memory measurements. After explicit collection, both methods were within roughly 5–8 KiB of the preceding reading. During the 25-call ASCII timing windows, the regex produced six and 18 automatic GC events; the scanner produced none. All four scanner timing windows had no automatic GC events.
 
 This provides evidence for reducing temporary allocations and word-count CPU cost. It does not establish a desktop RAM limit or an end-to-end typing latency gain; browser interaction measurements are documented separately in `docs/editor-resource-audit.md`.
+
+## Context library migration
+
+Reusable context stores each imported snapshot once in a library capped at 2,048 items. Notes retain lightweight references to it. Migrating older per-note sources must also preserve unmatched text when the library is full. The former migration searched the library linearly for each legacy source, including sources it could no longer promote at the cap.
+
+Migration now checks source IDs directly and lazily builds compact fingerprint buckets for snapshot lookup. A fingerprint match is always followed by a full metadata/text equality check, so differing bodies and hash collisions cannot overwrite a reference. Live-note entries match by their linked note ID. The migration copies arrays only when a source is actually promoted; already-migrated inputs return without building the lookup, and a full library leaves unmatched legacy sources intact.
+
+The helper-only synthetic fixture contains 2,048 canonical entries and 40,000 unmatched legacy references across 157 notes: 156 notes contain 256 sources each, and the final note contains 64. These counts respect the per-note source cap, but the fixture is not a complete validated or imported workspace. Serializing only its notes and library produces 5,193,887 bytes, about 5.19 MB. Bodies are short synthetic strings, with no user text, model process, network request or browser involved.
+
+On the same Windows/Node host, one warmup preceded five timed calls, with explicit collection before each call. Each call verified that both result arrays were the exact input arrays and that the unmatched references remained present.
+
+| Migration of the same synthetic inputs |    Median |  Minimum / maximum |
+| -------------------------------------- | --------: | -----------------: |
+| Linear snapshot lookup                 | 687.82 ms | 628.15 / 793.89 ms |
+| ID lookup and fingerprint buckets      |  27.96 ms |   27.29 / 32.47 ms |
+
+The ignored local harness is `artifacts/context-library-migration.mjs`; `node --expose-gc artifacts/context-library-migration.mjs after` transpiles and imports the actual helper with the installed TypeScript dependency. The earlier sample used the same harness before the lookup change. Regression tests cover equal snapshots with different IDs, same-ID snapshots with different bodies, live-note deduplication, and preservation at the cap.
+
+These five warm-process samples show the reduced lookup cost for this fixture. They do not measure retained heap, JSON validation, disk I/O, rendering or total startup time, and they do not establish a timing guarantee for every source distribution. Fingerprinting still scans previously unseen snapshot text, and equality checks still compare candidates within a matching bucket.
+
+The library dialog stays mounted for its modal lifecycle, but its closed state returns stable empty collections for folder, usage, note, search, attachment and picker calculations. Typing elsewhere therefore does not scan all notes or references through the hidden dialog. Reopening calculates current selections and live titles from the latest inputs. A regression observes zero helper calls and zero note/source lookup reads across closed writing renders and closing an active note picker.
+
+Context resolution returns the original note when it has no sources or only ordinary snapshots. Canonical ID lookups are built only for library references and cached with weak keys on immutable library arrays; replaced snapshots receive a new index, and unused arrays can be collected. Linked-note indexes are built only when needed, remain local to one resolution call, and read current target writing. No additional note-body cache is kept globally. Tests verify reuse across writing edits, same-ID snapshot replacement, missing canonical entries and current linked titles/text with an unchanged canonical library.

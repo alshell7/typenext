@@ -1,6 +1,14 @@
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import { EditorSelection, EditorState, Transaction } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import {
@@ -13,6 +21,10 @@ import {
 import { STORAGE_LIMITS } from '../../services/storage'
 import { defaultSettings } from '../../notebook/model'
 import { suggest } from '../../services/completion'
+import {
+  getBuiltinState,
+  subscribeBuiltinState,
+} from '../../services/builtin-engine'
 import type {
   Note,
   NotebookSettings,
@@ -34,9 +46,31 @@ import {
   suggestionOrigin,
 } from './suggestion-menu'
 
+const restoreUserAgent = vi.hoisted(() => {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, 'userAgent')
+  // CodeMirror caches browser detection on import. Chromium preserves the
+  // caret when a ghost splits a text node; JSDOM's generic UA misses that path.
+  // Model the Windows/Edge runtime while retaining real selection/DOM editing.
+  Object.defineProperty(navigator, 'userAgent', {
+    configurable: true,
+    value:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0',
+  })
+  return () => {
+    if (descriptor) Object.defineProperty(navigator, 'userAgent', descriptor)
+    else Reflect.deleteProperty(navigator, 'userAgent')
+  }
+})
+afterAll(restoreUserAgent)
+
 vi.mock('../../services/completion', () => ({ suggest: vi.fn() }))
+vi.mock('../../services/builtin-engine', () => ({
+  getBuiltinState: vi.fn(),
+  subscribeBuiltinState: vi.fn(),
+}))
 
 let nextNoteId = 0
+let builtinListener: (() => void) | undefined
 
 function makeNote(content = 'A thought in progress'): Note {
   return {
@@ -53,6 +87,7 @@ function makeNote(content = 'A thought in progress'): Note {
 
 function makeSettings(): NotebookSettings {
   return {
+    ...defaultSettings(),
     theme: 'light',
     palette: defaultSettings().palette,
     fontFamily: 'Merriweather',
@@ -64,6 +99,9 @@ function makeSettings(): NotebookSettings {
     suggestionDelay: 500,
     maxTokens: 80,
     suggestionLength: 'adaptive',
+    externalAutoEnabled: false,
+    suggestionInstructions: '',
+    localEngine: 'recall',
     provider: 'openai',
     externalProvider: 'openai',
     websiteImporter: 'direct',
@@ -136,8 +174,37 @@ function mountEditor(note = makeNote(), settings = makeSettings()) {
   }
 }
 
+function syncDOMSelection(view: EditorView) {
+  const selection = view.dom.ownerDocument.getSelection()
+  if (!selection) throw new Error('A DOM selection is required for this test')
+  const anchor = view.domAtPos(view.state.selection.main.anchor)
+  const head = view.domAtPos(view.state.selection.main.head)
+  // JSDOM queues focus selection events independently of CodeMirror's state.
+  // Keep the real selection at the cursor a user would have placed in the DOM.
+  selection.setBaseAndExtent(anchor.node, anchor.offset, head.node, head.offset)
+  expect(view.posAtDOM(selection.focusNode!, selection.focusOffset)).toBe(
+    view.state.selection.main.head
+  )
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  builtinListener = undefined
+  vi.mocked(getBuiltinState).mockReturnValue({
+    status: 'ready',
+    cached: true,
+    progress: 100,
+    downloadedBytes: 1,
+    totalBytes: 1,
+    backend: 'wasm',
+    identity: 'builtin-0',
+  })
+  vi.mocked(subscribeBuiltinState).mockImplementation(listener => {
+    builtinListener = listener
+    return () => {
+      builtinListener = undefined
+    }
+  })
   vi.mocked(suggest)
     .mockReset()
     .mockResolvedValue({
@@ -269,8 +336,14 @@ describe('manual suggestion choices', () => {
       ],
     })
     const { view, ref, content } = mountEditor(makeNote('The  ending.'))
-    act(() => view.dispatch({ selection: EditorSelection.cursor(4) }))
+    act(() => {
+      view.focus()
+      view.dispatch({ selection: EditorSelection.cursor(4) })
+      syncDOMSelection(view)
+    })
     await act(async () => ref.current?.requestSuggestion())
+    expect(view.state.field(suggestionMenuField)).not.toBeNull()
+    expect(view.state.selection.main.head).toBe(4)
     expect(screen.getByRole('listbox')).toHaveTextContent('From this note')
     const alternate = screen.getAllByRole('option')[1]!
     expect(alternate).toHaveTextContent('From Research.md')
@@ -308,6 +381,10 @@ describe('manual suggestion choices', () => {
     vi.mocked(suggest).mockResolvedValue(choices)
     const { ref, view, content } = mountEditor()
     async function request() {
+      act(() => {
+        view.focus()
+        syncDOMSelection(view)
+      })
       await act(async () => ref.current?.requestSuggestion())
       expect(screen.getByRole('listbox')).toBeVisible()
     }
@@ -384,7 +461,7 @@ describe('manual suggestion choices', () => {
     expect(suggest).not.toHaveBeenCalled()
     expect(editor.onStatus).toHaveBeenLastCalledWith({
       state: 'idle',
-      message: 'Suggestions are paused. Turn on Local suggestions to continue.',
+      message: 'Suggestions are paused. Turn on suggestions to continue.',
     })
     editor.rerender(
       <MarkdownEditor {...editor.props} settings={settings} ref={editor.ref} />
@@ -564,13 +641,265 @@ describe('private suggestion lifecycle', () => {
     expect(vi.mocked(suggest).mock.calls[0]?.[2].profiles.local.model).toBe('')
   })
 
-  it('keeps normal manual completion local and external completion explicit', async () => {
+  it('keeps remembered external profiles local until automatic inference is deliberately activated', async () => {
     const { ref, view } = mountEditor()
     await act(async () => ref.current?.requestSuggestion())
     expect(vi.mocked(suggest).mock.calls[0]?.[2].provider).toBe('local')
     await act(async () => ref.current?.requestExternalSuggestion('openai'))
     expect(vi.mocked(suggest).mock.calls[1]?.[2].provider).toBe('openai')
     expect(view.state.doc.toString()).toBe('A thought in progress')
+  })
+
+  it.each(['openai', 'openrouter', 'anthropic', 'custom'] as const)(
+    'uses deliberately activated %s for both automatic and normal manual requests',
+    async provider => {
+      vi.mocked(suggest).mockResolvedValue({
+        text: ' with a useful thought.',
+        sources: [],
+        mode: 'model',
+      })
+      const settings = {
+        ...makeSettings(),
+        provider,
+        externalAutoEnabled: true,
+      }
+      const editor = mountEditor(makeNote(), settings)
+      act(() => {
+        editor.view.focus()
+        editor.view.dispatch({
+          changes: { from: editor.view.state.doc.length, insert: ' today' },
+          selection: EditorSelection.cursor(editor.view.state.doc.length + 6),
+        })
+      })
+      await act(async () => vi.advanceTimersByTime(500))
+      expect(vi.mocked(suggest).mock.calls[0]?.[2].provider).toBe(provider)
+      expect(screen.queryByRole('listbox')).toBeNull()
+      await act(async () => editor.ref.current?.requestSuggestion())
+      expect(suggest).toHaveBeenCalledTimes(1)
+      expect(screen.getByRole('listbox')).toBeVisible()
+      const label = {
+        openai: 'OpenAI',
+        openrouter: 'OpenRouter',
+        anthropic: 'Anthropic',
+        custom: 'Custom endpoint',
+      }[provider]
+      expect(screen.getAllByRole('option')[0]).toHaveTextContent(label)
+      expect(editor.view.state.doc.toString()).toBe(
+        'A thought in progress today'
+      )
+    }
+  )
+
+  it('allows an activated external model to start from a blank page with a writing objective', async () => {
+    const editor = mountEditor(makeNote(''), {
+      ...makeSettings(),
+      externalAutoEnabled: true,
+    })
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(vi.mocked(suggest).mock.calls[0]?.[1].text).toBe('')
+    expect(vi.mocked(suggest).mock.calls[0]?.[2].provider).toBe('openai')
+    expect(editor.view.state.doc.toString()).toBe('')
+    expect(screen.getByRole('listbox')).toBeVisible()
+  })
+
+  it.each<{ label: string; patch: Partial<NotebookSettings> }>([
+    {
+      label: 'instructions',
+      patch: { suggestionInstructions: 'Use short sentences.' },
+    },
+    { label: 'provider', patch: { provider: 'openrouter' } },
+    { label: 'external activation', patch: { externalAutoEnabled: false } },
+    { label: 'local engine', patch: { localEngine: 'embedded' } },
+  ])('cancels a pending insertion when $label changes', async ({ patch }) => {
+    const pending = deferred<SuggestionResult>()
+    vi.mocked(suggest).mockImplementationOnce(() => pending.promise)
+    const settings = { ...makeSettings(), externalAutoEnabled: true }
+    const editor = mountEditor(makeNote(), settings)
+    await act(async () => editor.ref.current?.requestSuggestion())
+    const signal = vi.mocked(suggest).mock.calls[0]?.[3]
+    editor.rerender(
+      <MarkdownEditor
+        {...editor.props}
+        settings={{ ...settings, ...patch }}
+        ref={editor.ref}
+      />
+    )
+    expect(signal?.aborted).toBe(true)
+    await act(async () =>
+      pending.resolve({ text: ' stale.', sources: [], mode: 'model' })
+    )
+    expect(editor.view.state.field(inlineSuggestionField)).toBeNull()
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('returns routine inference to local immediately when external activation is switched off', async () => {
+    const settings = { ...makeSettings(), externalAutoEnabled: true }
+    const editor = mountEditor(makeNote(), settings)
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(vi.mocked(suggest).mock.calls[0]?.[2].provider).toBe('openai')
+    editor.rerender(
+      <MarkdownEditor
+        {...editor.props}
+        settings={{ ...settings, externalAutoEnabled: false }}
+        ref={editor.ref}
+      />
+    )
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(vi.mocked(suggest).mock.calls[1]?.[2].provider).toBe('local')
+    expect(editor.props.settings.profiles.openai.model).toBe('test')
+  })
+
+  it('invalidates completed cached insertions after a writer instruction change', async () => {
+    const editor = mountEditor()
+    await act(async () => editor.ref.current?.requestSuggestion())
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(suggest).toHaveBeenCalledTimes(1)
+    editor.rerender(
+      <MarkdownEditor
+        {...editor.props}
+        settings={{
+          ...editor.props.settings,
+          suggestionInstructions: 'Avoid metaphors.',
+        }}
+        ref={editor.ref}
+      />
+    )
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(suggest).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(suggest).mock.calls[1]?.[2].suggestionInstructions).toBe(
+      'Avoid metaphors.'
+    )
+  })
+
+  it.each(['local', 'openai'] as const)(
+    'offers one next automatic continuation after full acceptance in %s mode',
+    async provider => {
+      const settings = {
+        ...makeSettings(),
+        provider,
+        externalAutoEnabled: provider !== 'local',
+      }
+      const editor = mountEditor(makeNote(), settings)
+      act(() =>
+        editor.view.dispatch({
+          selection: EditorSelection.cursor(editor.view.state.doc.length),
+        })
+      )
+      await act(async () => editor.ref.current?.requestSuggestion())
+      act(() => fireEvent.keyDown(editor.content, { key: 'Tab' }))
+      expect(editor.view.state.field(inlineSuggestionField)).toBeNull()
+      await act(async () => vi.advanceTimersByTime(499))
+      expect(suggest).toHaveBeenCalledTimes(1)
+      await act(async () => vi.advanceTimersByTime(1))
+      expect(suggest).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(suggest).mock.calls[1]?.[2].provider).toBe(provider)
+      expect(vi.mocked(suggest).mock.calls[1]?.[1].text).toBe(
+        'A thought in progress with a useful next thought.'
+      )
+      await act(async () => vi.advanceTimersByTime(2_000))
+      expect(suggest).toHaveBeenCalledTimes(2)
+      expect(editor.view.state.doc.toString()).toBe(
+        'A thought in progress with a useful next thought.'
+      )
+    }
+  )
+
+  it('preserves a remaining word preview without starting another automatic request', async () => {
+    const editor = mountEditor()
+    await act(async () => editor.ref.current?.requestSuggestion())
+    act(() =>
+      fireEvent.keyDown(editor.content, { key: 'ArrowRight', ctrlKey: true })
+    )
+    const remaining = editor.view.state.field(inlineSuggestionField)
+    expect(remaining?.text).toBe('a useful next thought.')
+    await act(async () => vi.advanceTimersByTime(2_000))
+    expect(suggest).toHaveBeenCalledTimes(1)
+    expect(editor.view.state.field(inlineSuggestionField)).toBe(remaining)
+  })
+
+  it('keeps manual-only mode quiet after full acceptance', async () => {
+    const editor = mountEditor(makeNote(), {
+      ...makeSettings(),
+      autoSuggest: false,
+      externalAutoEnabled: true,
+    })
+    await act(async () => editor.ref.current?.requestSuggestion())
+    act(() => fireEvent.keyDown(editor.content, { key: 'Tab' }))
+    await act(async () => vi.advanceTimersByTime(2_000))
+    expect(suggest).toHaveBeenCalledTimes(1)
+    expect(editor.view.state.field(inlineSuggestionField)).toBeNull()
+  })
+
+  it('cancels requests when the page is hidden and never schedules inference in a hidden page', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get')
+    visibility.mockReturnValue('visible')
+    const pending = deferred<SuggestionResult>()
+    vi.mocked(suggest).mockImplementationOnce(() => pending.promise)
+    const editor = mountEditor(makeNote(), {
+      ...makeSettings(),
+      externalAutoEnabled: true,
+    })
+    await act(async () => editor.ref.current?.requestSuggestion())
+    const signal = vi.mocked(suggest).mock.calls[0]?.[3]
+    await act(async () => {
+      visibility.mockReturnValue('hidden')
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(signal?.aborted).toBe(true)
+    await act(async () => pending.resolve({ text: 'stale.', sources: [] }))
+    act(() =>
+      editor.view.dispatch({ changes: { from: 0, insert: 'Changed ' } })
+    )
+    await act(async () => vi.advanceTimersByTime(2_000))
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(suggest).toHaveBeenCalledTimes(1)
+    expect(editor.view.state.field(inlineSuggestionField)).toBeNull()
+    visibility.mockRestore()
+  })
+
+  it('invalidates embedded results and cached insertions when the local worker is unloaded or replaced', async () => {
+    const settings = {
+      ...makeSettings(),
+      provider: 'local' as const,
+      localEngine: 'embedded' as const,
+    }
+    const editor = mountEditor(makeNote(), settings)
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(editor.view.state.field(inlineSuggestionField)).not.toBeNull()
+    await act(async () => {
+      vi.mocked(getBuiltinState).mockReturnValue({
+        ...getBuiltinState(),
+        identity: 'builtin-1',
+        status: 'idle',
+      })
+      builtinListener?.()
+    })
+    expect(editor.view.state.field(inlineSuggestionField)).toBeNull()
+    await act(async () => editor.ref.current?.requestSuggestion())
+    expect(suggest).toHaveBeenCalledTimes(2)
+    const pending = deferred<SuggestionResult>()
+    vi.mocked(suggest).mockImplementationOnce(() => pending.promise)
+    act(() =>
+      editor.view.dispatch({ changes: { from: 0, insert: 'Changed ' } })
+    )
+    await act(async () => editor.ref.current?.requestSuggestion())
+    const signal = vi.mocked(suggest).mock.calls[2]?.[3]
+    await act(async () => {
+      vi.mocked(getBuiltinState).mockReturnValue({
+        ...getBuiltinState(),
+        identity: 'builtin-2',
+      })
+      builtinListener?.()
+    })
+    expect(signal?.aborted).toBe(true)
+    await act(async () =>
+      pending.resolve({
+        text: ' stale embedded insertion.',
+        sources: [],
+        mode: 'model',
+      })
+    )
+    expect(editor.view.state.field(inlineSuggestionField)).toBeNull()
   })
 
   it('handles the manual shortcut once and accepts a word through the keyboard', async () => {
@@ -1148,13 +1477,21 @@ describe('private suggestion lifecycle', () => {
     }
   })
 
-  it('rejects an oversized insertion without truncation, then allows a precise UTF-8 boundary edit', async () => {
+  it('rejects direct and imperative oversized insertions without truncation, then allows a precise UTF-8 boundary edit', async () => {
     const original = 'a'.repeat(STORAGE_LIMITS.noteBytes - 4)
     const editor = mountEditor(makeNote(original))
     await act(async () =>
       editor.view.dispatch({
         changes: { from: original.length, insert: '😀😀' },
       })
+    )
+    act(() =>
+      editor.view.dispatch({
+        selection: EditorSelection.cursor(original.length),
+      })
+    )
+    await act(async () =>
+      expect(() => editor.ref.current!.insert('😀😀')).toThrow('8 MiB')
     )
     expect(editor.view.state.doc.length).toBe(original.length)
     expect(editor.onChange).not.toHaveBeenCalled()
@@ -1165,9 +1502,7 @@ describe('private suggestion lifecycle', () => {
         message: expect.stringContaining('8 MiB'),
       })
     )
-    await act(async () =>
-      editor.view.dispatch({ changes: { from: original.length, insert: '😀' } })
-    )
+    await act(async () => editor.ref.current!.insert('😀'))
     expect(editor.view.state.field(documentByteSize)).toBe(
       STORAGE_LIMITS.noteBytes
     )
@@ -1180,5 +1515,12 @@ describe('private suggestion lifecycle', () => {
     expect(editor.view.state.field(documentByteSize)).toBe(
       STORAGE_LIMITS.noteBytes - 1
     )
+  })
+  it('allows an identical selection replacement instead of misclassifying it as a blocked insertion', () => {
+    const editor = mountEditor(makeNote('The same ending.'))
+    act(() => editor.view.dispatch({ selection: EditorSelection.range(4, 8) }))
+    act(() => expect(() => editor.ref.current!.insert('same')).not.toThrow())
+    expect(editor.view.state.doc.toString()).toBe('The same ending.')
+    expect(editor.onChange).toHaveBeenCalledExactlyOnceWith('The same ending.')
   })
 })

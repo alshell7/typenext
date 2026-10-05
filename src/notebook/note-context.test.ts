@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import type { Note } from '../types/notebook'
+import { describe, expect, it, vi } from 'vitest'
+import type { ContextSource, Note } from '../types/notebook'
+import { libraryReference } from './context-library'
 import {
   linkNoteSource,
   resolveNoteContext,
@@ -20,6 +21,126 @@ function note(id: string, title: string, content: string): Note {
 }
 
 describe('live linked-note context', () => {
+  it('returns a note without sources unchanged and does not visit other notes or the library', () => {
+    const draft = note('draft', 'Draft', 'My writing')
+    const unrelated = note('unrelated', 'Unrelated', 'Private writing')
+    Object.defineProperty(unrelated, 'id', {
+      get: () => {
+        throw new Error('An unrelated note must not be indexed.')
+      },
+    })
+    const library = [linkNoteSource(draft)]
+    Object.defineProperty(library[0], 'id', {
+      get: () => {
+        throw new Error('An unused library must not be indexed.')
+      },
+    })
+    expect(resolveNoteContext(draft, [unrelated], library)).toBe(draft)
+  })
+
+  it('retains ordinary snapshots and their note identity without building unused indexes', () => {
+    const ordinary: ContextSource = {
+      id: 'file',
+      name: 'Imported.md',
+      kind: 'markdown',
+      text: 'Imported evidence.',
+      enabled: true,
+      addedAt: 1,
+    }
+    const draft = { ...note('draft', 'Draft', ''), sources: [ordinary] }
+    const unrelated = note('unrelated', 'Unrelated', 'Private writing')
+    const library = [linkNoteSource(unrelated)]
+    Object.defineProperty(unrelated, 'id', {
+      get: () => {
+        throw new Error('Ordinary snapshots do not need a note index.')
+      },
+    })
+    Object.defineProperty(library[0], 'id', {
+      get: () => {
+        throw new Error('Ordinary snapshots do not need a library index.')
+      },
+    })
+    expect(resolveNoteContext(draft, [unrelated], library)).toBe(draft)
+    expect(draft.sources[0]).toBe(ordinary)
+  })
+
+  it('reuses an immutable library index across writing edits and refreshes replaced snapshots', () => {
+    const canonical: ContextSource = {
+      id: 'shared',
+      name: 'Shared.md',
+      kind: 'markdown',
+      text: 'First proof.',
+      enabled: true,
+      addedAt: 1,
+    }
+    const unused = { ...canonical, id: 'unused' }
+    const indexRead = vi.fn(() => 'unused')
+    Object.defineProperty(unused, 'id', { get: indexRead })
+    const library = [unused, canonical]
+    const draft = {
+      ...note('draft', 'Draft', 'My writing'),
+      sources: [libraryReference(canonical)],
+    }
+    const unrelated = note('unrelated', 'Unrelated', 'Private writing')
+    Object.defineProperty(unrelated, 'id', {
+      get: () => {
+        throw new Error('File references do not need a note index.')
+      },
+    })
+    expect(
+      resolveNoteContext(draft, [unrelated], library).sources[0]?.text
+    ).toBe('First proof.')
+    expect(indexRead).toHaveBeenCalledTimes(1)
+    expect(
+      resolveNoteContext(
+        { ...draft, content: 'More of my writing.' },
+        [unrelated],
+        library
+      ).sources[0]?.text
+    ).toBe('First proof.')
+    expect(indexRead).toHaveBeenCalledTimes(1)
+
+    const replaced = { ...canonical, name: 'Updated.md', text: 'Other proof.' }
+    const resolved = resolveNoteContext(draft, [unrelated], [unused, replaced])
+    expect(resolved.sources[0]).toMatchObject({
+      name: 'Updated.md',
+      text: 'Other proof.',
+    })
+    expect(indexRead).toHaveBeenCalledTimes(2)
+    expect(canonical.text).toBe('First proof.')
+  })
+
+  it('reads current target writing even when its canonical library index is reused', () => {
+    const reference = note('reference', 'Research', 'Initial evidence')
+    const canonical = linkNoteSource(reference)
+    const library = [canonical]
+    const draft = {
+      ...note('draft', 'Draft', 'My words'),
+      sources: [libraryReference(canonical, false)],
+    }
+    expect(
+      resolveNoteContext(draft, [reference], library).sources[0]
+    ).toMatchObject({
+      name: 'Research',
+      text: 'Initial evidence',
+      enabled: false,
+    })
+    const edited = {
+      ...reference,
+      title: 'Updated research',
+      content: 'Current evidence',
+    }
+    expect(
+      resolveNoteContext(draft, [edited], library).sources[0]
+    ).toMatchObject({
+      name: 'Updated research',
+      text: 'Current evidence',
+      enabled: false,
+    })
+    expect(library[0]?.text).toBe('')
+    expect(draft.sources[0]?.text).toBe('')
+  })
+
   it('stores a reference and follows subsequent writing and title edits', () => {
     const reference = note('reference', 'Research', 'Initial evidence')
     const draft = {

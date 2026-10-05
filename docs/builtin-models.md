@@ -1,0 +1,83 @@
+# Built-in local models
+
+Research and synthetic checks: 5 October 2026.
+
+TypeNext can run a small text model inside its webview, without a separately installed server. It is an optional download. The default local mode still uses exact recall and deterministic writing starters, which require no weights, worker or model process.
+
+In Preferences, choose **Local suggestions**, find **SmolLM2 135M**, and click **Download model**. After the download finishes, click **Use this model** to activate inference. Downloading alone does not change the selected suggestion mode. A cached model can be loaded with **Load downloaded model**. **Unload model** releases the worker; **Remove** also deletes this model's cache. Nothing is uploaded for inference.
+
+## Shipped text model
+
+| Property               | Value                                                                                                                                               |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Original               | [HuggingFaceTB/SmolLM2-135M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct)                                                   |
+| Browser conversion     | [onnx-community/SmolLM2-135M-Instruct-ONNX](https://huggingface.co/onnx-community/SmolLM2-135M-Instruct-ONNX)                                       |
+| Revision               | `b8a5c0f183b78c55955a5364f610c36668b5e681`                                                                                                          |
+| Quantization           | Q8, `onnx/model_quantized.onnx`                                                                                                                     |
+| Download               | 139,186,567 bytes across six pinned files; about 139 MB decimal                                                                                     |
+| Original model license | Apache-2.0                                                                                                                                          |
+| Runtime                | [Transformers.js 4.3.0](https://github.com/huggingface/transformers.js/releases/tag/4.3.0), Apache-2.0; ONNX Runtime Web from the package lock, MIT |
+| Default backend        | WebAssembly CPU, one inference thread                                                                                                               |
+
+The original model card describes an English instruction model and acknowledges factual and reasoning limitations. This instruction model has no trained native FIM interface. TypeNext supplies the title, objective, writing brief, retrieved passages and cursor suffix as data, then prefills the assistant turn with the latest writing so generation continues it. Native FIM is a separate training task; the [training recipe](fim-training.md) does not change the shipped weights.
+
+The chosen Q8 file is smaller than the conversion repository's Q4 file and works with the tested CPU backend. SmolLM2-360M or a larger instruction model may improve some tasks, but its prose quality, download size and live memory use have not been measured here. The existing local-server mode can use larger user-selected models without changing the built-in default. A small parameter count alone is not evidence of good context-sensitive writing.
+
+## Download, privacy and resource boundaries
+
+Only **Download model** fetches pinned public Hugging Face assets. Each file has an exact byte count and SHA-256 in `src/services/builtin-model.ts`; verification completes before the file is put in the model-specific Cache API store. A cancelled partial file is discarded. Already verified complete files can be reused on a later explicit download. Notebook text and API keys are absent from these requests.
+
+Loading and generating use the verified cache and bundled runtime files. The worker's fetch function allows only the app's own `/runtime/builtin/` assets; a missing optional model file receives a local 404. Remote model loading, filesystem cache and cross-origin storage are disabled. The pinned remote-path template also covers Transformers.js's initial configuration discovery, which otherwise queries `main` before forwarding the revision option. Loading missing weights produces an error instead of a download or hosted fallback.
+
+`npm run prepare:runtime` copies the installed ONNX Runtime's CPU and asyncify factories/WASM into `public/runtime/builtin/`. The app's dev/build/preview commands run this preparation. These generated binaries stay outside Git, while runtime licenses are checked in under `public/notices/`. A fresh clone therefore needs the package install and normal build, rather than a CDN runtime fetch during writing.
+
+The worker receives at most a 120-character title, 240-character objective, 240-character brief, two 320-character reference passages, a 900-character prefix, a 200-character suffix and 240-character instruction preference. A second check uses the actual tokenizer and keeps the complete prompt below 768 input tokens. It drops optional context or shortens old writing as whole fields; it never right-truncates away the current cursor or suffix. Unsupported over-budget input returns no model text. Generation is capped at 48 new tokens, with a 15-second cooperative deadline and a 20-second parent timeout. The completion service applies its normal short-insertion sanitizer afterward.
+
+Only one model task runs at a time. Abort rejects the caller immediately, asks the worker to stop between tokens, and terminates it after 1.5 seconds if it has not stopped. A subsequent request can wait briefly for that cancelled task; an unrelated concurrent task gets a busy error. The worker is unloaded after five idle minutes, on explicit unload/remove, or when the app closes. The cache is preserved after unloading. If embedded mode is still selected, a later suggestion restores the downloaded cache without downloading missing files. Download progress is throttled to approximately ten updates per second. Weights are never stored in notebook snapshots.
+
+CPU is the restart default, and a chosen backend is remembered across loads during the current app session. Advanced Automatic mode may try WebGPU; a failed initialization gets one fresh-worker CPU attempt using only cached bytes. Explicit GPU mode reports a failure rather than changing backends. WebGPU availability varies by browser, driver and model operator support. See the [official WebGPU guide](https://huggingface.co/docs/transformers.js/guides/webgpu). The installed library requires the asyncify GPU runtime factory; the older JSEP factory is not interchangeable.
+
+## Real synthetic text smoke
+
+The isolated harness exercised the actual TypeNext engine in Edge 154 on Windows using CPU WASM, one thread, greedy generation and 20 new tokens per sample. Only synthetic note titles, objectives, references, prefixes and suffixes were supplied. It loaded the downloaded pinned model, generated three insertions, unloaded it and reloaded the cache. After downloading, the test blocked all non-loopback requests; inference and reload made zero such requests. The notebook application's normal sanitizer remains responsible for clipping raw model output.
+
+| Sample                                                 | Generation time | Observation                                                                                                              |
+| ------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `I opened the window and` with a morning objective     | 1,555 ms        | Coherent continuation, but it described sunset and missed the morning objective.                                         |
+| `At dawn, the garden` with a short rain reference      | 1,704 ms        | Reused the scent/leaves imagery, but added an unsupported summer detail and ran into the token cap.                      |
+| `A patient writer` before ` before the next sentence.` | 1,280 ms        | Misread “patient” as medical patients and produced a poor bridge. The stored prefix and suffix themselves stayed intact. |
+
+Cached cold loading took 1,070 ms and a cache reload took 1,185 ms in that run. These three samples establish working offline inference, not general writing quality. They specifically show why short, reviewable suggestions and the lighter recall/starter mode remain necessary. This model is an experimental local option, not an equivalent substitute for a much larger writing model.
+
+An additional CPU resource-only run sampled all Edge processes belonging to the isolated test profile, including their child processes. Private committed memory was about 278 MiB before loading, 951 MiB while loaded and 332 MiB two seconds after explicit unload plus a renderer GC request. The roughly 673 MiB loaded increase includes runtime and browser-worker overhead; the roughly 619 MiB reduction demonstrates release, while some browser memory remained. Whole-profile working set was about 486 MiB before, 1,141 MiB loaded and 594 MiB after unload. CPU cumulative time grew by about 2.8 seconds across the first load. This is a point-in-time diagnostic, not peak memory, a minimum hardware requirement or a Tauri-specific benchmark. Main-renderer JS heap measurements exclude the model worker and WASM, so they are not used to claim a tiny memory footprint. Allow about 1 GB of free memory for CPU mode and measure on the target device.
+
+A separate cache-only advanced-backend probe successfully initialized and reloaded WebGPU after correcting the runtime factory. Loading took 1,981 ms and reloading 1,933 ms. It made zero generation or external requests. Whole-profile private memory was about 277 MiB before loading, 1,329 MiB loaded and 499 MiB after unload; GPU allocations were not measured separately. This verifies initialization on that environment, not GPU generation quality or hardware acceleration on every device. Its higher process-memory use is another reason CPU remains the default. Windows browser checks require a webview with Worker, Cache API, WebAssembly SIMD and Web Crypto support; packaged macOS inference remains unmeasured.
+
+Reproduce with a recent Node, installed dependencies and Edge available at the path used in the harness:
+
+```powershell
+npm run prepare:runtime
+node tests/perf/builtin-model-smoke.mjs
+```
+
+This command explicitly downloads only if the cache is missing, then makes three synthetic local generations. It writes reports and its disposable browser profile under ignored `artifacts/builtin-model-smoke/`; it never reads the note store or credentials. `--resources-only` requires an existing verified cache and makes no generation requests. `TYPENEXT_BUILTIN_BACKEND=auto` selects the optional backend probe. Reports should preserve the requested and actual backend separately. Windows CPU/whole-profile memory results do not establish macOS or GPU performance.
+
+## Cactus Needle and Whistle
+
+[Needle 3](https://github.com/cactus-compute/needle) targets tool calls, structured extraction and embeddings. Its responses are structured JSON with calls and confidence; it trades away general chat capacity. That makes its 8–29 MB footprint interesting for optional context extraction or semantic retrieval, but it is not an ordinary prose completion/FIM model. The current source and [Needle 3 weights](https://huggingface.co/Cactus-Compute/needle3) are Apache-2.0. Current platform assets include browser WASM and Windows/macOS targets; this differs from older general Cactus Engine guidance. The Needle CLI documentation says telemetry defaults on, so external CLI deployments must explicitly disable it. TypeNext does not invoke that CLI.
+
+[Whistle](https://cactuscompute.com/blog/whistle), released 2 October 2026, is a much better fit for dictation: 16.9 MB speech weights, CPU inference, 16 kHz mono PCM, and at most 30 seconds per clip. Its seven documented languages are English, German, French, Spanish, Italian, Dutch and Polish. The [official weights](https://huggingface.co/Cactus-Compute/whistle) and the shared engine are Apache-2.0. The official browser demo demonstrates local transcription after a model download. Its published M4 Pro latency/accuracy figures are the author's measurements and are not TypeNext benchmarks.
+
+For browser integration, the pinned Needle WASM factory accepts verified runtime bytes; `needle_load` loads the `.cact` weights and `needle_transcribe` accepts bounded PCM. This avoids a platform installer. TypeNext's dictation workstream uses explicit model download, microphone permission, local recording, a transcript preview and a separate insertion action. Dictation result quality and runtime measurements belong to its own smoke report; the text-model measurements above do not validate speech. No tool-call model is needed merely to insert a transcript.
+
+The text engine's supported APIs, bounds and cache behavior are covered by synthetic unit tests. The optional training/export path and cross-platform hardware quality require additional evaluation before a model release.
+
+## Whistle smoke and native integration
+
+A reproducible synthetic Windows voice fixture says “The patient writer leaves room for another thought.” The pinned runtime decoded the 3.27-second clip exactly: 33.5 ms model loading and 392 ms transcription in the Node WASM harness, with 58,851,328 bytes of WASM heap. These figures are one short CPU sample, not broad speech-quality or application-memory benchmarks. No human audio was recorded or transmitted.
+
+The actual packaged Windows WebView also passed download, microphone capture using the synthetic test device, local transcription, editable review, explicit insertion, restored editor focus and single-step undo. A production build issue found by this test was fixed by packaging the AudioWorklet as a same-origin file instead of an inlined data URL; the desktop Content Security Policy remains strict.
+
+Recordings stop at 30 seconds. Cancel, hiding the app and closing the dialog stop microphone tracks; late permission grants after cancellation are stopped immediately. The dialog discards captured audio after transcription, and its worker unloads on close or after one idle minute. Dictation does not select an external provider. macOS microphone usage text and audio-input entitlements are configured, but Mac recording has not been tested on this Windows workstation.
+
+Prepare the synthetic fixture with `node scripts/prepare-whistle-fixture.mjs`. `node scripts/test-whistle-runtime.mjs` uses the separately downloaded pinned model under ignored `artifacts/whistle/`; it performs no implicit download. Set `TYPENEXT_NATIVE_AI_SMOKE=1` when running `npm run test:native:windows` to include both real built-in models and the synthetic microphone workflow.

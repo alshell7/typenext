@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>NSMicrophoneUsageDescription</key><string>TypeNext records a short clip when you choose Record, then transcribes it on this device. Audio is never sent to an external model.</string></dict></plist>

@@ -1,12 +1,15 @@
 import type { NotebookSettings, PaletteColors } from '../types/notebook'
 
 export const LIGHT_PALETTES = {
+  contrast: { page: '#ffffff', sidebar: '#e6e8eb', accent: '#123d77' },
   paper: { page: '#ffffff', sidebar: '#f3f4f1', accent: '#42644d' },
   linen: { page: '#faf6ef', sidebar: '#eee7db', accent: '#805f44' },
   mist: { page: '#f4f7fa', sidebar: '#e7edf3', accent: '#426482' },
 } satisfies Record<string, PaletteColors>
 
 export const DARK_PALETTES = {
+  black: { page: '#000000', sidebar: '#101114', accent: '#c1c9d6' },
+  contrast: { page: '#0b0b0e', sidebar: '#22252d', accent: '#c3d9ff' },
   graphite: { page: '#212121', sidebar: '#17191c', accent: '#a6b6c8' },
   midnight: { page: '#151c28', sidebar: '#111722', accent: '#91acce' },
   forest: { page: '#202921', sidebar: '#172019', accent: '#a8bf9d' },
@@ -75,12 +78,18 @@ function readable(desired: string, backgrounds: string[]): string {
   return target
 }
 
-function surfaceColors(background: string, accent: string) {
+function surfaceColors(
+  background: string,
+  accent: string,
+  highContrast = false
+) {
   const target =
     contrastRatio('#ffffff', background) > contrastRatio('#000000', background)
       ? '#ffffff'
       : '#000000'
-  const ink = readable(blend(background, target, 0.86), [background])
+  const ink = readable(blend(background, target, highContrast ? 1 : 0.86), [
+    background,
+  ])
   // Preserve tonal depth while preventing a custom mid-gray surface from
   // crossing the contrast boundary for its already readable foreground.
   const safeBackground = (candidate: string) => readable(candidate, [ink])
@@ -89,8 +98,14 @@ function surfaceColors(background: string, accent: string) {
   const soft = safeBackground(blend(background, accent, 0.13))
   const selection = safeBackground(blend(background, accent, 0.19))
   const backgrounds = [background, surface, hover, soft, selection]
-  const secondary = readable(blend(background, target, 0.67), backgrounds)
-  const muted = readable(blend(background, target, 0.56), backgrounds)
+  const secondary = readable(
+    blend(background, target, highContrast ? 0.86 : 0.67),
+    backgrounds
+  )
+  const muted = readable(
+    blend(background, target, highContrast ? 0.76 : 0.56),
+    backgrounds
+  )
   return {
     ink,
     surface,
@@ -100,7 +115,7 @@ function surfaceColors(background: string, accent: string) {
     secondary,
     muted,
     accent: readable(accent, backgrounds),
-    line: blend(background, target, 0.14),
+    line: blend(background, target, highContrast ? 0.4 : 0.14),
     error: readable(target === '#ffffff' ? '#eea29a' : '#a13d37', backgrounds),
   }
 }
@@ -126,14 +141,17 @@ export function selectedPalette(
   }
 }
 
-export function paletteTokens(colors: PaletteColors): PaletteTokens {
+export function paletteTokens(
+  colors: PaletteColors,
+  highContrast = false
+): PaletteTokens {
   const safe = {
     page: hex(colors.page, LIGHT_PALETTES.paper.page),
     sidebar: hex(colors.sidebar, LIGHT_PALETTES.paper.sidebar),
     accent: hex(colors.accent, LIGHT_PALETTES.paper.accent),
   }
-  const page = surfaceColors(safe.page, safe.accent)
-  const sidebar = surfaceColors(safe.sidebar, safe.accent)
+  const page = surfaceColors(safe.page, safe.accent, highContrast)
+  const sidebar = surfaceColors(safe.sidebar, safe.accent, highContrast)
   const onAccent = readable(
     contrastRatio('#ffffff', safe.accent) >
       contrastRatio('#000000', safe.accent)
@@ -181,7 +199,12 @@ export function applyPalette(
   dark: boolean
 ): void {
   const colors = selectedPalette(settings, dark)
-  for (const [name, value] of Object.entries(paletteTokens(colors)))
+  for (const [name, value] of Object.entries(
+    paletteTokens(
+      colors,
+      (dark ? settings.palette.dark : settings.palette.light) === 'contrast'
+    )
+  ))
     root.style.setProperty(name, value)
   root.style.colorScheme = luminance(colors.page) < 0.18 ? 'dark' : 'light'
   root.dataset.palette = dark ? settings.palette.dark : settings.palette.light

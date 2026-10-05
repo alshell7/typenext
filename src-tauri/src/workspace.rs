@@ -22,6 +22,8 @@ pub struct WorkspaceState {
 pub struct Workspace {
     version: u8,
     notes: Vec<Note>,
+    #[serde(default)]
+    context_library: Vec<ContextSource>,
     open_note_ids: Vec<String>,
     active_note_id: Option<String>,
     settings: Settings,
@@ -63,24 +65,44 @@ struct ContextSource {
     origin: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     linked_note_id: Option<String>,
+    #[serde(default)]
+    library_id: Option<String>,
+    #[serde(default)]
+    folder: Option<String>,
     enabled: bool,
     added_at: u64,
 }
 
 impl Serialize for ContextSource {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let fields =
-            6 + usize::from(self.origin.is_some()) + usize::from(self.linked_note_id.is_some());
+        let fields = 6
+            + usize::from(self.origin.is_some())
+            + usize::from(self.linked_note_id.is_some())
+            + usize::from(self.library_id.is_some())
+            + usize::from(self.folder.is_some());
         let mut source = serializer.serialize_struct("ContextSource", fields)?;
         source.serialize_field("id", &self.id)?;
         source.serialize_field("name", &self.name)?;
         source.serialize_field("kind", &self.kind)?;
-        source.serialize_field("text", if self.kind == "note" { "" } else { &self.text })?;
+        source.serialize_field(
+            "text",
+            if self.kind == "note" || self.library_id.is_some() {
+                ""
+            } else {
+                &self.text
+            },
+        )?;
         if let Some(origin) = &self.origin {
             source.serialize_field("origin", origin)?;
         }
         if let Some(linked_note_id) = &self.linked_note_id {
             source.serialize_field("linkedNoteId", linked_note_id)?;
+        }
+        if let Some(library_id) = &self.library_id {
+            source.serialize_field("libraryId", library_id)?;
+        }
+        if let Some(folder) = &self.folder {
+            source.serialize_field("folder", folder)?;
         }
         source.serialize_field("enabled", &self.enabled)?;
         source.serialize_field("addedAt", &self.added_at)?;
@@ -105,6 +127,12 @@ struct Settings {
     #[serde(default = "default_suggestion_length")]
     suggestion_length: String,
     provider: String,
+    #[serde(default)]
+    external_auto_enabled: bool,
+    #[serde(default)]
+    suggestion_instructions: String,
+    #[serde(default = "default_local_engine")]
+    local_engine: String,
     #[serde(default = "default_external_provider")]
     external_provider: String,
     profiles: HashMap<String, ProviderProfile>,
@@ -113,6 +141,8 @@ struct Settings {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ProviderProfile {
+    #[serde(default, rename = "savedModels")]
+    saved_models: Vec<String>,
     endpoint: String,
     model: String,
     protocol: String,
@@ -156,10 +186,10 @@ impl Default for Palette {
 fn validate_palette(palette: &Palette) -> Result<(), String> {
     if !matches!(
         palette.light.as_str(),
-        "paper" | "linen" | "mist" | "custom"
+        "paper" | "linen" | "mist" | "contrast" | "custom"
     ) || !matches!(
         palette.dark.as_str(),
-        "graphite" | "midnight" | "forest" | "custom"
+        "graphite" | "midnight" | "forest" | "black" | "contrast" | "custom"
     ) {
         return Err("The notebook contains an invalid color palette".into());
     }
@@ -174,6 +204,10 @@ fn validate_palette(palette: &Palette) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn default_local_engine() -> String {
+    "server".into()
 }
 
 fn default_suggestion_length() -> String {
@@ -245,11 +279,51 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
             } else if source.linked_note_id.is_some() {
                 return Err("Only linked-note sources may contain a note identifier".into());
             }
+            if let Some(library_id) = &source.library_id {
+                validate_id(library_id)?;
+            }
+            if let Some(folder) = &source.folder {
+                bounded_text(folder, 4096, "Source folder")?;
+            }
             bounded_text(&source.name, 4096, "Source name")?;
             bounded_text(&source.text, MAX_MARKDOWN_BYTES, "Source text")?;
             if let Some(origin) = &source.origin {
                 bounded_text(origin, 32_768, "Source origin")?;
             }
+        }
+    }
+    if workspace.context_library.len() > 2048 {
+        return Err("The context library exceeds 2048 references".into());
+    }
+    let mut library_ids = HashSet::new();
+    for source in &workspace.context_library {
+        validate_id(&source.id)?;
+        if !library_ids.insert(&source.id) || source.library_id.is_some() {
+            return Err("The library contains duplicate or nested references".into());
+        }
+        if !matches!(
+            source.kind.as_str(),
+            "text" | "markdown" | "pdf" | "docx" | "website" | "note"
+        ) {
+            return Err("A library reference has an unsupported format".into());
+        }
+        if source.kind == "note" {
+            validate_id(
+                source
+                    .linked_note_id
+                    .as_deref()
+                    .ok_or("A library note link needs an identifier")?,
+            )?;
+        } else if source.linked_note_id.is_some() {
+            return Err("Only notes may have a linked note identifier".into());
+        }
+        bounded_text(&source.name, 4096, "Source name")?;
+        bounded_text(&source.text, MAX_MARKDOWN_BYTES, "Source text")?;
+        if let Some(origin) = &source.origin {
+            bounded_text(origin, 32_768, "Source origin")?;
+        }
+        if let Some(folder) = &source.folder {
+            bounded_text(folder, 4096, "Source folder")?;
         }
     }
     let mut open_ids = HashSet::new();
@@ -283,6 +357,17 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
     {
         return Err("The notebook contains invalid preferences".into());
     }
+    if !matches!(
+        settings.local_engine.as_str(),
+        "recall" | "embedded" | "server"
+    ) {
+        return Err("Invalid local suggestion engine".into());
+    }
+    bounded_text(
+        &settings.suggestion_instructions,
+        8000,
+        "Suggestion instructions",
+    )?;
     bounded_text(&settings.font_family, 256, "Font preference")?;
     if settings.profiles.len() != PROVIDERS.len() {
         return Err("Provider preferences are incomplete".into());
@@ -292,6 +377,12 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
             .profiles
             .get(provider)
             .ok_or("Provider preferences are incomplete")?;
+        if profile.saved_models.len() > 32 {
+            return Err("Too many saved models".into());
+        }
+        for model in &profile.saved_models {
+            bounded_text(model, 256, "Saved model")?;
+        }
         bounded_text(&profile.endpoint, 4096, "Provider endpoint")?;
         bounded_text(&profile.model, 256, "Provider model")?;
         if !matches!(profile.protocol.as_str(), "chat" | "fim") {
@@ -463,10 +554,12 @@ fn read_workspace(path: &Path) -> Result<Workspace, String> {
     let mut workspace: Workspace = serde_json::from_slice(&bytes)
         .map_err(|error| format!("The notebook file could not be parsed: {error}"))?;
     // Old provider preferences cannot opt the writer into remote suggestions.
-    workspace.settings.provider = "local".into();
+    if !workspace.settings.external_auto_enabled {
+        workspace.settings.provider = "local".into();
+    }
     for note in &mut workspace.notes {
         for source in &mut note.sources {
-            if source.kind == "note" {
+            if source.kind == "note" || source.library_id.is_some() {
                 source.text.clear();
             }
         }
@@ -684,7 +777,9 @@ pub async fn persist_workspace(
     state: State<'_, WorkspaceState>,
     mut workspace: Workspace,
 ) -> Result<(), String> {
-    workspace.settings.provider = "local".into();
+    if !workspace.settings.external_auto_enabled {
+        workspace.settings.provider = "local".into();
+    }
     let directory = app
         .path()
         .app_data_dir()
@@ -887,9 +982,61 @@ mod tests {
             text: "Derived writing must not be cached".into(),
             origin: None,
             linked_note_id: target.map(str::to_string),
+            library_id: None,
+            folder: None,
             enabled: true,
             added_at: 1,
         }
+    }
+
+    #[test]
+    fn reusable_context_and_explicit_engine_selection_survive_native_recovery() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut workspace = example("My writing");
+        let mut canonical = linked_source("shared", Some("reference-note"));
+        canonical.kind = "text".into();
+        canonical.linked_note_id = None;
+        canonical.text = "Only one stored copy".into();
+        canonical.folder = Some("Research/Ideas".into());
+        let mut reference = linked_source("shared", Some("reference-note"));
+        reference.kind = "text".into();
+        reference.linked_note_id = None;
+        reference.library_id = Some("shared".into());
+        workspace.context_library.push(canonical);
+        workspace.notes[0].sources.push(reference);
+        workspace.settings.provider = "openai".into();
+        workspace.settings.external_auto_enabled = true;
+        workspace.settings.local_engine = "embedded".into();
+        workspace.settings.suggestion_instructions = "Keep my voice".into();
+        workspace.settings.palette.dark = "black".into();
+        workspace
+            .settings
+            .profiles
+            .get_mut("openai")
+            .unwrap()
+            .saved_models = vec!["writer-a".into(), "writer-b".into()];
+        persist_at_path(directory.path(), &workspace).unwrap();
+        let restored = load_at_path(directory.path()).unwrap().0.unwrap();
+        assert_eq!(restored.settings.provider, "openai");
+        assert!(restored.settings.external_auto_enabled);
+        assert_eq!(restored.settings.local_engine, "embedded");
+        assert_eq!(restored.settings.suggestion_instructions, "Keep my voice");
+        assert_eq!(restored.settings.profiles["openai"].saved_models.len(), 2);
+        assert_eq!(restored.context_library[0].text, "Only one stored copy");
+        assert_eq!(
+            restored.context_library[0].folder.as_deref(),
+            Some("Research/Ideas")
+        );
+        assert_eq!(restored.notes[0].sources[0].text, "");
+        assert_eq!(
+            restored.notes[0].sources[0].library_id.as_deref(),
+            Some("shared")
+        );
+        workspace.context_library[0].library_id = Some("nested".into());
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.context_library[0].library_id = None;
+        workspace.settings.suggestion_instructions = "x".repeat(8001);
+        assert!(validate_workspace(&workspace).is_err());
     }
 
     #[test]
@@ -1057,6 +1204,8 @@ mod tests {
             text: "\u{0000}".repeat(MAX_MARKDOWN_BYTES),
             origin: None,
             linked_note_id: None,
+            library_id: None,
+            folder: None,
             enabled: true,
             added_at: 1,
         });
@@ -1262,6 +1411,8 @@ mod tests {
             text: "Attached material for useful recall.\n".repeat(28_000),
             origin: None,
             linked_note_id: None,
+            library_id: None,
+            folder: None,
             enabled: true,
             added_at: 1,
         });

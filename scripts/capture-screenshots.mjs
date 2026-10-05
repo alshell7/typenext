@@ -1,5 +1,6 @@
 import { chromium } from '@playwright/test'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 
 const executablePath =
   process.env.PLAYWRIGHT_EXECUTABLE_PATH ??
@@ -128,6 +129,75 @@ try {
     .click()
   await settled(page)
   await page.screenshot({ path: 'docs/screenshots/linked-note.png' })
+  await page.getByRole('button', { name: 'Done', exact: true }).click()
+  await page.getByRole('button', { name: /Context library/ }).click()
+  const library = page.getByRole('dialog', {
+    name: 'Context library',
+    exact: true,
+  })
+  const folder = path.resolve('artifacts/ui/context/Field research')
+  mkdirSync(folder, { recursive: true })
+  writeFileSync(
+    path.join(folder, 'Walking notes.md'),
+    '# Walking notes\n\nA walk gives an unfinished thought a little room. The small details return when we leave enough space to notice them.'
+  )
+  writeFileSync(
+    path.join(folder, 'Reading notes.txt'),
+    'A quiet writing tool should make the next useful action easy to find, then leave the writer with the page.'
+  )
+  await library
+    .getByLabel('Add folder to context library', { exact: true })
+    .setInputFiles(folder)
+  await library
+    .getByRole('button', { name: 'Preview Walking notes.md', exact: true })
+    .waitFor()
+  await settled(page)
+  await page.screenshot({ path: 'docs/screenshots/context-library.png' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await library.locator('.context-library-content').evaluate(el => {
+    el.scrollTop = 0
+  })
+  await settled(page)
+  await page.screenshot({ path: 'docs/screenshots/context-library-narrow.png' })
+  await library.getByRole('button', { name: 'Done', exact: true }).click()
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.getByRole('button', { name: 'Choose suggestion engine' }).click()
+  await settled(page)
+  await page.screenshot({ path: 'docs/screenshots/model-chooser.png' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await settled(page)
+  await page.screenshot({ path: 'docs/screenshots/model-chooser-narrow.png' })
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click()
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.getByRole('button', { name: 'Preferences', exact: true }).click()
+  await page
+    .getByRole('group', { name: 'Dark palette', exact: true })
+    .getByText('Dark contrast', { exact: true })
+    .click()
+  await settled(page)
+  await page.screenshot({ path: 'docs/screenshots/contrast-presets.png' })
+  await page
+    .getByRole('tab', { name: 'Local suggestions', exact: true })
+    .click()
+  await page
+    .getByRole('region', { name: 'Built-in offline model', exact: true })
+    .scrollIntoViewIfNeeded()
+  await settled(page)
+  await page.screenshot({ path: 'docs/screenshots/local-model-setup.png' })
+  await page.getByRole('button', { name: 'Done', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Dictate on this device', exact: true })
+    .click()
+  await page
+    .getByRole('dialog', { name: 'Dictate a thought', exact: true })
+    .waitFor()
+  await settled(page)
+  await page.screenshot({ path: 'docs/screenshots/dictation-setup.png' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await settled(page)
+  await page.screenshot({ path: 'docs/screenshots/dictation-setup-narrow.png' })
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click()
+  await page.setViewportSize({ width: 1440, height: 960 })
   const mobileContext = await browser.newContext({
     viewport: { width: 390, height: 844 },
     colorScheme: 'light',

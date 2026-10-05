@@ -25,6 +25,12 @@ if (existsSync(dataPath))
   throw new Error(
     'The smoke profile already exists. Use a fresh isolated identifier before rerunning.'
   )
+const offlineModels = process.env.TYPENEXT_NATIVE_AI_SMOKE === '1'
+const syntheticWav = resolve(root, 'artifacts/whistle/synthetic.wav')
+if (offlineModels && !existsSync(syntheticWav))
+  throw new Error(
+    'Create the synthetic speech fixture with the Whistle smoke script first.'
+  )
 const observations = []
 const generationRequests = []
 const server = createServer(async (request, response) => {
@@ -79,7 +85,10 @@ async function start() {
     env: {
       ...process.env,
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
-        '--remote-debugging-port=19220 --remote-debugging-address=127.0.0.1',
+        '--remote-debugging-port=19220 --remote-debugging-address=127.0.0.1' +
+        (offlineModels
+          ? ` --use-fake-device-for-media-stream --use-fake-ui-for-media-stream --use-file-for-fake-audio-capture="${syntheticWav}"`
+          : ''),
       WEBVIEW2_USER_DATA_FOLDER: join(out, 'webview-profile'),
     },
   })
@@ -221,6 +230,102 @@ try {
     'Real WebView2 editor -> native Rust localhost HTTP -> inline preview and suggestion menu -> Tab -> atomic native workspace autosave passed.'
   )
 
+  if (offlineModels) {
+    const modelSettings = await preferences('Local suggestions')
+    const modelPanel = modelSettings.getByRole('region', {
+      name: 'Built-in offline model',
+    })
+    await modelPanel
+      .getByText('Performance and model limits', { exact: true })
+      .click()
+    await modelPanel
+      .getByLabel('Run the offline model with', { exact: true })
+      .selectOption('wasm')
+    await modelPanel
+      .getByRole('button', { name: /^(Download model|Load downloaded model)$/ })
+      .click()
+    await expect(
+      modelPanel.getByRole('button', { name: 'Use this model', exact: true })
+    ).toBeVisible({ timeout: 240_000 })
+    await modelPanel
+      .getByRole('button', { name: 'Use this model', exact: true })
+      .click()
+    await modelSettings
+      .getByRole('button', { name: 'Done', exact: true })
+      .click()
+    await editor.fill('I opened the window and')
+    await editor.press('Control+End')
+    await editor.press('Control+Space')
+    await expect(page.locator('.cm-ghost-text')).toBeVisible({
+      timeout: 30_000,
+    })
+    const insertion = await page.locator('.cm-ghost-text').textContent()
+    if (!insertion?.trim())
+      throw new Error('The real embedded model did not produce an insertion.')
+    await editor.press('Tab')
+    await expect(editor).toHaveText('I opened the window and' + insertion)
+    const unloadSettings = await preferences('Local suggestions')
+    await unloadSettings
+      .getByRole('button', { name: 'Unload model', exact: true })
+      .click()
+    await unloadSettings
+      .getByRole('button', { name: 'Done', exact: true })
+      .click()
+    await editor.fill(accepted)
+    observations.push(
+      'Bundled SmolLM2 downloaded with hash verification, generated real text in the native WebView worker, inserted with Tab, and unloaded.'
+    )
+    await editor.press('Control+End')
+    await page
+      .getByRole('button', { name: 'Dictate on this device', exact: true })
+      .click()
+    const voice = page.getByRole('dialog', {
+      name: 'Dictate a thought',
+      exact: true,
+    })
+    await voice
+      .getByRole('button', {
+        name: /^(Download Whistle|Load downloaded model)/,
+      })
+      .click()
+    await expect(
+      voice.getByRole('button', { name: 'Record', exact: true })
+    ).toBeEnabled({ timeout: 120_000 })
+    await voice.getByLabel('Language', { exact: true }).selectOption('en')
+    await page.bringToFront()
+    await expect
+      .poll(() => page.evaluate(() => document.visibilityState))
+      .toBe('visible')
+    await voice.getByRole('button', { name: 'Record', exact: true }).click()
+    await expect(
+      voice.getByRole('button', { name: 'Stop & transcribe', exact: true })
+    ).toBeVisible({ timeout: 10_000 })
+    await page.waitForTimeout(5_000)
+    await voice
+      .getByRole('button', { name: 'Stop & transcribe', exact: true })
+      .click()
+    await expect(
+      voice.getByLabel('Your transcript', { exact: true })
+    ).toBeVisible({ timeout: 30_000 })
+    const transcript = await voice
+      .getByLabel('Your transcript', { exact: true })
+      .inputValue()
+    expect(transcript.toLowerCase()).toContain('patient writer')
+    await voice
+      .getByLabel('Your transcript', { exact: true })
+      .fill(' A reviewed dictated thought.')
+    await voice
+      .getByRole('button', { name: 'Insert transcript', exact: true })
+      .click()
+    await expect(editor).toBeFocused()
+    await expect(editor).toHaveText(accepted + ' A reviewed dictated thought.')
+    await editor.press('Control+z')
+    await expect(editor).toHaveText(accepted)
+    observations.push(
+      'Real native Whistle download and WASM, fake-device synthetic speech capture, local transcription, editable review, explicit insert, editor focus and one-step undo passed.'
+    )
+  }
+
   const deniedPath = join(out, 'not-granted.md')
   const denial = await page.evaluate(async path => {
     try {
@@ -352,8 +457,9 @@ try {
         observations,
         unhandledErrors: errors,
         generationRequests: generationRequests.length,
-        modelTransport:
-          'synthetic local server through native Rust HTTP; not real model inference',
+        modelTransport: offlineModels
+          ? 'synthetic server plus real bundled SmolLM2 and Whistle worker inference'
+          : 'synthetic local server through native Rust HTTP; not real model inference',
       },
       null,
       2
