@@ -80,6 +80,107 @@ describe('local context retrieval', () => {
     expect(retrieveContext(draft, 'harbour', 0.5)).toEqual([])
   })
 
+  it('puts cursor matches ahead of a varied background while retaining background-only passages', () => {
+    const background =
+      'Welcome guests warmly with clear practical everyday language. Address adult writers directly with gentle unhurried encouragement, quiet invitations, familiar words and optional reading activities.'
+    const draft = note([
+      source('voice', background),
+      source(
+        'house',
+        'Guests arrive at the house on Friday. Reading is optional.'
+      ),
+      source('coast', 'The coastal walk starts at the blue orchard gate.'),
+      source('schedule', 'The coastal walk takes place on Saturday afternoon.'),
+    ])
+    const query = `${background} The coastal walk starts`
+    expect(retrieveContext(draft, query, 4)[0]?.sourceId).toBe('voice')
+    const focused = retrieveContext(draft, query, 4, 'The coastal walk starts')
+    expect(focused.map(item => item.sourceId).slice(0, 2)).toEqual([
+      'coast',
+      'schedule',
+    ])
+    expect(focused.map(item => item.sourceId)).toContain('voice')
+    expect(focused.map(item => item.score)).toEqual(
+      focused.map(item => item.score).sort((a, b) => b - a)
+    )
+  })
+
+  it('keeps the original background ranking when cursor terms have no hits', () => {
+    const draft = note([
+      source('orchard', 'Quince trees grow beside the sheltered orchard.'),
+      source('morning', 'A quiet morning in the sheltered garden.'),
+    ])
+    const background = 'Quince orchard and a quiet morning'
+    expect(retrieveContext(draft, background, 4, 'asteroid quasar')).toEqual(
+      retrieveContext(draft, background, 4)
+    )
+    expect(retrieveContext(draft, background, 4, '   ')).toEqual(
+      retrieveContext(draft, background, 4)
+    )
+  })
+
+  it('preserves the original background term budget when all focused terms are unmatched', () => {
+    const terms = Array.from(
+      { length: 128 },
+      (_, index) => `background${index}`
+    )
+    const draft = note([
+      source('late', 'The passage mentions background127.'),
+      source('early', 'The passage mentions background0.'),
+    ])
+    const background = retrieveContext(draft, terms.join(' '), 4)
+    expect(background.map(item => item.sourceId)).toContain('late')
+    expect(
+      retrieveContext(draft, terms.join(' '), 4, 'asteroid quasar')
+    ).toEqual(background)
+  })
+
+  it('allows a bounded cursor-only query without revealing disabled passages', () => {
+    const draft = note([
+      source('hidden', 'Harbour lantern harbour lantern.', false),
+      source('visible', 'A harbour lantern marks the entrance.'),
+      source('background', 'A quince orchard grows nearby.'),
+    ])
+    expect(
+      retrieveContext(draft, '', 4, 'harbour lantern').map(
+        item => item.sourceId
+      )
+    ).toEqual(['visible'])
+    expect(
+      retrieveContext(
+        draft,
+        'quince',
+        4,
+        ' '.repeat(400) + 'harbour lantern'
+      ).map(item => item.sourceId)
+    ).toEqual(['background'])
+    expect(retrieveContext(draft, '', 0, 'harbour')).toEqual([])
+  })
+
+  it('reuses the source index when only the short cursor query changes', () => {
+    const draft = note([
+      source(
+        'large-reference',
+        'A harbour lantern marks the entrance. '.repeat(6_000)
+      ),
+    ])
+    retrieveContext(draft, 'harbour lantern', 4, 'harbour')
+    const normalize = vi.spyOn(String.prototype, 'normalize')
+    try {
+      expect(
+        retrieveContext(draft, 'harbour lantern', 4, 'lantern').length
+      ).toBeGreaterThan(0)
+      expect(normalize).toHaveBeenCalledTimes(2)
+      expect(
+        normalize.mock.contexts.every(
+          text => typeof text === 'string' && text.length <= 400
+        )
+      ).toBe(true)
+    } finally {
+      normalize.mockRestore()
+    }
+  })
+
   it('reuses a source index across writing edits and new arrays with the same source data', () => {
     const draft = note([
       source(
@@ -158,7 +259,12 @@ describe('local context retrieval', () => {
         source(`long-${i}`, `Harbour detail ${i}. `.repeat(400))
       ),
     ])
-    const results = retrieveContext(draft, 'harbour lantern detail', 100)
+    const results = retrieveContext(
+      draft,
+      'harbour lantern detail',
+      100,
+      'harbour lantern'
+    )
     expect(results.length).toBeLessThanOrEqual(8)
     expect(
       results.reduce((sum, chunk) => sum + chunk.text.length, 0)

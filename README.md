@@ -16,7 +16,9 @@ TypeNext gives you a quiet page, a small notebook of tabs, and context close to 
 - Keep recent notes, switch tabs, use focus mode, and autosave locally. Open and save ordinary Markdown files.
 - Choose light, dark, or system appearance. Start with paper or neutral graphite, choose Pure black, Dark contrast, Light contrast or another curated palette, or set your own page, sidebar, and accent colours. Change the writing typeface and size.
 
-The screenshots use example writing. New notebooks start empty.
+New notebooks start empty. Choose **Try a sample** on the welcome screen or in **Contexts** to open a fictional Bramble House retreat note with two attached context packages. Put the cursor after “Guests arrive at Bramble House”, press **Ctrl/Command + Space**, then **Tab**. The default local recall mode completes the arrival detail directly from the sample files, with no setup. You can edit the sample, switch models, or detach a context to compare.
+
+The [sample files](examples/bramble-house) and [downloadable ZIP](public/demo/typenext-sample.zip) are included. Opening the sample preserves your existing notes and model settings. The screenshots use example writing.
 
 Autosave keeps a recoverable previous version and saves during continuous typing. Desktop saves replace complete files atomically; interrupted or unreadable data is preserved for recovery. See [save and recovery behaviour](docs/reliability.md) for the tested guarantees and limits, and the [service](docs/services-resource-audit.md) and [editor](docs/editor-resource-audit.md) resource measurements.
 
@@ -35,19 +37,19 @@ Autosave keeps a recoverable previous version and saves during continuous typing
 
 </details>
 
-![Named reusable contexts with folder snapshots and references shared between notes](docs/screenshots/context-library.png)
+![The sample's two reusable contexts, with its house details and weekend plan attached to the note](docs/screenshots/demo-contexts.png)
 
 ## Suggestions and privacy
 
 Suggestions start on your device. With no model connected, **local recall** can complete a matching phrase from enabled references or earlier writing. When there is no matching phrase, **writing starters** offer short, optional English prompts using the note's own context. These lightweight starters are labelled separately from model-generated continuations; they do not invent facts. Attached references are optional.
 
-For new wording without another app, download the optional **SmolLM2-135M** model in **Preferences → Local suggestions**. The pinned, verified download is about 139 MB; later generation and cached loading work offline. It is a small experimental English writing model, so judge its suggestions before accepting them. You can also connect a local instruction model through LM Studio, Jan, Lemonade, or llama.cpp. TypeNext retrieves relevant passages with BM25 and sends a bounded objective, background, and cursor prefix/suffix to that local server. Native llama.cpp FIM is available for models trained for infill.
+For new wording without another app, download the optional **SmolLM2-135M** model in **Preferences → Local suggestions**. The pinned, verified download is about 139 MB; later generation and cached loading work offline. It is a small experimental English writing model, so judge its suggestions before accepting them. You can also connect a local instruction model through LM Studio, Jan, Lemonade, or llama.cpp. The same local BM25 retrieval feeds the built-in model, local servers and deliberately enabled external models. Each request combines relevant attached passages with a bounded objective, background and cursor prefix/suffix. Native llama.cpp FIM is available for models trained for infill.
 
 OpenRouter, OpenAI, Anthropic, and custom endpoints are optional. Configure their keys and saved models independently, then use **Choose model** beside the editor. **Use continuously** explicitly activates external suggestions until you switch back to **On this device**. The chooser explains what is shared; the active provider remains visible. No local error triggers an external fallback. OpenRouter defaults to its free-model router, and its available-model list can filter for free models. Availability and account limits still apply.
 
 With an active hosted chat model, **Ctrl/Command + Space** asks for up to three fresh, distinct choices in one request. It refreshes the choices even at the same cursor. Arrow-key preview makes no further requests, and only the choice you accept enters the note. Local recall, writing starters and local models keep their offline paths.
 
-Set your own suggestion instructions and choose a few words, one sentence, or an adaptive length. **Find in attached context** lets you inspect the actual BM25 passages used to ground suggestions.
+Set your own suggestion instructions and choose a few words, one sentence, or an adaptive length. **Find in attached context** uses the same BM25 retriever to search your attached sources. Suggestions prioritize the words near the cursor. Retrieval is lexical: it finds matching words rather than embedding-based semantic similarity. A model can still get a fact wrong despite receiving the right passage.
 
 Notes and extracted references are stored locally. Desktop keys can be remembered in the operating system credential vault; otherwise they stay in the session. Browser keys are session-only. Website import contacts the selected website, and optional Firecrawl import sends its URL to Firecrawl. Files are parsed locally.
 

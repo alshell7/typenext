@@ -13,8 +13,13 @@ import { execFileSync } from 'node:child_process'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const directory = path.join(root, 'artifacts', 'builtin-model-smoke')
 const resourcesOnly = process.argv.includes('--resources-only')
+const demoOnly = process.argv.includes('--demo')
 const selectedBackend = process.env.TYPENEXT_BUILTIN_BACKEND ?? 'wasm'
-const reportName = resourcesOnly ? 'resources.json' : 'report.json'
+const reportName = resourcesOnly
+  ? 'resources.json'
+  : demoOnly
+    ? 'demo-report.json'
+    : 'report.json'
 function ownedBrowserStatistics() {
   if (process.platform !== 'win32') return null
   const code = `$builtinProcesses=Get-CimInstance Win32_Process; $builtinIds=[System.Collections.Generic.HashSet[int]]::new(); foreach($builtinProcess in $builtinProcesses){ if($builtinProcess.Name -eq 'msedge.exe' -and $builtinProcess.CommandLine -and $builtinProcess.CommandLine.Contains($env:TYPENEXT_SMOKE_PROFILE)){[void]$builtinIds.Add([int]$builtinProcess.ProcessId)}}; do{$builtinAdded=$false; foreach($builtinProcess in $builtinProcesses){if($builtinIds.Contains([int]$builtinProcess.ParentProcessId) -and -not $builtinIds.Contains([int]$builtinProcess.ProcessId)){[void]$builtinIds.Add([int]$builtinProcess.ProcessId);$builtinAdded=$true}}}while($builtinAdded); $builtinStats=@($builtinIds | ForEach-Object {Get-Process -Id $_ -ErrorAction SilentlyContinue}); [PSCustomObject]@{processes=$builtinStats.Count;privateBytes=($builtinStats|Measure-Object PrivateMemorySize64 -Sum).Sum;workingSetBytes=($builtinStats|Measure-Object WorkingSet64 -Sum).Sum;cpuSeconds=($builtinStats|ForEach-Object {$_.TotalProcessorTime.TotalSeconds}|Measure-Object -Sum).Sum} | ConvertTo-Json -Compress`
@@ -69,7 +74,7 @@ await build({
       },
       load(id) {
         if (id === '\0builtin-harness')
-          return `import * as engine from ${JSON.stringify(path.join(root, 'src/services/builtin-engine.ts').replaceAll('\\', '/'))};import {suggest} from ${JSON.stringify(path.join(root, 'src/services/completion.ts').replaceAll('\\', '/'))};import {defaultSettings} from ${JSON.stringify(path.join(root, 'src/notebook/model.ts').replaceAll('\\', '/'))};globalThis.builtinEngine=engine;globalThis.syntheticCompletion={suggest,defaultSettings};`
+          return `import * as engine from ${JSON.stringify(path.join(root, 'src/services/builtin-engine.ts').replaceAll('\\', '/'))};import {suggest} from ${JSON.stringify(path.join(root, 'src/services/completion.ts').replaceAll('\\', '/'))};import {defaultSettings,emptyWorkspace} from ${JSON.stringify(path.join(root, 'src/notebook/model.ts').replaceAll('\\', '/'))};import {addDemoWorkspace} from ${JSON.stringify(path.join(root, 'src/notebook/demo.ts').replaceAll('\\', '/'))};import {resolveNoteContext} from ${JSON.stringify(path.join(root, 'src/notebook/note-context.ts').replaceAll('\\', '/'))};import {retrieveContext} from ${JSON.stringify(path.join(root, 'src/services/retrieval.ts').replaceAll('\\', '/'))};globalThis.builtinEngine=engine;globalThis.syntheticCompletion={suggest,defaultSettings,retrieveContext,createDemo(){const w=addDemoWorkspace(emptyWorkspace());return resolveNoteContext(w.notes[0],w.notes,w.contextLibrary,w.contextPackages)}};`
       },
     },
   ],
@@ -212,60 +217,80 @@ try {
     /^https?:\/\/(?!127\.0\.0\.1(?::|\/)|localhost(?::|\/))/u,
     route => route.abort()
   )
-  const fixtures = [
-    {
-      name: 'informal testing fragment',
-      noteTitle: 'Writing practice',
-      objective: 'Try a little everyday writing.',
-      writingBrief: 'An informal personal note.',
-      references: [],
-      beforeCursor:
-        "Sometimes the words come slowly, and that is okay.\nI'm just testing if",
-      afterCursor: '',
-    },
-    {
-      name: 'quoted prose',
-      noteTitle: 'A conversation',
-      objective: 'A quiet conversation about writing.',
-      writingBrief: '',
-      references: [],
-      beforeCursor:
-        '\"I can try again,\" she said.\nThe most useful part of this exercise was',
-      afterCursor: '',
-    },
-    {
-      name: 'ordinary prose',
-      noteTitle: 'A slower morning',
-      objective: 'Describe an unhurried morning.',
-      writingBrief: '',
-      references: [],
-      beforeCursor: 'I opened the window and',
-      afterCursor: '',
-    },
-    {
-      name: 'reference aware',
-      noteTitle: 'Rain in the garden',
-      objective: 'Describe the garden after rain.',
-      writingBrief: '',
-      references: [
+  const fixtures = demoOnly
+    ? await page.evaluate(() => {
+        const note = globalThis.syntheticCompletion.createDemo()
+        return [
+          'Guests arrive at Bramble House',
+          'The Saturday writing session begins',
+          'The coastal walk starts',
+        ].map(beforeCursor => ({
+          name: 'shipped demo: ' + beforeCursor,
+          noteTitle: note.title,
+          objective: note.objective,
+          writingBrief: note.context,
+          references: note.sources.map(source => ({
+            name: source.name,
+            text: source.text,
+          })),
+          beforeCursor,
+          afterCursor: '',
+        }))
+      })
+    : [
         {
-          name: 'Synthetic garden reference',
-          text: 'At dawn, the garden held the scent of rain. The leaves were wet and the streets were quiet.',
+          name: 'informal testing fragment',
+          noteTitle: 'Writing practice',
+          objective: 'Try a little everyday writing.',
+          writingBrief: 'An informal personal note.',
+          references: [],
+          beforeCursor:
+            "Sometimes the words come slowly, and that is okay.\nI'm just testing if",
+          afterCursor: '',
         },
-      ],
-      beforeCursor: 'At dawn, the garden',
-      afterCursor: '',
-    },
-    {
-      name: 'suffix bridge',
-      noteTitle: 'A patient writer',
-      objective: 'Write calmly about making time.',
-      writingBrief: '',
-      references: [],
-      beforeCursor: 'A patient writer',
-      afterCursor: ' before the next sentence.',
-    },
-  ]
+        {
+          name: 'quoted prose',
+          noteTitle: 'A conversation',
+          objective: 'A quiet conversation about writing.',
+          writingBrief: '',
+          references: [],
+          beforeCursor:
+            '\"I can try again,\" she said.\nThe most useful part of this exercise was',
+          afterCursor: '',
+        },
+        {
+          name: 'ordinary prose',
+          noteTitle: 'A slower morning',
+          objective: 'Describe an unhurried morning.',
+          writingBrief: '',
+          references: [],
+          beforeCursor: 'I opened the window and',
+          afterCursor: '',
+        },
+        {
+          name: 'reference aware',
+          noteTitle: 'Rain in the garden',
+          objective: 'Describe the garden after rain.',
+          writingBrief: '',
+          references: [
+            {
+              name: 'Synthetic garden reference',
+              text: 'At dawn, the garden held the scent of rain. The leaves were wet and the streets were quiet.',
+            },
+          ],
+          beforeCursor: 'At dawn, the garden',
+          afterCursor: '',
+        },
+        {
+          name: 'suffix bridge',
+          noteTitle: 'A patient writer',
+          objective: 'Write calmly about making time.',
+          writingBrief: '',
+          references: [],
+          beforeCursor: 'A patient writer',
+          afterCursor: ' before the next sentence.',
+        },
+      ]
   for (const fixture of resourcesOnly
     ? []
     : fixtures.flatMap(fixture =>
@@ -276,11 +301,8 @@ try {
     const result = await page.evaluate(
       async ({ input, temperature }) => {
         const engine = globalThis.builtinEngine
-        const raw = await engine.generateBuiltinInsertion(input, {
-          maxTokens: 48,
-          temperature,
-        })
-        const { suggest, defaultSettings } = globalThis.syntheticCompletion
+        const { suggest, defaultSettings, retrieveContext } =
+          globalThis.syntheticCompletion
         const note = {
           id: 'synthetic-' + crypto.randomUUID(),
           title: input.noteTitle,
@@ -298,6 +320,25 @@ try {
             addedAt: 1,
           })),
         }
+        const retrieved = retrieveContext(
+          note,
+          `${input.beforeCursor.slice(-900)} ${input.afterCursor.slice(0, 250)} ${input.objective} ${input.writingBrief.slice(0, 400)} ${input.noteTitle}`,
+          4,
+          `${(input.beforeCursor.split('\n').at(-1) ?? '').slice(-250)} ${input.afterCursor.slice(0, 100).split('\n', 1)[0] ?? ''}`
+        )
+        const raw = await engine.generateBuiltinInsertion(
+          {
+            ...input,
+            references: retrieved.map(chunk => ({
+              name: chunk.sourceName,
+              text: chunk.text,
+            })),
+          },
+          {
+            maxTokens: 48,
+            temperature,
+          }
+        )
         const suggestion = await suggest(
           note,
           {
@@ -314,6 +355,10 @@ try {
         )
         return {
           raw,
+          retrieved: retrieved.map(chunk => ({
+            name: chunk.sourceName,
+            text: chunk.text,
+          })),
           suggestion,
           accepted: input.beforeCursor + suggestion.text + input.afterCursor,
           reconstructed: input.beforeCursor + raw + input.afterCursor,

@@ -868,6 +868,30 @@ describe('offline exact recall', () => {
     expect(getSecret).not.toHaveBeenCalled()
   })
 
+  it('keeps distinct full-phrase continuations without appending weaker tail matches', async () => {
+    const draft = gardenDraft(
+      '',
+      'At dawn, the garden held the scent of rain.\nAt dawn, the garden waited for sunlight.\nThe garden filled the courtyard.'
+    )
+    const config = { ...settings(), localEngine: 'recall' as const }
+    const result = await suggest(draft, cursor(draft.content), config)
+    expect(result).toEqual({
+      text: ' held the scent of rain.',
+      sources: ['Garden.md'],
+      mode: 'recall',
+      alternatives: [
+        {
+          text: ' waited for sunlight.',
+          sources: ['Garden.md'],
+          mode: 'recall',
+        },
+      ],
+    })
+    expect(requestJson).not.toHaveBeenCalled()
+    expect(getSecret).not.toHaveBeenCalled()
+    expect(generateBuiltinInsertion).not.toHaveBeenCalled()
+  })
+
   it('returns no suggestion for an unmatched phrase or disabled source', async () => {
     const draft = note('The rain returned')
     draft.sources = [
@@ -1297,6 +1321,77 @@ describe('built-in prose output guard', () => {
 })
 
 describe('model word-boundary spacing', () => {
+  const recordedDemoResponse =
+    'There is room here for an unfinished thought. Bring a notebook, find a chair, and begin wherever you are.'
+
+  it.each([
+    'local',
+    'openai',
+    'openrouter',
+    'anthropic',
+    'custom',
+    'embedded',
+  ] as const)(
+    'separates the recorded capitalized prose response at end-of-note for %s',
+    async provider => {
+      const config = settings()
+      if (provider === 'embedded') config.localEngine = 'embedded'
+      else config.provider = provider
+      vi.mocked(getSecret).mockResolvedValue('synthetic-test-key')
+      vi.mocked(generateBuiltinInsertion).mockResolvedValue(
+        recordedDemoResponse
+      )
+      vi.mocked(requestJson).mockResolvedValue(
+        provider === 'anthropic'
+          ? { content: [{ type: 'text', text: recordedDemoResponse }] }
+          : completion(recordedDemoResponse)
+      )
+      const prefix = 'Guests arrive at Bramble House'
+      const result = await suggest(note(prefix), cursor(prefix), config)
+      expect(result.text).toBe(' There is room here for an unfinished thought.')
+      expect(prefix + result.text).toBe(
+        'Guests arrive at Bramble House There is room here for an unfinished thought.'
+      )
+      expect(result.mode).toBe('model')
+      expect(
+        provider === 'embedded' ? generateBuiltinInsertion : requestJson
+      ).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('protects every fresh hosted alternative with the same end-of-note separator', async () => {
+    const config = { ...settings(), provider: 'openrouter' as const }
+    vi.mocked(getSecret).mockResolvedValue('synthetic-test-key')
+    vi.mocked(requestJson).mockResolvedValue(
+      completion(
+        JSON.stringify({
+          insertions: [
+            recordedDemoResponse,
+            'Another quiet thought arrives.',
+            'I hope to find a chair.',
+          ],
+        })
+      )
+    )
+    const prefix = 'Guests arrive at Bramble House'
+    const result = await suggest(
+      note(prefix),
+      cursor(prefix),
+      config,
+      undefined,
+      { purpose: 'alternatives' }
+    )
+    expect([
+      result.text,
+      ...result.alternatives!.map(item => item.text),
+    ]).toEqual([
+      ' There is room here for an unfinished thought.',
+      ' Another quiet thought arrives.',
+      ' I hope to find a chair.',
+    ])
+    expect(requestJson).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
     {
       name: 'missing separator before an existing space',
@@ -1355,6 +1450,41 @@ describe('model word-boundary spacing', () => {
       expected: 'erful.',
     },
     {
+      name: 'an ambiguous lowercase fragment followed by a phrase at end-of-note',
+      prefix: 'It was wond',
+      suffix: '',
+      raw: 'erful in the morning.',
+      expected: 'erful in the morning.',
+    },
+    {
+      name: 'a capitalized word fragment inside the existing word',
+      prefix: 'The app is Type',
+      suffix: 'xt.',
+      raw: 'Ne',
+      expected: 'Ne',
+    },
+    {
+      name: 'a capitalized single-word fragment at end-of-note',
+      prefix: 'The app is Type',
+      suffix: '',
+      raw: 'Next.',
+      expected: 'Next.',
+    },
+    {
+      name: 'an explicit leading newline at end-of-note',
+      prefix: 'Guests arrive at Bramble House',
+      suffix: '',
+      raw: '\nThere is room here for an unfinished thought.',
+      expected: '\nThere is room here for an unfinished thought.',
+    },
+    {
+      name: 'an explicit sentence-ending punctuation at end-of-note',
+      prefix: 'Guests arrive at Bramble House',
+      suffix: '',
+      raw: '. There is room here for an unfinished thought.',
+      expected: '.',
+    },
+    {
       name: 'a script that does not use word separators',
       prefix: '庭園',
       suffix: ' は静かだ。',
@@ -1411,6 +1541,23 @@ describe('model word-boundary spacing', () => {
       if (kind === 'code') context.inCode = true
       expect((await suggest(draft, context, config)).text).toBe('erful')
       expect(draft.content).toBe('wond ')
+      expect(requestJson).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it.each(['code', 'native FIM'] as const)(
+    'does not repair the capitalized phrase in intentional %s',
+    async kind => {
+      const config = settings()
+      if (kind === 'native FIM') config.profiles.local.protocol = 'fim'
+      const prefix = 'Type'
+      const raw = 'Next is available.'
+      vi.mocked(requestJson).mockResolvedValue(
+        kind === 'native FIM' ? { content: raw } : completion(raw)
+      )
+      const context = cursor(prefix)
+      if (kind === 'code') context.inCode = true
+      expect((await suggest(note(prefix), context, config)).text).toBe(raw)
       expect(requestJson).toHaveBeenCalledTimes(1)
     }
   )

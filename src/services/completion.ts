@@ -387,16 +387,18 @@ function sanitizeModelText(
     .replace(/<\|(?:im_end|endoftext|fim_[\w]+)\|>/gu, '')
     .replaceAll('\0', '')
   // Chat models sometimes omit the separator even when the cursor is at an
-  // existing word boundary. Only repair that established boundary: horizontal
-  // whitespace is already after the cursor, and both adjoining words use a
-  // space-delimited alphabet. Keep punctuation, explicit spaces, word fragments,
-  // code, native FIM and scripts that do not separate words with spaces intact.
+  // existing word boundary. Horizontal whitespace proves that boundary; at
+  // end-of-note a capitalized multiword phrase also needs a separator. Leave
+  // ambiguous lowercase or single-word fragments intact, as well as explicit
+  // spaces, punctuation/newlines, code, native FIM and unspaced writing systems.
+  const startsCapitalizedPhrase =
+    /^\p{Lu}[\p{L}\p{M}'’-]*[^\S\r\n]+\p{L}/u.test(text)
   if (
     repairWordBoundary &&
     /[\p{Script_Extensions=Latin}\p{Script_Extensions=Cyrillic}\p{Script_Extensions=Greek}][\p{M}\p{N}]*$/u.test(
       prefix
     ) &&
-    /^[^\S\r\n]/u.test(suffix) &&
+    (/^[^\S\r\n]/u.test(suffix) || (!suffix && startsCapitalizedPhrase)) &&
     /^[\p{Script_Extensions=Latin}\p{Script_Extensions=Cyrillic}\p{Script_Extensions=Greek}]/u.test(
       text
     )
@@ -597,6 +599,10 @@ function exactRecall(
         }
       }
     }
+    // Keep all valid continuations for the strongest matching phrase. A shorter
+    // tail may belong to a different sentence and is only a fallback when that
+    // phrase yielded no safe insertion.
+    if (candidates.length) return candidates
   }
   return candidates
 }
@@ -840,7 +846,16 @@ export async function suggest(
       ? offlineResult(note, context, budget)
       : { text: '', sources: [] }
   const query = `${beforeCursor.slice(-900)} ${afterCursor.slice(0, 250)} ${objective} ${writingBrief.slice(0, 400)} ${noteTitle}`
-  const references = boundedReferences(retrieveContext(note, query, 4))
+  const currentLine = beforeCursor.slice(beforeCursor.lastIndexOf('\n') + 1)
+  const nearbyBefore = boundedSlice(
+    currentLine,
+    Math.max(0, currentLine.length - 250)
+  )
+  const nearbyAfter = boundedSlice(afterCursor, 0, 100).split('\n', 1)[0] ?? ''
+  const cursorQuery = `${nearbyBefore} ${nearbyAfter}`
+  const references = boundedReferences(
+    retrieveContext(note, query, 4, cursorQuery)
+  )
   const data = {
     noteTitle,
     objective,

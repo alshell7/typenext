@@ -198,13 +198,29 @@ function getIndex(note: Note): ContextIndex {
   return index
 }
 
-/** Retrieve relevant, bounded source passages with local BM25 scoring. */
+/**
+ * Retrieve bounded source passages with local BM25 scoring. Optional cursor
+ * terms take priority over background-only matches; ordinary library queries
+ * keep their original ranking, including when no cursor terms match.
+ */
 export function retrieveContext(
   note: Note,
   query: string,
-  limit = 4
+  limit = 4,
+  focusedQuery = ''
 ): RetrievedChunk[] {
-  const terms = [...new Set(tokenize(query.slice(0, 4_000)))].slice(0, 128)
+  const focusedTerms = new Set(
+    focusedQuery
+      ? [...new Set(tokenize(focusedQuery.slice(0, 400)))].slice(0, 64)
+      : []
+  )
+  const backgroundTerms = new Set(
+    [...new Set(tokenize(query.slice(0, 4_000)))].slice(0, 128)
+  )
+  // Preserve the original background's complete 128-term budget even if none
+  // of the cursor's <=64 extra terms match. The single scoring pass is bounded
+  // to their union (at most 192 terms), without rescanning or rebuilding sources.
+  const terms = [...new Set([...backgroundTerms, ...focusedTerms])]
   if (!terms.length || !Number.isFinite(limit) || limit <= 0) return []
   const count = Math.min(8, Math.floor(limit))
   if (!count) return []
@@ -212,29 +228,42 @@ export function retrieveContext(
   if (!index.chunks.length) return []
   const k1 = 1.5
   const b = 0.75
+  let maximumScore = 0
   const ranked = index.chunks
     .map(chunk => {
       let score = 0
+      let focusedScore = 0
       for (const term of terms) {
         const frequency = chunk.terms.get(term) ?? 0
         if (!frequency) continue
         const df = index.documentFrequency.get(term) ?? 0
         const idf = Math.log(1 + (index.chunks.length - df + 0.5) / (df + 0.5))
-        score +=
+        let contribution =
           (idf * frequency * (k1 + 1)) /
           (frequency + k1 * (1 - b + (b * chunk.length) / index.averageLength))
-        if (chunk.nameTerms.has(term)) score += idf * 0.2
+        if (chunk.nameTerms.has(term)) contribution += idf * 0.2
+        if (backgroundTerms.has(term)) score += contribution
+        if (focusedTerms.has(term)) focusedScore += contribution
       }
-      return { chunk, score }
+      maximumScore = Math.max(maximumScore, score)
+      return { chunk, score, focusedScore }
     })
-    .filter(result => result.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .filter(result => result.score > 0 || result.focusedScore > 0)
+  // A fixed multiplier can still let a long, varied background query displace
+  // the cursor's topic. The shared offset makes cursor hits win without another
+  // index or a second retrieval pass; BM25 orders those hits and breaks ties.
+  const priorityScore = (result: (typeof ranked)[number]) =>
+    result.focusedScore > 0 ? maximumScore + result.focusedScore : result.score
+  ranked.sort(
+    (a, b) => priorityScore(b) - priorityScore(a) || b.score - a.score
+  )
 
   const results: RetrievedChunk[] = []
   const seenText = new Set<string>()
   const perSource = new Map<string, number>()
   let remaining = MAX_RETRIEVED_CHARACTERS
-  for (const { chunk, score } of ranked) {
+  for (const result of ranked) {
+    const { chunk } = result
     if (results.length >= count || remaining <= 0) break
     const normalized = chunk.text.replace(/\s+/gu, ' ').toLowerCase()
     if (seenText.has(normalized) || (perSource.get(chunk.sourceId) ?? 0) >= 2)
@@ -247,7 +276,7 @@ export function retrieveContext(
       sourceId: chunk.sourceId,
       sourceName: chunk.sourceName,
       text,
-      score,
+      score: priorityScore(result),
     })
   }
   return results

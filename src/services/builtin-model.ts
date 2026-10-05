@@ -90,6 +90,27 @@ function bounded(value: string, limit: number, tail = false): string {
     .join('')
 }
 
+function referenceExcerpt(text: string, prompt: BuiltinPrompt): string {
+  if (prompt.inCode) return bounded(text, 320)
+  // A retrieved chunk can contain several facts. When the writer is completing
+  // an existing phrase, spend the tiny model's budget on that line rather than
+  // headings or unrelated facts at the beginning of the chunk.
+  const fragment = builtinPrefill(prompt.beforeCursor).slice(-160).trim()
+  if (fragment.length < 12 || (fragment.match(/\p{L}+/gu)?.length ?? 0) < 2)
+    return bounded(text, 320)
+  const chunk = bounded(text, 1400)
+  const literal = fragment.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const match = new RegExp(literal, 'iu').exec(chunk)
+  if (!match) return bounded(chunk, 320)
+  const start = chunk.lastIndexOf('\n', Math.max(0, match.index - 1)) + 1
+  const nextLine = chunk.indexOf('\n', match.index + match[0].length)
+  const end = nextLine < 0 ? chunk.length : nextLine
+  const line = chunk.slice(start, end).trim()
+  return line.length <= 320
+    ? line
+    : bounded(chunk.slice(Math.max(start, match.index), end), 320)
+}
+
 /** Bound before crossing the worker boundary; do not transfer full notes. */
 export function boundBuiltinPrompt(prompt: BuiltinPrompt): BuiltinPrompt {
   return {
@@ -100,7 +121,7 @@ export function boundBuiltinPrompt(prompt: BuiltinPrompt): BuiltinPrompt {
       .slice(0, 2)
       .map(reference => ({
         name: bounded(reference.name, 60),
-        text: bounded(reference.text, 320),
+        text: referenceExcerpt(reference.text, prompt),
       })),
     beforeCursor: bounded(prompt.beforeCursor, 900, true),
     afterCursor: bounded(prompt.afterCursor, 200),

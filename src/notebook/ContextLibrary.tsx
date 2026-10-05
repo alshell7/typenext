@@ -46,6 +46,10 @@ export interface ContextLibraryProps {
   activeNote: Note | null
   initialPackageId?: string | null
   importing: boolean
+  demoInstalled?: boolean
+  onDemo?(): void
+  demoDownloadHref?: string
+  onCloseAutoFocus?(event: Event): void
   onCreatePackage(name: string): string | null
   onRenamePackage(id: string, name: string): void
   onRemovePackage(id: string): void
@@ -83,6 +87,10 @@ export function ContextLibrary({
   activeNote,
   initialPackageId,
   importing,
+  demoInstalled = false,
+  onDemo,
+  demoDownloadHref,
+  onCloseAutoFocus,
   onCreatePackage,
   onRenamePackage,
   onRemovePackage,
@@ -286,6 +294,7 @@ export function ContextLibrary({
       title="Contexts"
       description="Gather sources into reusable contexts. Choose several for each note."
       className="context-library-dialog"
+      onCloseAutoFocus={onCloseAutoFocus}
       onEscapeKeyDown={event => {
         if (removing) {
           event.preventDefault()
@@ -890,10 +899,24 @@ export function ContextLibrary({
         </div>
       ) : (
         <div className="context-library-footer">
-          <p>
-            Files and websites are snapshots on this device. Linked notes follow
-            your writing.
-          </p>
+          <div className="context-library-footer-copy">
+            <p>
+              Files and websites are snapshots on this device. Linked notes
+              follow your writing.
+            </p>
+            {onDemo && (
+              <div className="context-library-demo">
+                <button onClick={onDemo} disabled={importing}>
+                  {demoInstalled ? 'Open sample' : 'Try a sample'}
+                </button>
+                {demoDownloadHref && (
+                  <a href={demoDownloadHref} download="typenext-sample.zip">
+                    Download sample files
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
           <button
             className="button primary"
             onClick={() => onOpenChange(false)}

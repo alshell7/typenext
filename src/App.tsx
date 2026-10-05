@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { EditorView } from '@codemirror/view'
 import {
   ArrowUpRight,
   Check,
@@ -49,6 +50,13 @@ import {
   type InlineDictationHandle,
 } from './notebook/InlineDictation'
 import { ContextLibrary } from './notebook/ContextLibrary'
+import {
+  addDemoWorkspace,
+  DEMO_DOWNLOAD_PATH,
+  DEMO_NOTE_ID,
+  DEMO_STARTER,
+  hasDemoNote,
+} from './notebook/demo'
 import {
   contextFolder,
   findLibrarySource,
@@ -102,6 +110,7 @@ function App() {
   const [contextVisible, setContextVisible] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [libraryPackageId, setLibraryPackageId] = useState<string | undefined>()
+  const pendingSampleFocus = useRef<{ atEnd: boolean } | null>(null)
   const [websitePackageId, setWebsitePackageId] = useState<string | undefined>()
   const dictationRef = useRef<InlineDictationHandle>(null)
   const [dictationActive, setDictationActive] = useState(false)
@@ -154,6 +163,7 @@ function App() {
     ]
   )
   const settings = workspace.settings
+  const demoInstalled = useMemo(() => hasDemoNote(workspace), [workspace])
   const font = FONTS.find(item => item.name === settings.fontFamily) ?? FONTS[0]
   const hasLocalModel =
     settings.localEngine === 'embedded' ||
@@ -192,6 +202,29 @@ function App() {
   }, [])
 
   const notify = useCallback((message: string) => setNotice(message), [])
+  const focusSample = useCallback(() => {
+    const pending = pendingSampleFocus.current
+    if (!pending || getWorkspace().activeNoteId !== DEMO_NOTE_ID) return
+    const content = document.querySelector('.document-page .cm-content')
+    const view = content ? EditorView.findFromDOM(content as HTMLElement) : null
+    if (!view) return
+    pendingSampleFocus.current = null
+    if (pending.atEnd)
+      view.dispatch({
+        selection: { anchor: view.state.doc.length },
+        scrollIntoView: true,
+      })
+    editorRef.current?.focus()
+  }, [getWorkspace])
+  useEffect(() => {
+    if (
+      pendingSampleFocus.current &&
+      note?.id === DEMO_NOTE_ID &&
+      !libraryOpen &&
+      !document.querySelector('[role="dialog"]')
+    )
+      focusSample()
+  }, [note?.id, libraryOpen, focusSample])
   useEffect(() => {
     const recovered = () =>
       notify(
@@ -627,6 +660,29 @@ function App() {
         checkContextBudgets(next, value)
         return next
       })
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error))
+    }
+  }
+  const openSample = () => {
+    if (importing) return
+    try {
+      const fresh = !hasDemoNote(getWorkspace())
+      setWorkspace(value => {
+        const next = addDemoWorkspace(value)
+        checkContextBudgets(next, value)
+        return next
+      })
+      pendingSampleFocus.current = { atEnd: fresh }
+      setStatus({ state: 'idle' })
+      if (window.innerWidth < 760) {
+        setSidebarVisible(false)
+        setContextVisible(false)
+      }
+      setLibraryOpen(false)
+      notify('Sample opened.')
+      if (!libraryOpen && getWorkspace().activeNoteId === note?.id)
+        focusSample()
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error))
     }
@@ -1330,6 +1386,20 @@ function App() {
                         )}
                       </div>
                     )}
+                    {note.id === DEMO_NOTE_ID &&
+                      note.content.trimEnd().endsWith(DEMO_STARTER) && (
+                        <p
+                          className="sample-note-hint"
+                          role="note"
+                          aria-label="Sample writing tip"
+                        >
+                          <Keyboard size={14} />
+                          <span>
+                            Fictional sample. Try <kbd>Ctrl / ⌘ Space</kbd> for
+                            a suggestion, then <kbd>Tab</kbd> to accept.
+                          </span>
+                        </p>
+                      )}
                   </div>
                 </div>
                 <InlineDictation
@@ -1528,6 +1598,9 @@ function App() {
                   <Plus size={16} />
                   Start a note
                 </button>
+                <button className="button secondary" onClick={openSample}>
+                  {demoInstalled ? 'Open sample' : 'Try a sample'}
+                </button>
                 <button
                   className="button subtle"
                   onClick={() => {
@@ -1638,6 +1711,19 @@ function App() {
         packages={workspace.contextPackages ?? []}
         initialPackageId={libraryPackageId}
         importing={importing}
+        demoInstalled={demoInstalled}
+        onDemo={openSample}
+        demoDownloadHref={
+          isDesktop()
+            ? undefined
+            : `${import.meta.env.BASE_URL}${DEMO_DOWNLOAD_PATH}`
+        }
+        onCloseAutoFocus={event => {
+          if (pendingSampleFocus.current) {
+            event.preventDefault()
+            focusSample()
+          }
+        }}
         onCreatePackage={createPackage}
         onRenamePackage={renamePackage}
         onRemovePackage={removePackage}

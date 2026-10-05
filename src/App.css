@@ -885,6 +885,22 @@ kbd {
 .blank-page-hint > svg {
   margin-top: 3px;
 }
+.sample-note-hint {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.7;
+  margin-top: 18px;
+}
+.sample-note-hint > svg {
+  margin-top: 3px;
+}
+.sample-note-hint kbd {
+  color: inherit;
+  font-size: inherit;
+}
 .blank-page-hint button {
   display: inline;
   padding: 0;

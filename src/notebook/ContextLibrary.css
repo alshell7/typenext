@@ -408,6 +408,29 @@
   flex-shrink: 0;
   font-size: 12px;
 }
+.context-library-footer-copy {
+  flex: 1;
+  min-width: 0;
+}
+.context-library-demo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+  margin-top: 5px;
+}
+.context-library-demo > button,
+.context-library-demo > a {
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.5;
+  padding-block: 3px;
+}
+.context-library-demo > button:hover:not(:disabled),
+.context-library-demo > a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .context-library-confirm p {
   display: flex;
   flex-direction: column;
@@ -628,6 +651,9 @@
   }
   .context-library-footer p,
   .context-library-confirm p {
+    flex-basis: 100%;
+  }
+  .context-library-footer-copy {
     flex-basis: 100%;
   }
   .context-library-footer .button {
