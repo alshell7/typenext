@@ -1,0 +1,3 @@
+node_modules/
+# Copied from docs/screenshots and public/ by scripts/sync-assets.mjs
+public/assets/

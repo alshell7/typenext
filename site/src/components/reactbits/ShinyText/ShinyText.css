@@ -1,0 +1,27 @@
+/*
+ * ShinyText from React Bits (https://reactbits.dev, https://github.com/DavidHDev/react-bits)
+ * Copyright (c) 2026 David Haz. MIT + Commons Clause License Condition v1.0.
+ * Used as part of the TypeNext website. See ../LICENSE.md.
+ */
+
+.shiny-text {
+  position: relative;
+  display: inline-block;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.shiny-text__glow {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: blur(0.14em);
+  pointer-events: none;
+  user-select: none;
+}

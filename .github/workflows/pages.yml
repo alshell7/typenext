@@ -7,7 +7,9 @@ on:
       [
         site/**,
         docs/screenshots/**,
+        docs/media/typenext-film*,
         public/Icon.png,
+        public/Icon512.png,
         public/notices/**,
         scripts/build-site.mjs,
         package.json,
@@ -34,7 +36,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+          cache-dependency-path: site/package-lock.json
+      # The site has its own dependencies; site:build runs `npm ci` in site/.
       - run: npm run site:build
       - uses: actions/configure-pages@v5
         with:
