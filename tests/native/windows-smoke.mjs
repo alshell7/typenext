@@ -166,11 +166,11 @@ async function preferences(pane) {
 }
 try {
   await start()
+  // A note starts at once; the title is optional and set afterwards.
   await page.getByRole('button', { name: 'Start a note', exact: true }).click()
   await page
-    .getByLabel('Title', { exact: true })
+    .getByRole('textbox', { name: 'Note title', exact: true })
     .fill('Native smoke: a quiet garden')
-  await page.getByRole('button', { name: 'Create note', exact: true }).click()
   const editor = page.getByRole('textbox', {
     name: 'Note content',
     exact: true,
@@ -181,17 +181,21 @@ try {
   await editor.press('Control+Home')
   for (let index = 0; index < prefix.length; index++)
     await editor.press('ArrowRight')
-  const local = await preferences('Local suggestions')
-  await local
+  const timing = await preferences('Suggestions')
+  await timing
     .getByRole('switch', { name: /^Suggest after a pause/ })
     .setChecked(false)
-  await local.getByLabel('Server address', { exact: true }).fill(modelUrl)
-  await local.getByLabel('Model', { exact: true }).fill('native-smoke-local')
-  await local
-    .getByRole('button', { name: 'Test connection', exact: true })
+  await timing.getByRole('button', { name: 'Done', exact: true }).click()
+  const models = await preferences('Models')
+  const onDevice = models.locator('#models-local')
+  await onDevice.getByRole('radio', { name: /^Local server/ }).click()
+  await onDevice.getByLabel('Server address', { exact: true }).fill(modelUrl)
+  await onDevice
+    .getByRole('button', { name: 'Detect models', exact: true })
     .click()
-  await expect(local.getByText(/Connected\./)).toBeVisible()
-  await local.getByRole('button', { name: 'Done', exact: true }).click()
+  await expect(onDevice.getByText(/Connected\./)).toBeVisible()
+  await onDevice.getByLabel('Model', { exact: true }).fill('native-smoke-local')
+  await models.getByRole('button', { name: 'Done', exact: true }).click()
   await editor.focus()
   await editor.press('Control+Space')
   await expect(page.locator('.cm-ghost-text')).toHaveText(' held its breath')
@@ -225,8 +229,10 @@ try {
   )
 
   if (offlineModels) {
-    const modelSettings = await preferences('Local suggestions')
-    const modelPanel = modelSettings.getByRole('region', {
+    const modelSettings = await preferences('Models')
+    const device = modelSettings.locator('#models-local')
+    await device.getByRole('radio', { name: /^Built-in model/ }).click()
+    const modelPanel = device.getByRole('region', {
       name: 'Built-in offline model',
     })
     await modelPanel
@@ -258,7 +264,11 @@ try {
       throw new Error('The real embedded model did not produce an insertion.')
     await editor.press('Tab')
     await expect(editor).toHaveText('I opened the window and' + insertion)
-    const unloadSettings = await preferences('Local suggestions')
+    const unloadSettings = await preferences('Models')
+    await unloadSettings
+      .locator('#models-local')
+      .getByRole('radio', { name: /^Built-in model/ })
+      .click()
     await unloadSettings
       .getByRole('button', { name: 'Unload model', exact: true })
       .click()
@@ -269,87 +279,60 @@ try {
     observations.push(
       'Bundled SmolLM2 downloaded with hash verification, generated real text in the native WebView worker, inserted with Tab, and unloaded.'
     )
-    await editor.press('Control+End')
-    await page
-      .getByRole('button', { name: 'Dictate on this device', exact: true })
-      .click()
-    const voice = page.getByRole('region', {
-      name: 'Inline dictation',
-      exact: true,
+    // Whistle on this device, then the local server again with pauses on,
+    // so a suggestion follows the dictated words.
+    const dictationSettings = await preferences('Dictation')
+    await dictationSettings.getByRole('radio', { name: /^Whistle/ }).click()
+    const downloadWhistle = dictationSettings.getByRole('button', {
+      name: /^Download Whistle/,
     })
-    await expect(voice).toBeVisible()
-    // Cached models let the toolbar record immediately. Stop that setup
-    // gesture before choosing an exact input; uncached models just show setup.
-    await editor.press('Escape')
-    const chooseInput = voice.getByRole('button', {
-      name: 'Choose microphone',
-      exact: true,
-    })
-    if ((await chooseInput.getAttribute('aria-expanded')) !== 'true')
-      await chooseInput.click()
-    await voice
-      .getByRole('button', {
-        name: /^(Download Whistle|Load downloaded model)/,
-      })
-      .click()
+    if (await downloadWhistle.isVisible()) await downloadWhistle.click()
     await expect(
-      voice.getByRole('button', { name: 'Dictate', exact: true })
-    ).toBeEnabled({ timeout: 120_000 })
-    await voice
-      .getByRole('button', {
-        name: 'Allow and refresh microphones',
-        exact: true,
-      })
-      .click()
-    await expect(
-      voice.getByRole('button', {
-        name: 'Allow and refresh microphones',
-        exact: true,
-      })
-    ).toBeEnabled()
-    const microphoneId = await voice
-      .getByRole('combobox', { name: 'Microphone', exact: true })
-      .locator('option')
-      .evaluateAll(options =>
-        options.map(option => option.value).find(value => value !== '')
-      )
-    if (!microphoneId)
-      throw new Error('The fake microphone was not discovered.')
-    await voice
-      .getByRole('combobox', { name: 'Microphone', exact: true })
-      .selectOption(microphoneId)
-    await voice
-      .getByLabel('Dictation language', { exact: true })
+      dictationSettings
+        .getByRole('button', { name: 'Unload model', exact: true })
+        .or(
+          dictationSettings.getByRole('button', {
+            name: /^Load downloaded model/,
+          })
+        )
+    ).toBeVisible({ timeout: 120_000 })
+    await dictationSettings
+      .getByLabel('Language', { exact: true })
       .selectOption('en')
-    await voice
-      .getByRole('button', { name: 'Choose microphone', exact: true })
-      .click()
-    const dictationSettings = await preferences('Local suggestions')
-    await dictationSettings
-      .getByLabel('Use on this device', { exact: true })
-      .selectOption('server')
-    await dictationSettings
-      .getByRole('switch', { name: /^Suggest after a pause/ })
-      .setChecked(true)
     await dictationSettings
       .getByRole('button', { name: 'Done', exact: true })
       .click()
+    const serverAgain = await preferences('Models')
+    await serverAgain
+      .locator('#models-local')
+      .getByRole('radio', { name: /^Local server/ })
+      .click()
+    await serverAgain.getByRole('button', { name: 'Done', exact: true }).click()
+    const pauses = await preferences('Suggestions')
+    await pauses
+      .getByRole('switch', { name: /^Suggest after a pause/ })
+      .setChecked(true)
+    await pauses.getByRole('button', { name: 'Done', exact: true }).click()
+    const chip = page.locator('.dictation-chip')
+    async function startDictation() {
+      await editor.press('Control+Shift+d')
+      const start = page
+        .getByRole('region', { name: 'Inline dictation', exact: true })
+        .getByRole('button', { name: 'Start dictating', exact: true })
+      await expect(chip.or(start)).toBeVisible({ timeout: 15_000 })
+      if (await start.isVisible()) await start.click()
+      await expect(chip).toBeVisible({ timeout: 10_000 })
+    }
     await editor.focus()
     await editor.press('Control+End')
     const requestsBeforeSpeech = generationRequests.length
     await page.bringToFront()
-    await editor.press('Control+Shift+d')
-    await expect(
-      voice.getByRole('button', { name: 'Stop', exact: true })
-    ).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator('.cm-dictation-anchor')).toHaveText('Listening…')
+    await startDictation()
     await editor.pressSequentially(' Typed alongside.')
     await page.waitForTimeout(4_000)
     expect(generationRequests.length).toBe(requestsBeforeSpeech)
     await editor.press('Control+Shift+d')
-    await expect(page.locator('.cm-dictation-anchor')).toHaveCount(0, {
-      timeout: 30_000,
-    })
+    await expect(chip).toHaveCount(0, { timeout: 30_000 })
     await expect(editor).toContainText('patient writer')
     const dictated = await editor.textContent()
     expect(dictated.startsWith(accepted + ' Typed alongside. ')).toBe(true)
@@ -361,21 +344,18 @@ try {
     await editor.press('Escape')
     await editor.press('Control+z')
     await expect(editor).toHaveText(accepted + ' Typed alongside.')
-    await editor.press('Control+Shift+d')
-    await expect(
-      voice.getByRole('button', { name: 'Stop', exact: true })
-    ).toBeVisible()
+    await startDictation()
     await editor.press('Escape')
-    await expect(page.locator('.cm-dictation-anchor')).toHaveCount(0)
+    await expect(chip).toHaveCount(0)
     await expect(editor).toHaveText(accepted + ' Typed alongside.')
     await editor.fill(accepted)
-    const quiet = await preferences('Local suggestions')
+    const quiet = await preferences('Suggestions')
     await quiet
       .getByRole('switch', { name: /^Suggest after a pause/ })
       .setChecked(false)
     await quiet.getByRole('button', { name: 'Done', exact: true }).click()
     observations.push(
-      'Real inline Whistle capture with a selected microphone, shortcut start/stop/cancel, concurrent typing, mapped insertion, automatic model suggestion and one-step speech undo passed.'
+      'Real Whistle dictation with the dictation chip, shortcut start/finish/cancel, concurrent typing, mapped insertion, automatic model suggestion and one-step speech undo passed.'
     )
   }
 
