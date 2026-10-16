@@ -1,54 +1,55 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
+  type ReactNode,
 } from 'react'
-import { ChevronDown, LoaderCircle, Mic, Square, X } from 'lucide-react'
-import { WhistleModelPanel } from './WhistleModelPanel'
+import { createPortal } from 'react-dom'
+import { Download, LoaderCircle, Mic, Settings2, X } from 'lucide-react'
 import {
   checkWhistleCache,
+  downloadWhistleModel,
   getWhistleState,
   subscribeWhistleState,
-  transcribeWhistle,
-  unloadWhistleModel,
 } from '../services/whistle'
+import { startDictationRecording } from '../services/whistle-recorder'
+import { WHISTLE_MAX_TEXT } from '../services/whistle-model'
 import {
-  startWhistleRecording,
-  type WhistleRecording,
-} from '../services/whistle-recorder'
+  getSpeechRuntimeStatus,
+  refreshSpeechRuntime,
+  subscribeSpeechRuntime,
+} from '../services/speech-runtime'
 import {
-  listWhistleMicrophones,
-  subscribeWhistleMicrophoneChanges,
-  type WhistleMicrophone,
-} from '../services/whistle-microphones'
+  chooseDictationEngine,
+  fluidReadiness,
+  whistleEngine,
+  whistleReadiness,
+  type DictationEngine,
+  type DictationReadiness,
+} from '../services/dictation-engine'
+import { downloadFluidSpeech } from '../services/fluid-speech'
 import {
-  WHISTLE_LANGUAGES,
-  WHISTLE_MAX_TEXT,
-  type WhistleLanguage,
-} from '../services/whistle-model'
-import type { DictationCapture } from '../components/notebook/dictation-anchor'
+  getDictationChipHost,
+  subscribeDictationChipHost,
+  type DictationCapture,
+} from '../components/notebook/dictation-anchor'
+import type { DictationSettings } from '../types/notebook'
+import { defaultSettings } from './model'
+import { DictationChip, DICTATION_SHORTCUT } from './dictation/DictationChip'
+import { getDictationInput } from './dictation/input-preference'
+import {
+  DictationSession,
+  type DictationSnapshot,
+  type SessionEnd,
+} from './dictation/session'
 import './inline-dictation.css'
 
-type Phase = 'idle' | 'starting' | 'recording' | 'transcribing'
-const PREFERENCE_KEY = 'typenext:dictation-input:v1'
-function preference(): { deviceId: string; language: WhistleLanguage } {
-  try {
-    const value = JSON.parse(localStorage.getItem(PREFERENCE_KEY) ?? '{}')
-    return {
-      deviceId:
-        typeof value.deviceId === 'string' ? value.deviceId.slice(0, 512) : '',
-      language: WHISTLE_LANGUAGES.some(item => item.id === value.language)
-        ? value.language
-        : '',
-    }
-  } catch {
-    return { deviceId: '', language: '' }
-  }
-}
+const DEFAULT_DICTATION: DictationSettings = defaultSettings().dictation
+
 export interface InlineDictationHandle {
   toggle(): void
   cancel(): void
@@ -60,7 +61,20 @@ interface Props {
   /** Parent-owned recovery survives note switches while recording stays keyed. */
   recoveryText?: string | null
   onRecoveryTextChange?(text: string | null): void
+  /** `settings.dictation`. Defaults apply when absent. */
+  settings?: DictationSettings
+  /** Open Preferences → Dictation. Without it, setup happens inline. */
+  onOpenSettings?(): void
 }
+
+type Setup = { engine: DictationEngine['id'] } | null
+
+function readinessOf(engine: DictationEngine): DictationReadiness {
+  return engine.id === 'fluid'
+    ? fluidReadiness(getSpeechRuntimeStatus())
+    : whistleReadiness(getWhistleState())
+}
+
 export const InlineDictation = forwardRef<InlineDictationHandle, Props>(
   function InlineDictation(
     {
@@ -69,261 +83,220 @@ export const InlineDictation = forwardRef<InlineDictationHandle, Props>(
       onActiveChange,
       recoveryText,
       onRecoveryTextChange,
+      settings = DEFAULT_DICTATION,
+      onOpenSettings,
     },
     ref
   ) {
-    const model = useSyncExternalStore(
+    const whistle = useSyncExternalStore(
       subscribeWhistleState,
       getWhistleState,
       getWhistleState
     )
+    const speech = useSyncExternalStore(
+      subscribeSpeechRuntime,
+      getSpeechRuntimeStatus,
+      getSpeechRuntimeStatus
+    )
+    const host = useSyncExternalStore(
+      subscribeDictationChipHost,
+      getDictationChipHost,
+      getDictationChipHost
+    )
+    const [snapshot, setSnapshot] = useState<DictationSnapshot | null>(null)
+    const [engineLabel, setEngineLabel] = useState('')
+    const [setup, setSetup] = useState<Setup>(null)
     const [expanded, setExpanded] = useState(recoveryText != null)
-    const [settingsOpen, setSettingsOpen] = useState(false)
-    const [phase, setPhaseState] = useState<Phase>('idle')
-    const phaseRef = useRef<Phase>('idle')
-    const [seconds, setSeconds] = useState(0)
-    const [level, setLevel] = useState(0)
-    const [input, setInput] = useState(preference)
-    const [devices, setDevices] = useState<WhistleMicrophone[]>([
-      { deviceId: '', label: 'System default' },
-    ])
-    const [deviceBusy, setDeviceBusy] = useState(false)
     const [error, setError] = useState('')
-    const [message, setMessage] = useState('')
+    const [announcement, setAnnouncement] = useState('')
+    const [fallbackAccepted, setFallbackAccepted] = useState(false)
     const [internalRecoveryText, setInternalRecoveryText] = useState<
       string | null
     >(null)
     const pendingText =
       recoveryText === undefined ? internalRecoveryText : recoveryText
-    const request = useRef<AbortController | null>(null)
-    const deviceRequest = useRef<AbortController | null>(null)
-    const recording = useRef<WhistleRecording | null>(null)
-    const capture = useRef<DictationCapture | null>(null)
+    const session = useRef<DictationSession | null>(null)
+    const opening = useRef(false)
     const mounted = useRef(true)
-    const actions = useRef({ toggle: () => {}, cancel: () => {} })
-    const callbacks = useRef({
+    const latest = useRef({
       onCapture,
       onRecoverInsert,
       onActiveChange,
       onRecoveryTextChange,
+      settings,
+      recoveryText,
+      fallbackAccepted,
+      pendingText,
     })
-    callbacks.current = {
+    latest.current = {
       onCapture,
       onRecoverInsert,
       onActiveChange,
       onRecoveryTextChange,
+      settings,
+      recoveryText,
+      fallbackAccepted,
+      pendingText,
     }
-    const setPendingText = (text: string | null) => {
-      if (recoveryText === undefined) setInternalRecoveryText(text)
-      callbacks.current.onRecoveryTextChange?.(text)
-    }
+    const setPendingText = useCallback((text: string | null) => {
+      if (latest.current.recoveryText === undefined)
+        setInternalRecoveryText(text)
+      latest.current.onRecoveryTextChange?.(text)
+    }, [])
+    const announce = useCallback((text: string) => {
+      // A trailing no-break space makes a repeated message a new one.
+      if (mounted.current)
+        setAnnouncement(value =>
+          value.replace(/\u00a0$/u, '') === text ? `${value}\u00a0` : text
+        )
+    }, [])
     const hasRecovery = pendingText !== null
     useEffect(() => {
       if (hasRecovery) setExpanded(true)
     }, [hasRecovery])
-    const setPhase = (next: Phase) => {
-      phaseRef.current = next
-      setPhaseState(next)
-      callbacks.current.onActiveChange?.(next !== 'idle')
-    }
-    const cancel = () => {
-      request.current?.abort()
-      request.current = null
-      recording.current?.cancel()
-      recording.current = null
-      capture.current?.cancel()
-      capture.current = null
-      unloadWhistleModel()
-      if (mounted.current) {
-        setPhase('idle')
-        setLevel(0)
-        setMessage('Dictation cancelled. Your writing is unchanged.')
-      }
-    }
-    const refreshDevices = async (permission = false) => {
-      deviceRequest.current?.abort()
-      const controller = new AbortController()
-      deviceRequest.current = controller
-      setDeviceBusy(true)
-      try {
-        const choices = await listWhistleMicrophones({
-          signal: controller.signal,
-          requestPermission: permission,
-        })
-        if (
-          mounted.current &&
-          deviceRequest.current === controller &&
-          !controller.signal.aborted
-        ) {
-          setDevices(choices)
-          if (permission) setError('')
-        }
-      } catch (failure) {
-        if (
-          mounted.current &&
-          deviceRequest.current === controller &&
-          !controller.signal.aborted
-        )
-          setError(
-            failure instanceof Error
-              ? failure.message
-              : 'Microphones could not be listed.'
-          )
-      } finally {
-        if (mounted.current && deviceRequest.current === controller)
-          setDeviceBusy(false)
-      }
-    }
+
     useEffect(() => {
       mounted.current = true
       void checkWhistleCache()
       return () => {
         mounted.current = false
-        request.current?.abort()
-        recording.current?.cancel()
-        capture.current?.cancel()
-        deviceRequest.current?.abort()
-        unloadWhistleModel()
-        callbacks.current.onActiveChange?.(false)
+        session.current?.cancel()
+        session.current = null
+        latest.current.onActiveChange?.(false)
       }
     }, [])
+    // Fluid's install state lives in the desktop app; read it once so the
+    // first shortcut already knows whether it can record.
     useEffect(() => {
-      if (!expanded || !settingsOpen) return
-      void refreshDevices()
-      const unsubscribe = subscribeWhistleMicrophoneChanges(() => {
-        void refreshDevices()
-      })
-      return () => {
-        unsubscribe()
-        deviceRequest.current?.abort()
-        deviceRequest.current = null
-      }
-    }, [expanded, settingsOpen])
-    useEffect(() => {
-      try {
-        localStorage.setItem(PREFERENCE_KEY, JSON.stringify(input))
-      } catch {
-        /* Optional device preference; writing persistence is independent. */
-      }
-    }, [input])
-    const record = async () => {
-      if (phaseRef.current !== 'idle') return
-      setExpanded(true)
-      if (
-        [
-          'checking',
-          'downloading',
-          'loading',
-          'unavailable',
-          'transcribing',
-        ].includes(model.status)
-      ) {
-        setSettingsOpen(true)
-        setMessage('Finish Whistle setup before recording.')
-        return
-      }
-      if (!model.cached) {
-        setSettingsOpen(true)
-        setMessage('Download Whistle once to dictate on this device.')
-        return
-      }
-      // A microphone-list permission prompt belongs to its setup panel, not
-      // to the new recording. Its late grant must not keep a second input open.
-      deviceRequest.current?.abort()
-      deviceRequest.current = null
-      setDeviceBusy(false)
-      const controller = new AbortController()
-      request.current = controller
-      setError('')
-      setMessage('')
-      setPendingText(null)
-      setSeconds(0)
-      setLevel(0)
-      setSettingsOpen(false)
-      setPhase('starting')
-      let pcm: Float32Array | null = null
-      let transcript = ''
-      const current = () =>
-        mounted.current &&
-        request.current === controller &&
-        !controller.signal.aborted
-      try {
-        capture.current = callbacks.current.onCapture()
-        const session = await startWhistleRecording({
-          signal: controller.signal,
-          deviceId: input.deviceId,
-          onDuration: value => {
-            if (current()) setSeconds(value)
-          },
-          onLevel: value => {
-            if (current()) setLevel(value)
-          },
-        })
-        if (!current()) {
-          void session.finished.catch(() => undefined)
-          session.cancel()
+      if (settings.engine === 'fluid')
+        void refreshSpeechRuntime().catch(() => undefined)
+    }, [settings.engine])
+
+    const ended = useCallback(
+      (end: SessionEnd) => {
+        session.current = null
+        if (!mounted.current) return
+        setSnapshot(null)
+        latest.current.onActiveChange?.(false)
+        if (end.recovery) {
+          const previous = latest.current.pendingText
+          setPendingText(
+            previous ? `${previous} ${end.recovery}` : end.recovery
+          )
+        }
+        if (end.reason === 'cancelled') {
+          setError('')
+          announce(
+            end.words
+              ? 'Dictation cancelled. Phrases already inserted stay; undo with Ctrl / ⌘ Z.'
+              : 'Dictation cancelled. Your writing is unchanged.'
+          )
           return
         }
-        recording.current = session
-        setPhase('recording')
-        pcm = await session.finished
-        if (recording.current === session) recording.current = null
-        if (!current()) return
-        capture.current?.transcribing()
-        setPhase('transcribing')
-        setLevel(0)
-        const result = await transcribeWhistle(pcm, {
-          language: input.language,
-          signal: controller.signal,
-        })
-        if (!current()) return
-        transcript = result.text.trim()
-        if (!transcript)
-          throw new Error(
-            'No words were heard. Check your microphone and try again.'
+        if (end.error) {
+          setExpanded(true)
+          setError(end.error)
+        } else setError('')
+        if (end.words)
+          announce(
+            `Dictation finished. Inserted ${end.words} word${end.words === 1 ? '' : 's'}. Undo with Ctrl / ⌘ Z.`
           )
-        if (!capture.current)
-          throw new Error('Place the cursor and insert your transcript below.')
-        capture.current.commit(transcript)
-        capture.current = null
-        setMessage('Added to your note. Undo with Ctrl / ⌘ Z.')
-        setPhase('idle')
+      },
+      [announce, setPendingText]
+    )
+
+    const record = useCallback(async () => {
+      if (session.current || opening.current) return
+      const current = latest.current
+      if (
+        current.settings.engine === 'fluid' &&
+        !getSpeechRuntimeStatus().installed.model
+      ) {
+        // A second shortcut while the desktop app answers must not open a
+        // second session.
+        opening.current = true
+        await refreshSpeechRuntime().catch(() => undefined)
+        opening.current = false
+      }
+      if (!mounted.current || session.current) return
+      const choice = chooseDictationEngine(
+        current.settings.engine,
+        current.fallbackAccepted,
+        readinessOf
+      )
+      if (!choice.engine) {
+        setExpanded(true)
+        setSetup({ engine: choice.preferred.id })
+        announce(
+          choice.readiness.state === 'setup'
+            ? `Dictation needs ${choice.preferred.name}. ${choice.readiness.action}.`
+            : choice.readiness.state === 'busy'
+              ? `${choice.readiness.message}. Dictation starts when it is ready.`
+              : choice.readiness.state === 'unavailable'
+                ? choice.readiness.message
+                : 'Set up dictation first.'
+        )
+        return
+      }
+      const engine = choice.engine
+      setSetup(null)
+      setError('')
+      setPendingText(null)
+      let capture: DictationCapture
+      try {
+        capture = current.onCapture()
       } catch (failure) {
-        if (!current()) return
-        capture.current?.cancel()
-        capture.current = null
-        setPendingText(transcript || null)
+        setExpanded(true)
         setError(
           failure instanceof Error
             ? failure.message
-            : 'Dictation could not finish. Try again.'
+            : 'Place the cursor where you want to dictate.'
         )
-        setPhase('idle')
-        setLevel(0)
-      } finally {
-        pcm?.fill(0)
-        if (request.current === controller) {
-          request.current = null
-          recording.current?.cancel()
-          recording.current = null
-        }
-      }
-    }
-    const toggle = () => {
-      if (phaseRef.current === 'recording') {
-        recording.current?.stop()
         return
       }
-      if (phaseRef.current !== 'idle') {
-        cancel()
+      const input = getDictationInput()
+      const next = new DictationSession({
+        engine,
+        fallback:
+          engine.id === 'fluid' && readinessOf(whistleEngine).state === 'ready'
+            ? whistleEngine
+            : null,
+        capture,
+        settings: current.settings,
+        language: engine.id === 'fluid' ? 'en' : input.language,
+        deviceId: input.deviceId,
+        record: startDictationRecording,
+        onUpdate: value => {
+          if (mounted.current && session.current === next) setSnapshot(value)
+        },
+        onAnnounce: announce,
+        onEnd: end => {
+          if (session.current === next || session.current === null) ended(end)
+        },
+      })
+      session.current = next
+      setEngineLabel(choice.fallback ? engine.name : '')
+      current.onActiveChange?.(true)
+      await next.start()
+    }, [announce, ended, setPendingText])
+
+    const cancel = useCallback(() => {
+      session.current?.cancel()
+    }, [])
+    const toggle = useCallback(() => {
+      const active = session.current
+      if (active) {
+        if (active.state === 'listening') void active.finish()
+        else if (active.state === 'starting') active.cancel()
         return
       }
-      if (pendingText !== null) {
+      if (latest.current.pendingText !== null) {
         setExpanded(true)
         return
       }
       void record()
-    }
+    }, [record])
+    const actions = useRef({ toggle, cancel })
     actions.current = { toggle, cancel }
     useImperativeHandle(
       ref,
@@ -345,18 +318,14 @@ export const InlineDictation = forwardRef<InlineDictationHandle, Props>(
           event.preventDefault()
           event.stopPropagation()
           if (!event.repeat) actions.current.toggle()
-        } else if (event.key === 'Escape' && phaseRef.current !== 'idle') {
+        } else if (event.key === 'Escape' && session.current) {
           event.preventDefault()
           event.stopPropagation()
           actions.current.cancel()
         }
       }
       const hide = () => {
-        if (
-          document.visibilityState === 'hidden' &&
-          phaseRef.current !== 'idle'
-        )
-          actions.current.cancel()
+        if (document.visibilityState === 'hidden') session.current?.cancel()
       }
       window.addEventListener('keydown', key, true)
       document.addEventListener('visibilitychange', hide)
@@ -365,228 +334,293 @@ export const InlineDictation = forwardRef<InlineDictationHandle, Props>(
         document.removeEventListener('visibilitychange', hide)
       }
     }, [])
-    if (!expanded) return null
-    const busy = phase !== 'idle'
+
+    const [busyAction, setBusyAction] = useState('')
+    const downloadWhistle = async () => {
+      setBusyAction('whistle')
+      try {
+        await downloadWhistleModel()
+      } catch {
+        // The panel shows Whistle's own error and the token guide.
+      } finally {
+        if (mounted.current) setBusyAction('')
+      }
+    }
+    const downloadFluid = async () => {
+      if (onOpenSettings) {
+        onOpenSettings()
+        return
+      }
+      setBusyAction('fluid')
+      const result = await downloadFluidSpeech()
+      if (!mounted.current) return
+      setBusyAction('')
+      if (result.error) setError(result.error)
+    }
+
+    const live = snapshot !== null
+    // The anchor shows its plain marker until the chip is rendered into it.
+    useEffect(() => {
+      const marker = host?.parentElement
+      if (!marker || !live) return
+      marker.dataset.live = 'true'
+      return () => {
+        delete marker.dataset.live
+      }
+    }, [host, live])
+    const chip = snapshot && (
+      <DictationChip
+        snapshot={snapshot}
+        engineName={engineLabel}
+        placement={host ? 'inline' : 'strip'}
+        onFinish={() => actions.current.toggle()}
+        onCancel={() => actions.current.cancel()}
+      />
+    )
+    const liveRegion = (
+      <p className="visually-hidden" role="status" aria-live="polite">
+        {announcement}
+      </p>
+    )
+    const setupView = setup && !live && (
+      <SetupStrip
+        engine={setup.engine}
+        whistle={whistleReadiness(whistle)}
+        fluid={fluidReadiness(speech)}
+        busy={busyAction}
+        onDownloadWhistle={() => {
+          void downloadWhistle()
+        }}
+        onDownloadFluid={() => {
+          void downloadFluid()
+        }}
+        onUseWhistle={() => {
+          setFallbackAccepted(true)
+          latest.current.fallbackAccepted = true
+          setSetup(null)
+          void record()
+        }}
+        onStart={() => {
+          setSetup(null)
+          void record()
+        }}
+        onOpenSettings={onOpenSettings}
+      />
+    )
+    const showStrip =
+      (live && !host) ||
+      !!setupView ||
+      (expanded && (!!error || pendingText !== null))
     return (
-      <section
-        className={`inline-dictation ${busy ? 'is-active' : ''}`}
-        aria-label="Inline dictation"
-      >
-        <div className="dictation-strip">
-          <div className="dictation-feedback" role="status" aria-live="polite">
-            {phase === 'recording' ? (
-              <span
-                className="dictation-meter"
-                aria-hidden="true"
-                style={{ '--voice-level': level } as CSSProperties}
-              >
-                {[0, 1, 2, 3, 4].map(i => (
-                  <i key={i} />
-                ))}
-              </span>
-            ) : phase === 'starting' || phase === 'transcribing' ? (
-              <LoaderCircle size={16} className="spin" />
-            ) : (
-              <Mic size={16} />
+      <>
+        {liveRegion}
+        {chip && host && createPortal(chip, host)}
+        {showStrip && (
+          <section
+            className={`inline-dictation ${live ? 'is-active' : ''}`}
+            aria-label="Inline dictation"
+          >
+            {live && !host && <div className="dictation-strip">{chip}</div>}
+            {setupView}
+            {error && (
+              <p className="dictation-inline-error" role="alert">
+                {error}
+              </p>
             )}
-            <span>
-              {phase === 'recording'
-                ? 'Listening'
-                : phase === 'starting'
-                  ? 'Opening microphone…'
-                  : phase === 'transcribing'
-                    ? 'Transcribing on this device…'
-                    : message
-                      ? 'Ready for your next thought'
-                      : 'Dictate into your note'}
-            </span>
-            {phase === 'recording' && (
-              <span className="dictation-elapsed">
-                {Math.floor(seconds)} / 30 s
-              </span>
+            {pendingText !== null && (
+              <div className="dictation-recovery">
+                <label htmlFor="recovered-transcript">Your transcript</label>
+                <textarea
+                  id="recovered-transcript"
+                  value={pendingText}
+                  maxLength={WHISTLE_MAX_TEXT * 5}
+                  rows={3}
+                  onChange={event => setPendingText(event.target.value)}
+                />
+                <div className="dictation-recovery-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={!pendingText.trim()}
+                    onMouseDown={event => event.preventDefault()}
+                    onClick={() => {
+                      try {
+                        latest.current.onRecoverInsert(pendingText)
+                        setPendingText(null)
+                        setError('')
+                        announce('Transcript inserted.')
+                      } catch (failure) {
+                        setError(
+                          failure instanceof Error
+                            ? failure.message
+                            : 'The transcript could not be inserted.'
+                        )
+                      }
+                    }}
+                  >
+                    Insert at cursor
+                  </button>
+                  <button
+                    type="button"
+                    className="button subtle"
+                    onClick={() => {
+                      setPendingText(null)
+                      setError('')
+                      announce('Transcript discarded.')
+                    }}
+                  >
+                    Discard transcript
+                  </button>
+                </div>
+              </div>
             )}
-          </div>
-          {phase === 'recording' ? (
-            <button
-              className="button primary"
-              onMouseDown={event => event.preventDefault()}
-              onClick={() => recording.current?.stop()}
-            >
-              <Square size={12} />
-              Stop
-            </button>
-          ) : phase === 'idle' && pendingText === null ? (
-            <button
-              className="button secondary"
-              disabled={
-                !model.cached ||
-                ['checking', 'downloading', 'loading', 'unavailable'].includes(
-                  model.status
-                )
-              }
-              onMouseDown={event => event.preventDefault()}
-              onClick={() => {
-                void record()
-              }}
-            >
-              <Mic size={14} />
-              Dictate
-            </button>
-          ) : null}
-          {busy ? (
-            <button
-              className="icon-button"
-              aria-label="Cancel dictation"
-              title="Cancel dictation (Escape)"
-              onMouseDown={event => event.preventDefault()}
-              onClick={cancel}
-            >
-              <X size={16} />
-            </button>
-          ) : (
-            <>
+            {!live && (
               <button
-                className="dictation-input-button"
-                aria-label="Choose microphone"
-                aria-expanded={settingsOpen}
-                onClick={() => setSettingsOpen(value => !value)}
-              >
-                <span>Microphone</span>
-                <ChevronDown size={13} />
-              </button>
-              <button
-                className="icon-button"
+                type="button"
+                className="icon-button dictation-close"
                 aria-label="Hide dictation controls"
                 onClick={() => {
                   setExpanded(false)
-                  setSettingsOpen(false)
+                  setError('')
+                  setSetup(null)
                 }}
               >
                 <X size={15} />
               </button>
-            </>
-          )}
-        </div>
-        {settingsOpen && !busy && (
-          <div className="dictation-input-panel">
-            <div className="dictation-input-fields">
-              <label>
-                Microphone
-                <select
-                  aria-label="Microphone"
-                  value={input.deviceId}
-                  onChange={event =>
-                    setInput(value => ({
-                      ...value,
-                      deviceId: event.target.value,
-                    }))
-                  }
-                >
-                  {!devices.some(
-                    device => device.deviceId === input.deviceId
-                  ) && (
-                    <option value={input.deviceId}>
-                      Previously selected microphone · unavailable
-                    </option>
-                  )}
-                  {devices.map(device => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Language
-                <select
-                  aria-label="Dictation language"
-                  value={input.language}
-                  onChange={event =>
-                    setInput(value => ({
-                      ...value,
-                      language: event.target.value as WhistleLanguage,
-                    }))
-                  }
-                >
-                  {WHISTLE_LANGUAGES.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <button
-              className="button subtle"
-              disabled={deviceBusy}
-              onClick={() => {
-                void refreshDevices(true)
-              }}
-            >
-              {deviceBusy
-                ? 'Finding microphones…'
-                : 'Allow and refresh microphones'}
-            </button>
-            <p className="field-help">
-              Ctrl / ⌘ Shift D starts and stops. Escape cancels. Speech stays on
-              this device and enters your note when you stop. You can keep
-              typing.
-            </p>
-            <WhistleModelPanel />
-          </div>
+            )}
+          </section>
         )}
-        {error && (
-          <p className="dictation-inline-error" role="alert">
-            {error}
-          </p>
-        )}
-        {pendingText !== null && (
-          <div className="dictation-recovery">
-            <label htmlFor="recovered-transcript">Your transcript</label>
-            <textarea
-              id="recovered-transcript"
-              value={pendingText}
-              maxLength={WHISTLE_MAX_TEXT}
-              rows={3}
-              onChange={event => setPendingText(event.target.value)}
-            />
-            <button
-              className="button secondary"
-              disabled={!pendingText.trim()}
-              onMouseDown={event => event.preventDefault()}
-              onClick={() => {
-                try {
-                  callbacks.current.onRecoverInsert(pendingText)
-                  setPendingText(null)
-                  setError('')
-                  setMessage('Transcript inserted.')
-                } catch (failure) {
-                  setError(
-                    failure instanceof Error
-                      ? failure.message
-                      : 'The transcript could not be inserted.'
-                  )
-                }
-              }}
-            >
-              Insert at cursor
-            </button>
-            <button
-              className="button subtle"
-              onClick={() => {
-                setPendingText(null)
-                setError('')
-                setMessage('Transcript discarded. Ready to dictate again.')
-              }}
-            >
-              Discard transcript
-            </button>
-          </div>
-        )}
-        {!busy && !error && message && (
-          <p className="dictation-inline-hint">{message}</p>
-        )}
-      </section>
+      </>
     )
   }
 )
+
+/** One clear next step when the chosen engine cannot record yet. */
+function SetupStrip({
+  engine,
+  whistle,
+  fluid,
+  busy,
+  onDownloadWhistle,
+  onDownloadFluid,
+  onUseWhistle,
+  onStart,
+  onOpenSettings,
+}: {
+  engine: DictationEngine['id']
+  whistle: DictationReadiness
+  fluid: DictationReadiness
+  busy: string
+  onDownloadWhistle(): void
+  onDownloadFluid(): void
+  onUseWhistle(): void
+  onStart(): void
+  onOpenSettings?(): void
+}) {
+  const wanted = engine === 'fluid' ? fluid : whistle
+  const name = engine === 'fluid' ? 'Fluid Speech Mini' : 'Whistle'
+  const percent = (value?: number) =>
+    value === undefined ? '' : ` · ${Math.floor(value * 100)}%`
+  let text: string
+  let primary: ReactNode = null
+  if (wanted.state === 'ready') {
+    text = `${name} is ready.`
+    primary = (
+      <button type="button" className="button primary" onClick={onStart}>
+        <Mic size={14} /> Start dictating
+      </button>
+    )
+  } else if (wanted.state === 'busy') {
+    text = `${wanted.message}${percent(wanted.progress)}. Dictation can start when it is ready.`
+  } else if (wanted.state === 'unavailable') {
+    text = wanted.message
+  } else if (engine === 'fluid') {
+    text =
+      'Fluid Speech Mini is not downloaded yet. It is the most accurate choice for long dictation in English.'
+    primary = (
+      <button
+        type="button"
+        className="button primary"
+        disabled={busy === 'fluid'}
+        onClick={onDownloadFluid}
+      >
+        {busy === 'fluid' ? (
+          <LoaderCircle size={14} className="spin" />
+        ) : (
+          <Download size={14} />
+        )}
+        {wanted.action}
+      </button>
+    )
+  } else {
+    text =
+      'Whistle turns speech into text on this device after a one-time download.'
+    primary = (
+      <button
+        type="button"
+        className="button primary"
+        disabled={busy === 'whistle'}
+        onClick={onDownloadWhistle}
+      >
+        {busy === 'whistle' ? (
+          <LoaderCircle size={14} className="spin" />
+        ) : (
+          <Download size={14} />
+        )}
+        {wanted.action}
+      </button>
+    )
+  }
+  const offerWhistle = engine === 'fluid' && wanted.state !== 'ready'
+  return (
+    <div className="dictation-setup" role="group" aria-label="Set up dictation">
+      <p className="dictation-setup-text">
+        <Mic size={15} aria-hidden="true" />
+        <span>{text}</span>
+      </p>
+      <div className="dictation-setup-actions">
+        {primary}
+        {offerWhistle &&
+          (whistle.state === 'ready' ? (
+            <button
+              type="button"
+              className="button secondary"
+              onClick={onUseWhistle}
+            >
+              Use Whistle now
+            </button>
+          ) : whistle.state === 'setup' ? (
+            <button
+              type="button"
+              className="button secondary"
+              disabled={busy === 'whistle'}
+              onClick={onDownloadWhistle}
+            >
+              {busy === 'whistle' && (
+                <LoaderCircle size={14} className="spin" />
+              )}
+              Use Whistle instead · 17 MB
+            </button>
+          ) : whistle.state === 'busy' ? (
+            <span className="dictation-setup-progress">
+              <LoaderCircle size={13} className="spin" />
+              {whistle.message}
+              {percent(whistle.progress)}
+            </span>
+          ) : null)}
+        {onOpenSettings && (
+          <button
+            type="button"
+            className="button subtle"
+            onClick={onOpenSettings}
+          >
+            <Settings2 size={14} /> Dictation settings
+          </button>
+        )}
+      </div>
+      <p className="dictation-setup-hint">
+        {DICTATION_SHORTCUT} starts and finishes · Esc cancels
+      </p>
+    </div>
+  )
+}

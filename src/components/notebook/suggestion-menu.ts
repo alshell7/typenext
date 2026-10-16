@@ -29,6 +29,9 @@ export interface SuggestionMenu {
 let nextMenuId = 0
 export const setSuggestionMenu = StateEffect.define<SuggestionMenu | null>()
 
+/** Web facts may extend a menu of three choices to five. */
+export const MAX_MENU_CHOICES = 5
+
 /** Keep one bounded, distinct list for both the inline preview and the menu. */
 export function suggestionChoices(result: SuggestionResult) {
   const seen = new Set<string>()
@@ -39,7 +42,12 @@ export function suggestionChoices(result: SuggestionResult) {
       seen.add(text)
       return true
     })
-    .map(({ text, sources, mode }) => ({ text, sources, mode }))
+    .map(({ text, sources, mode, citations }) => ({
+      text,
+      sources,
+      mode,
+      ...(citations?.length ? { citations } : {}),
+    }))
 }
 
 export function suggestionOrigin(
@@ -48,6 +56,15 @@ export function suggestionOrigin(
 ) {
   if (candidate.mode === 'starter') return 'Writing starter'
   if (candidate.mode === 'model') return PROVIDERS[provider]
+  if (candidate.mode === 'web') {
+    const citation = candidate.citations?.[0]
+    if (!citation) return 'Web search'
+    try {
+      return `Web · ${new URL(citation.url).hostname.replace(/^www\./u, '')}`
+    } catch {
+      return 'Web search'
+    }
+  }
   const source = candidate.sources[0]
   if (!source || /^(this|current) note$/i.test(source)) return 'From this note'
   return `From ${source}`

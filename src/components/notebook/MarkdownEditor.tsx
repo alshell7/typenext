@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import {
+  Compartment,
   EditorSelection,
   EditorState,
   StateEffect,
@@ -21,9 +22,15 @@ import {
   historyKeymap,
   isolateHistory,
 } from '@codemirror/commands'
-import { markdown } from '@codemirror/lang-markdown'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { syntaxTree } from '@codemirror/language'
 import { suggest } from '../../services/completion'
+import {
+  researchFocus,
+  searchWebFacts,
+  webFactsAvailable,
+} from '../../services/web-facts'
+import { isDesktop } from '../../services/native'
 import {
   getBuiltinState,
   subscribeBuiltinState,
@@ -37,6 +44,32 @@ import type {
   SuggestionCandidate,
   SuggestionResult,
 } from '../../types/notebook'
+import {
+  completionOpen,
+  editorCompletions,
+  type EditorAction,
+  type EditorHost,
+} from './editor-completions'
+import { livePreview } from './live-preview'
+import { refreshFlow, writingFlow, type FlowHost } from './writing-flow'
+import { fetchLinkPreview } from '../../services/link-preview'
+import {
+  automaticAllowed,
+  automaticDelay,
+  newRhythm,
+  noteAccepted,
+  noteKeystroke,
+} from './suggestion-timing'
+import { linkTools, refreshLinks, type LinkHost } from './link-tools'
+import {
+  deleteMarkupBackward,
+  insertLink,
+  smartEnter,
+  smartShiftTab,
+  smartTab,
+  toggleTask,
+  wrapSelection,
+} from './markdown-editing'
 import {
   acceptedSuggestionHighlight,
   acceptInlineSuggestion,
@@ -57,6 +90,7 @@ import {
 import {
   acceptMenuSuggestion,
   createSuggestionMenu,
+  MAX_MENU_CHOICES,
   moveSuggestionSelection,
   setSuggestionMenu,
   suggestionChoices,
@@ -67,12 +101,9 @@ import {
 import {
   dictationAnchorField,
   dictationAnchorDecoration,
-  setDictationAnchor,
-  spaceDictation,
+  startDictationCapture,
   type DictationCapture,
 } from './dictation-anchor'
-
-let nextDictationId = 0
 
 export interface EditorStatus {
   state: 'idle' | 'loading' | 'suggestion' | 'error'
@@ -91,6 +122,10 @@ export interface MarkdownEditorHandle {
   requestSuggestion(): void
   /** Request this provider once without changing the activated suggestion mode. */
   requestExternalSuggestion(provider: ProviderId): void
+  /** Research the selection (or the sentence before the cursor) on the web. */
+  requestWebFacts(): void
+  /** Move the cursor to a position and show it near the top of the window. */
+  jumpTo(pos: number): void
 }
 
 interface MarkdownEditorProps {
@@ -100,11 +135,33 @@ interface MarkdownEditorProps {
   onStatus(status: EditorStatus): void
   requestToken: number
   onCursorChange?(context: CursorContext): void
+  /** All notes, for [[links]], hover previews and completion. */
+  notes?: Note[]
+  onOpenNote?(id: string): void
+  onCreateNote?(title: string): void
+  onAction?(action: EditorAction): void
+  /** Full zen: typewriter scrolling and paragraph focus when allowed. */
+  zenFull?: boolean
 }
 
 interface EditorControls {
   invalidate(): void
   request(provider?: ProviderId): void
+  webFacts(): void
+}
+
+const EMPTY_NOTES: Note[] = []
+const livePreviewCompartment = new Compartment()
+
+export function openExternalUrl(url: string) {
+  if (!/^(?:https?:|mailto:)/iu.test(url)) return
+  if (isDesktop())
+    void import('@tauri-apps/api/core').then(({ invoke }) =>
+      invoke('plugin:opener|open_url', { url }).catch(() =>
+        window.open(url, '_blank', 'noopener,noreferrer')
+      )
+    )
+  else window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 // Restore cursor, scrolling, and undo when moving between open note tabs.
@@ -407,81 +464,22 @@ export const MarkdownEditor = forwardRef<
         if (!view.state.selection.main.empty)
           throw new Error('Place the cursor where you want to dictate.')
         controlsRef.current?.invalidate()
-        const id = ++nextDictationId
-        view.focus()
-        view.dispatch({
-          effects: setDictationAnchor.of({
-            id,
-            at: view.state.selection.main.head,
-            phase: 'listening',
-          }),
-        })
-        const anchor = (requirePosition = true) => {
-          const value =
-            viewRef.current === view
-              ? view.state.field(dictationAnchorField)
-              : null
-          if (
-            !value ||
-            value.id !== id ||
-            (requirePosition && value.at === null)
-          )
-            throw new Error(
-              'The dictation position changed. Place the cursor and insert your transcript below.'
-            )
-          return value
-        }
-        return {
-          cancel() {
-            if (
-              viewRef.current === view &&
-              view.state.field(dictationAnchorField)?.id === id
-            )
-              view.dispatch({ effects: setDictationAnchor.of(null) })
-          },
-          transcribing() {
-            // Finish recognition even if typing removed the insertion point.
-            // A later commit failure keeps the transcript available for recovery.
-            const value = anchor(false)
-            view.dispatch({
-              effects: setDictationAnchor.of({
-                ...value,
-                phase: 'transcribing',
-              }),
-            })
-          },
-          commit(text) {
-            const value = anchor()
-            const at = value.at!
-            const inserted = spaceDictation(
-              text,
-              view.state.sliceDoc(Math.max(0, at - 1), at),
-              view.state.sliceDoc(at, at + 1)
-            )
-            if (!inserted)
-              throw new Error('No words were heard. Try recording again.')
-            const transaction = view.state.update({
-              changes: { from: at, insert: inserted },
-              selection: EditorSelection.cursor(at + inserted.length),
-              effects: setDictationAnchor.of(null),
-              annotations: [
-                Transaction.userEvent.of('input.dictation'),
-                isolateHistory.of('full'),
-              ],
-              scrollIntoView: true,
-            })
-            if (!transaction.docChanged)
-              throw new Error(
-                'This note is full. Keep your transcript below and insert it into a shorter note.'
-              )
-            view.focus()
-            view.dispatch(transaction)
-          },
-        }
+        return startDictationCapture(view, () => viewRef.current === view)
       },
       requestSuggestion: () => controlsRef.current?.request(),
       requestExternalSuggestion: provider =>
         controlsRef.current?.request(provider),
+      requestWebFacts: () => controlsRef.current?.webFacts(),
+      jumpTo(pos) {
+        const view = viewRef.current
+        if (!view) return
+        const at = Math.max(0, Math.min(pos, view.state.doc.length))
+        view.dispatch({
+          selection: EditorSelection.cursor(at),
+          effects: EditorView.scrollIntoView(at, { y: 'start', yMargin: 96 }),
+        })
+        view.focus()
+      },
     }),
     []
   )
@@ -497,6 +495,7 @@ export const MarkdownEditor = forwardRef<
     let trimmingHistory = false
     let offeredBlankStarter = false
     let lastStatus: EditorStatus = { state: 'idle' }
+    let rhythm = newRhythm()
 
     function emitStatus(status: EditorStatus) {
       if (disposed || propsRef.current.note.id !== noteId) return
@@ -599,6 +598,8 @@ export const MarkdownEditor = forwardRef<
 
     function request(override?: ProviderId, manual = true) {
       if (view.state.field(dictationAnchorField)) return
+      // The insert menu and note completion own the keyboard while open.
+      if (!manual && completionOpen(view)) return
       if (manual) view.focus()
       // Focusing an empty page may schedule its initial automatic starter.
       // A manual request owns this interaction and cancels that focus timer.
@@ -688,10 +689,17 @@ export const MarkdownEditor = forwardRef<
         )
       }
 
+      const withFacts =
+        showMenu &&
+        current.settings.webFacts?.withSuggestions === true &&
+        webFactsAvailable(current.settings)
       const cached = freshChoices ? undefined : getCachedSuggestion(key)
       if (cached) {
-        if (isCurrent()) showSuggestion(cached, showMenu, manual, provider)
-        controller = null
+        if (isCurrent()) {
+          showSuggestion(cached, showMenu, manual, provider)
+          if (withFacts) void appendWebFacts(context, isCurrent)
+        }
+        if (!withFacts) controller = null
         return
       }
 
@@ -710,6 +718,7 @@ export const MarkdownEditor = forwardRef<
             if (!isCurrent()) return
             if (!freshChoices) cacheSuggestion(key, result)
             showSuggestion(result, showMenu, manual, provider, freshChoices)
+            if (showMenu && withFacts) void appendWebFacts(context, isCurrent)
           } catch (error) {
             if (!isCurrent()) return
             emitStatus({
@@ -724,6 +733,137 @@ export const MarkdownEditor = forwardRef<
           }
         },
       })
+    }
+
+    /** Add cited web facts to an open choice menu when they arrive. */
+    async function appendWebFacts(
+      context: CursorContext,
+      isCurrent: () => boolean
+    ) {
+      const current = propsRef.current
+      try {
+        const facts = await searchWebFacts(
+          {
+            selection: '',
+            beforeCursor: context.text.slice(0, context.cursor),
+            afterCursor: context.text.slice(context.cursor),
+            noteTitle: current.note.title,
+            objective: current.note.objective,
+          },
+          current.settings.webFacts,
+          controller?.signal
+        )
+        const menu = view.state.field(suggestionMenuField)
+        if (!facts.length || !isCurrent() || !menu) return
+        const choices = [
+          ...menu.choices.slice(
+            0,
+            MAX_MENU_CHOICES - Math.min(2, facts.length)
+          ),
+          ...facts,
+        ].slice(0, MAX_MENU_CHOICES)
+        const next = createSuggestionMenu(menu.at, choices, menu.provider)
+        view.dispatch({
+          effects: [
+            setSuggestionMenu.of({ ...next, selected: menu.selected }),
+            EditorView.announce.of(
+              `${facts.length} web ${facts.length === 1 ? 'fact' : 'facts'} added to the choices.`
+            ),
+          ],
+        })
+      } catch {
+        // Ordinary choices stay usable when web search fails.
+      }
+    }
+
+    function webFacts() {
+      if (view.state.field(dictationAnchorField)) return
+      const current = propsRef.current
+      view.focus()
+      invalidate()
+      if (!webFactsAvailable(current.settings)) {
+        emitStatus({
+          state: 'idle',
+          message:
+            'Turn on web facts in Preferences → Web facts to research a selection.',
+        })
+        return
+      }
+      const range = view.state.selection.main
+      const selection = view.state.sliceDoc(range.from, range.to)
+      // Facts are inserted after the selected text.
+      if (!range.empty)
+        view.dispatch({ selection: EditorSelection.cursor(range.to) })
+      const context = cursorContext(view)
+      if (
+        !researchFocus({
+          selection,
+          beforeCursor: context.text.slice(0, context.cursor),
+          afterCursor: '',
+          noteTitle: '',
+          objective: '',
+        })
+      ) {
+        emitStatus({
+          state: 'idle',
+          message: 'Select text or write a sentence to research.',
+        })
+        return
+      }
+      const abort = new AbortController()
+      controller = abort
+      const requestRevision = revision
+      const requestedDoc = view.state.doc
+      const requestedSelection = view.state.selection
+      const isCurrent = () =>
+        !disposed &&
+        !abort.signal.aborted &&
+        controller === abort &&
+        revision === requestRevision &&
+        view.state.doc === requestedDoc &&
+        view.state.selection.eq(requestedSelection)
+      emitStatus({ state: 'loading', message: 'Searching the web…' })
+      void searchWebFacts(
+        {
+          selection,
+          beforeCursor: context.text.slice(0, context.cursor),
+          afterCursor: context.text.slice(context.cursor),
+          noteTitle: current.note.title,
+          objective: current.note.objective,
+        },
+        current.settings.webFacts,
+        abort.signal
+      )
+        .then(facts => {
+          if (!isCurrent()) return
+          if (!facts.length) {
+            emitStatus({
+              state: 'idle',
+              message: 'The web search found no cited facts. Try other words.',
+            })
+            return
+          }
+          const [first, ...rest] = facts
+          showSuggestion(
+            { ...first!, alternatives: rest },
+            true,
+            true,
+            'openai'
+          )
+        })
+        .catch(error => {
+          if (!isCurrent()) return
+          emitStatus({
+            state: 'error',
+            message:
+              error instanceof Error
+                ? error.message
+                : 'The web search could not be completed.',
+          })
+        })
+        .finally(() => {
+          if (controller === abort) controller = null
+        })
     }
 
     function scheduleAutomatic() {
@@ -741,13 +881,30 @@ export const MarkdownEditor = forwardRef<
       ) {
         return
       }
+      const head = view.state.selection.main.head
+      const line = view.state.doc.lineAt(head)
+      const lineBefore = view.state.sliceDoc(line.from, head)
+      if (
+        !automaticAllowed({
+          lineBefore,
+          minCharacters: settings.timing?.minCharacters ?? 0,
+          documentEmpty: view.state.doc.length === 0,
+        })
+      )
+        return
       if (timer !== null) clearTimeout(timer)
       timer = setTimeout(
         () => {
           timer = null
           request(undefined, false)
         },
-        Math.max(300, settings.suggestionDelay)
+        automaticDelay({
+          base: settings.suggestionDelay,
+          adaptive: settings.timing?.adaptiveDelay === true,
+          rhythm,
+          now: Date.now(),
+          lineBefore,
+        })
       )
     }
 
@@ -813,6 +970,48 @@ export const MarkdownEditor = forwardRef<
       )
     }
 
+    const editorHost: EditorHost = {
+      settings: () => propsRef.current.settings.editor,
+      webFacts: () => webFactsAvailable(propsRef.current.settings),
+      notes: () => propsRef.current.notes ?? EMPTY_NOTES,
+      noteId: () => noteId,
+      runAction(action) {
+        if (action === 'suggest') queueMicrotask(() => request())
+        else if (action === 'web-facts') queueMicrotask(() => webFacts())
+        else propsRef.current.onAction?.(action)
+      },
+    }
+    const linkHost: LinkHost = {
+      notes: () => propsRef.current.notes ?? EMPTY_NOTES,
+      noteId: () => noteId,
+      previews: () => propsRef.current.settings.editor?.linkPreviews ?? 'notes',
+      hoverDelay: () => propsRef.current.settings.timing?.hoverDelay ?? 320,
+      openNote: id => propsRef.current.onOpenNote?.(id),
+      createNote: title => propsRef.current.onCreateNote?.(title),
+      openUrl: openExternalUrl,
+    }
+
+    const editorSettings = () => propsRef.current.settings.editor
+    const zenFocus = () =>
+      propsRef.current.zenFull === true && editorSettings()?.zenFocus !== false
+    const flowHost: FlowHost = {
+      selectionToolbar: () => editorSettings()?.selectionToolbar !== false,
+      typewriter: () => editorSettings()?.typewriter === true || zenFocus(),
+      focus: () =>
+        editorSettings()?.focus && editorSettings()!.focus !== 'off'
+          ? editorSettings()!.focus
+          : zenFocus()
+            ? 'paragraph'
+            : 'off',
+      smartTypography: () => editorSettings()?.smartTypography === true,
+      webFacts: () => webFactsAvailable(propsRef.current.settings),
+      runWebFacts: () => queueMicrotask(() => webFacts()),
+      linkTitle: url =>
+        editorSettings()?.linkPreviews === 'all'
+          ? fetchLinkPreview(url).then(preview => preview.title ?? null)
+          : Promise.resolve(null),
+    }
+
     const extensions: Extension[] = [
       dictationAnchorField,
       dictationAnchorDecoration,
@@ -837,8 +1036,20 @@ export const MarkdownEditor = forwardRef<
         })
         return []
       }),
-      markdown(),
+      markdown({
+        base: markdownLanguage,
+        addKeymap: false,
+        completeHTMLTags: false,
+      }),
       markdownPresentation,
+      livePreviewCompartment.of(
+        propsRef.current.settings.editor?.livePreview === false
+          ? []
+          : livePreview()
+      ),
+      editorCompletions(editorHost),
+      linkTools(linkHost),
+      writingFlow(flowHost),
       writingSurface,
       EditorView.lineWrapping,
       highlightSpecialChars(),
@@ -858,8 +1069,27 @@ export const MarkdownEditor = forwardRef<
       keymap.of([
         { key: 'ArrowDown', run: editor => moveSuggestionSelection(editor, 1) },
         { key: 'ArrowUp', run: editor => moveSuggestionSelection(editor, -1) },
-        { key: 'Enter', run: acceptMenuSuggestion },
-        { key: 'Tab', run: acceptInlineSuggestion },
+        {
+          key: 'Enter',
+          run: editor => acceptMenuSuggestion(editor) || smartEnter(editor),
+        },
+        { key: 'Backspace', run: deleteMarkupBackward },
+        {
+          key: 'Tab',
+          run: editor => acceptInlineSuggestion(editor) || smartTab(editor),
+        },
+        { key: 'Shift-Tab', run: smartShiftTab },
+        { key: 'Mod-Enter', run: toggleTask },
+        { key: 'Mod-k', run: insertLink, preventDefault: true },
+        { key: 'Mod-i', run: editor => wrapSelection(editor, '*') },
+        {
+          key: 'Mod-Shift-k',
+          run: () => {
+            webFacts()
+            return true
+          },
+          preventDefault: true,
+        },
         {
           key: 'Mod-ArrowRight',
           run: editor => acceptInlineSuggestion(editor, 'word'),
@@ -932,6 +1162,16 @@ export const MarkdownEditor = forwardRef<
           const accepted = update.transactions.some(transaction =>
             transaction.isUserEvent('input.complete')
           )
+          if (accepted) rhythm = noteAccepted(rhythm, Date.now())
+          else if (
+            update.docChanged &&
+            update.transactions.some(
+              transaction =>
+                transaction.isUserEvent('input.type') ||
+                transaction.isUserEvent('delete')
+            )
+          )
+            rhythm = noteKeystroke(rhythm, Date.now())
           if (
             update.docChanged &&
             !external &&
@@ -975,7 +1215,7 @@ export const MarkdownEditor = forwardRef<
     })
     viewRef.current = view
     documentStrings.set(view.state.doc, content)
-    controlsRef.current = { invalidate, request }
+    controlsRef.current = { invalidate, request, webFacts }
     const document = view.dom.ownerDocument
     const visibilityChanged = () => {
       if (document.visibilityState === 'hidden') invalidate()
@@ -1020,6 +1260,26 @@ export const MarkdownEditor = forwardRef<
   useEffect(() => {
     controlsRef.current?.invalidate()
   }, [completionConfiguration, noteId])
+
+  const livePreviewEnabled = props.settings.editor?.livePreview !== false
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: livePreviewCompartment.reconfigure(
+        livePreviewEnabled ? livePreview() : []
+      ),
+    })
+  }, [livePreviewEnabled, noteId])
+
+  const flowKey = `${props.zenFull ? 1 : 0}:${props.settings.editor?.focus}:${props.settings.editor?.zenFocus}`
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: refreshFlow.of(null) })
+  }, [flowKey])
+
+  // Restyle [[links]] when titles change; note bodies do not affect styles.
+  const titles = (props.notes ?? EMPTY_NOTES).map(item => item.title).join('\n')
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: refreshLinks.of(null) })
+  }, [titles])
 
   useEffect(() => {
     const view = viewRef.current

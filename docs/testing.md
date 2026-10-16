@@ -1,5 +1,97 @@
 # Testing TypeNext
 
+This document has two parts. The first part tells you which tests exist and how to run them. The second part is a log of earlier verification runs. Test counts in the log are historical.
+
+## Test suites
+
+| Suite                | Command                                           | Scope                                                                                                |
+| -------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Unit (Vitest, jsdom) | `npm run test:run`                                | `src/notebook`, `src/services`, `src/components/notebook`. Setup file: `src/notebook/test-setup.ts`. |
+| Browser (Playwright) | `npm run test:e2e`                                | `tests/e2e`, one worker, dev server on `http://127.0.0.1:1420`.                                      |
+| Rust                 | `cargo test --manifest-path src-tauri/Cargo.toml` | Native storage, credentials, HTTP and the embedding runtime manager.                                 |
+| Quality gate         | `npm run check:all`                               | Type check, lint, unit tests, `cargo fmt --check` and `cargo clippy -D warnings`.                    |
+
+`npm run check:all` does not run `cargo test` or the browser tests. Run them separately.
+
+### Tests for this release
+
+| File                                                  | What it checks                                                                                                                                                       |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/e2e/editor-features.spec.ts`                   | Insert menu (Escape keeps a literal slash), lists, tasks, tables, live preview, `[[links]]` with hover cards and create, the note graph, zen levels, typing latency. |
+| `tests/e2e/support/notes.ts`                          | Shared helpers: `startNote`, `noteEditor`, `openIntent`, `savedMarkdown`.                                                                                            |
+| `src/components/notebook/markdown-editing.test.ts`    | List and table editing, formatting, insert menu ranking and trigger rules, note-link completion, live preview escaping, unsafe link URLs.                            |
+| `src/services/semantic.test.ts`                       | Embedding client prompts, Matryoshka truncation, queue priorities, ranking, fusion, budgets, BM25 fallback, vector cache, media vectors, next-line recall.           |
+| `src/services/features.test.ts`                       | Media limits, web facts parsing and request shape, link previews, automatic titles, settings migration.                                                              |
+| `src/notebook/Preferences.test.tsx`                   | Preference navigation, custom commands, trigger validation, Knowledge downloads and server command, Web facts, Models.                                               |
+| `src/notebook/ModelChooser.test.tsx`                  | Grouped engine list, keyboard selection, switch back to this device, setup entries.                                                                                  |
+| `src/notebook/NoteGraph.test.tsx`                     | Graph dialog, filters, depth, list view, open and create, search and keys, empty states.                                                                             |
+| `src/notebook/note-graph-layout.test.ts`              | Seeded layout, force simulation, Barnes–Hut accuracy, a 3,000-note speed budget, camera and picking.                                                                 |
+| `src/notebook/note-links.test.ts`                     | Link parsing (labels, headings, code), title resolution, backlinks, graph edges, neighbourhoods.                                                                     |
+| `src/notebook/context/ContextPanel.semantic.test.tsx` | The Context panel with semantic search.                                                                                                                              |
+| `src-tauri/src/embedding.rs` (unit tests)             | Pinned archives and URLs, safe extraction, context clamp, server arguments, key not on the command line, orphan cleanup.                                             |
+
+### Typing latency
+
+`typing stays responsive in a long note with lists and tables` pastes 400 blocks (about 3,600 lines) of headings, nested lists, tables and links. It then types 60 characters and measures each frame. The median must be below 40 ms and the 95th percentile below 120 ms. Run it after changes to live preview, link styles or completion sources:
+
+```sh
+npx playwright test tests/e2e/editor-features.spec.ts
+```
+
+## Opt-in live tests
+
+Live tests are skipped by default. They contact real servers or providers.
+
+CAUTION: Never put API keys in documentation, test files or commits. Put them in a local `.env` file. `.gitignore` excludes `.env`, `.env.*` and `CREDENTIALS.txt`.
+
+### Semantic search against a real server
+
+1. Start `llama-server` with EmbeddingGemma 2 and the media encoder (see the command in **Preferences → Knowledge**).
+2. Optional: make a folder with `shot.jpg`, `speech.wav` and `clip.mp4`.
+3. Run:
+
+```sh
+TYPENEXT_EMBEDDING_URL=http://127.0.0.1:8080 \
+TYPENEXT_MEDIA_DIR=/path/to/media \
+npx vitest run src/services/semantic-live.test.ts
+```
+
+The suite checks the reported modalities and latency, paraphrase ranking at 128, 256, 512 and 768 dimensions, retrieval by meaning when the words differ, a next line at a sentence boundary, and image, speech and video matches to text queries. Without `TYPENEXT_EMBEDDING_URL`, the suite is skipped. Without `shot.jpg`, the media test is skipped.
+
+### Suggestions against real providers
+
+1. Put `OPEN_AI_API_KEY` (or `OPENAI_API_KEY`) and/or `OPENROUTER_API_KEY` in the local `.env` file.
+2. Run:
+
+```sh
+set -a; . ./.env; set +a
+TYPENEXT_LIVE_SUGGEST=1 npx vitest run src/services/suggest-live.test.ts
+```
+
+3. Optional: add `TYPENEXT_EMBEDDING_URL=http://127.0.0.1:8080` to include the semantic retrieval test.
+
+For each provider with a key (OpenAI `gpt-5.4-mini`, OpenRouter `openrouter/free`), the suite checks a fact from an attached reference with the suffix kept, a word fragment, three distinct fresh choices, and retrieval by meaning. With an OpenAI key, it also checks cited web facts. These tests send synthetic text and cost money or free-tier quota.
+
+### Managed embedding server (Rust)
+
+The ignored test `managed_server_serves_authenticated_embeddings` installs and runs the real runtime.
+
+1. Make a folder with the pinned llama.cpp archive for your platform (its release name, or `llama.tar.gz` / `llama.zip`), `eg2-q4.gguf` and, optionally, `mmproj-q8.gguf`.
+2. Run:
+
+```sh
+TYPENEXT_EMBEDDING_TEST_DIR=/path/to/folder \
+cargo test --manifest-path src-tauri/Cargo.toml managed_server -- --ignored
+```
+
+The test verifies the archive hash and installs the runtime in a temporary folder. It starts a text server and checks the loopback endpoint, the pid file and the status events. It checks `/health`, a 401 without the key, an embedding, and reuse of the running server. With the media file, it checks a media server with a new key. Then it stops the server and checks that app shutdown kills a running server.
+
+### Playwright live checks
+
+`tests/e2e/openrouter-live.spec.ts` (`TYPENEXT_LIVE_OPENROUTER=1`) and `tests/e2e/demo-openrouter-live.spec.ts` (`TYPENEXT_DEMO_OPENROUTER=1`) read their key from the ignored `CREDENTIALS.txt`. They are described in the log below.
+
+## Verification log
+
 ## Sample context verification, 2026-10-06
 
 The final suite passed **604 unit tests** across 27 files and **64 Edge browser tests**, with two live-provider tests intentionally skipped. TypeScript, zero-warning ESLint, the production frontend build and the normal Windows debug NSIS build passed. The browser run refreshed the sample screenshots at desktop and narrow dark sizes. Earlier Rust/native runtime checks below were not rerun for this frontend change. Git attributes preserve the sample's raw-import line endings so its byte checks also survive Windows checkouts.
@@ -89,7 +181,7 @@ To exercise the same UI flow with a synthetic key and a mocked response, set `TY
 
 The test checks the current public model catalog before sending writing. The selected model must exist, have zero prompt, completion and request pricing, and permit reasoning to be disabled. A paid or unavailable model causes the test to stop before any authenticated request. `TYPENEXT_LIVE_MODEL` can select another eligible fixed model for a deliberate separate run; there is no automatic model fallback. Free catalog entries have their own availability and rate limits. [OpenRouter free variants](https://openrouter.ai/docs/guides/routing/model-variants/free), [model catalog](https://openrouter.ai/api/v1/models).
 
-OpenRouter requests use `/api/v1/chat/completions` with Bearer authentication. The completion engine asks for `reasoning.enabled: false` and `reasoning.exclude: true` because hidden reasoning can consume a tiny `max_tokens` budget before producing any visible insertion. Models with mandatory reasoning are unsuitable for this short-insertion test. [OpenRouter quickstart](https://openrouter.ai/docs/quickstart), [reasoning controls](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
+OpenRouter requests use `/api/v1/chat/completions` with Bearer authentication. The completion engine asks for `reasoning.enabled: false` and `reasoning.exclude: true` because hidden reasoning can consume a tiny `max_tokens` budget before producing any visible insertion. Models with mandatory reasoning are unsuitable for this short-insertion test. In the app, a request that fails because reasoning is mandatory is sent once more with low reasoning effort and 512 more tokens. See [AI design](ai-design.md). [OpenRouter quickstart](https://openrouter.ai/docs/quickstart), [reasoning controls](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
 
 ## Live evidence, 2026-10-05
 

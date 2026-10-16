@@ -1,3 +1,4 @@
+import { startNote } from './support/notes'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -34,7 +35,7 @@ async function setSessionKey(input: Locator, secret: string): Promise<void> {
 
 async function openExternalSettings(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
-  await page.getByRole('tab', { name: 'External models' }).click()
+  await page.getByRole('tab', { name: 'Models' }).click()
 }
 
 test('live free model returns three fresh manual choices in one consented request and inserts only at the cursor', async ({
@@ -187,38 +188,39 @@ test('live free model returns three fresh manual choices in one consented reques
     await page.goto('/')
     // Acceptance must not schedule an accidental second hosted request.
     await page.getByRole('button', { name: 'Preferences', exact: true }).click()
-    await page.getByRole('tab', { name: 'Local suggestions' }).click()
+    await page.getByRole('tab', { name: 'Suggestions' }).click()
     await page.getByRole('switch', { name: /^Suggest after a pause/ }).uncheck()
     await page.getByLabel('Suggestion length').selectOption('adaptive')
     await page.getByRole('button', { name: 'Done', exact: true }).click()
     await openExternalSettings(page)
-    await page.getByLabel('Configure provider').selectOption('openrouter')
-    await page.getByLabel('Model', { exact: true }).fill(model)
-    await setSessionKey(page.getByLabel('API key', { exact: true }), secret)
-    await page.getByRole('button', { name: 'Save key', exact: true }).click()
+    const external = page.getByRole('region', {
+      name: 'External providers',
+      exact: true,
+    })
+    await external
+      .getByRole('radio', { name: 'OpenRouter', exact: true })
+      .click()
+    await external.getByLabel('Model', { exact: true }).fill(model)
+    await setSessionKey(external.getByLabel('API key', { exact: true }), secret)
+    await external
+      .getByRole('button', { name: 'Save key', exact: true })
+      .click()
     await expect(
-      page.getByText('Ready for this session.', { exact: true })
+      external.getByText('Ready for this session.', { exact: true })
     ).toBeVisible()
     await page.getByRole('button', { name: 'Done', exact: true }).click()
 
-    await page
-      .getByRole('button', { name: 'Start a note', exact: true })
-      .click()
-    await page
-      .getByLabel('Title', { exact: true })
-      .fill('Synthetic live completion check')
-    await page
-      .getByLabel(/^Context for suggestions/)
-      .fill(
-        'A quiet sentence about fresh morning air. Fill only a natural short phrase at the cursor. Keep the existing words on both sides.'
-      )
-    await page.getByRole('button', { name: 'Create note', exact: true }).click()
+    await startNote(
+      page,
+      'Synthetic live completion check',
+      'A quiet sentence about fresh morning air. Fill only a natural short phrase at the cursor. Keep the existing words on both sides.'
+    )
     const editor = page.getByRole('textbox', { name: 'Note content' })
     await editor.fill(prefix + suffix)
-    await editor.press('Control+End')
+    await editor.press('ControlOrMeta+End')
     for (let i = 0; i < suffix.length; i += 1) await editor.press('ArrowLeft')
     // Merely configuring a key leaves ordinary manual suggestions local.
-    await editor.press('Control+Space')
+    await editor.press('ControlOrMeta+Space')
     await page.waitForTimeout(200)
     expect(
       hostedRequests,
@@ -251,10 +253,12 @@ test('live free model returns three fresh manual choices in one consented reques
     )
     const started = Date.now()
     await page
-      .getByRole('button', { name: 'Use OpenRouter continuously', exact: true })
+      .getByRole('dialog', { name: 'Choose your suggestion engine' })
+      .getByRole('group', { name: 'OpenRouter', exact: true })
+      .getByRole('option', { name: model, exact: true })
       .click()
     await editor.focus()
-    await editor.press('Control+Space')
+    await editor.press('ControlOrMeta+Space')
     const response = await responsePromise
     evidence.httpStatus = response.status()
     evidence.latencyMs = Date.now() - started
@@ -366,14 +370,17 @@ test('live free model returns three fresh manual choices in one consented reques
     expect(requestedJSONChoices).toBe(true)
     expect(permittedRequests).toBe(1)
     expect(hostedRequests).toBe(1)
-    await editor.press('Control+z')
+    await editor.press('ControlOrMeta+z')
     await expect(editor).toHaveText(prefix + suffix)
     evidence.undoPreservedBothSides = true
 
     await page.getByRole('button', { name: 'Choose suggestion engine' }).click()
-    await page.getByRole('button', { name: /On this device/ }).click()
-    await editor.press('Control+End')
-    await editor.press('Control+Space')
+    await page
+      .getByRole('dialog', { name: 'Choose your suggestion engine' })
+      .getByRole('option', { name: 'Writing starters & recall', exact: true })
+      .click()
+    await editor.press('ControlOrMeta+End')
+    await editor.press('ControlOrMeta+Space')
     await page.waitForTimeout(200)
     expect(
       hostedRequests,

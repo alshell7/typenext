@@ -1,0 +1,67 @@
+.hf-guide {
+  width: min(520px, calc(100vw - 32px));
+}
+.hf-guide-steps {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 16px;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.hf-guide-steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.5;
+  counter-increment: step;
+}
+.hf-guide-steps li > span::before {
+  content: counter(step) '. ';
+  color: var(--muted);
+  font-weight: 600;
+}
+.hf-guide-steps .button {
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.hf-guide-form {
+  display: grid;
+  gap: 8px;
+}
+.hf-guide-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--muted);
+}
+.hf-guide-input input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 9px 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  color: var(--ink);
+}
+.hf-guide-input:focus-within {
+  border-color: var(--accent);
+}
+.hf-guide-status {
+  margin: 0;
+  color: var(--secondary);
+  font-size: 12px;
+}
+.hf-guide-status.is-error {
+  color: var(--error);
+}

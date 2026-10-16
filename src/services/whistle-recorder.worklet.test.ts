@@ -8,7 +8,7 @@ const code = readFileSync(
   'utf8'
 )
 interface Output {
-  type: 'progress' | 'complete'
+  type: 'progress' | 'complete' | 'chunk'
   seconds?: number
   level?: number
   samples?: Float32Array
@@ -127,5 +127,63 @@ describe('fixed-size on-device audio worklet', () => {
     expect(
       messages.filter(message => message.type === 'complete')
     ).toHaveLength(1)
+  })
+})
+
+describe('streaming dictation worklet', () => {
+  function stream(rate: number, maxSamples?: number) {
+    const messages: Output[] = []
+    let Constructor!: new (options?: unknown) => Recorder
+    class Processor {
+      port = {
+        onmessage: null,
+        postMessage: (value: Output) => messages.push(value),
+      }
+    }
+    runInNewContext(code, {
+      Float32Array,
+      Number,
+      AudioWorkletProcessor: Processor,
+      sampleRate: rate,
+      registerProcessor: (_name: string, value: typeof Constructor) => {
+        Constructor = value
+      },
+    })
+    return {
+      recorder: new Constructor({
+        processorOptions: { emitLevel: true, stream: true, maxSamples },
+      }),
+      messages: messages as Array<Output & { type: string }>,
+    }
+  }
+
+  it('sends 100 ms chunks with levels and flushes the remainder on stop', () => {
+    const { recorder, messages } = stream(16_000)
+    const input = new Float32Array(128).fill(0.25)
+    for (let index = 0; index < 30; index++) recorder.process([[input]])
+    const chunks = messages.filter(message => message.type === 'chunk')
+    expect(chunks).toHaveLength(2)
+    expect(chunks.every(chunk => chunk.samples?.length === 1_600)).toBe(true)
+    expect(chunks[0]!.level).toBeCloseTo(0.25)
+    expect(chunks[1]!.seconds).toBeCloseTo(0.2)
+    expect(messages.some(message => message.type === 'progress')).toBe(false)
+    recorder.port.onmessage({ data: { type: 'stop' } })
+    const complete = messages.find(message => message.type === 'complete')!
+    expect(complete.samples?.length).toBe(30 * 128 - 3_200)
+    expect(recorder.process([[input]])).toBe(false)
+  })
+
+  it('records past thirty seconds and stops by itself at its own limit', () => {
+    const { recorder, messages } = stream(16_000, 16_000 * 40)
+    const second = new Float32Array(16_000).fill(0.1)
+    for (let index = 0; index < 39; index++)
+      expect(recorder.process([[second]])).toBe(true)
+    expect(recorder.process([[second]])).toBe(false)
+    const total = messages.reduce(
+      (sum, message) => sum + (message.samples?.length ?? 0),
+      0
+    )
+    expect(total).toBe(16_000 * 40)
+    expect(messages.at(-1)?.type).toBe('complete')
   })
 })

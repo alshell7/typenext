@@ -56,10 +56,7 @@ async function savedWriting(page: Page): Promise<string | undefined> {
   })
 }
 
-async function preferences(
-  page: Page,
-  pane: 'Local suggestions' | 'External models'
-) {
+async function preferences(page: Page, pane: 'Suggestions' | 'Models') {
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Make yourself at home' })
   await dialog.getByRole('tab', { name: pane, exact: true }).click()
@@ -119,24 +116,28 @@ test('the captured demo provider response stays a preview, accepts with a separa
   const original = await writingText(editor)
   expect(original.endsWith(fragment)).toBe(true)
 
-  let dialog = await preferences(page, 'Local suggestions')
+  let dialog = await preferences(page, 'Suggestions')
   await dialog.getByRole('switch', { name: /^Suggest after a pause/ }).uncheck()
-  await dialog.getByLabel('Pause before suggesting').selectOption('1800')
+  await dialog.getByLabel('Pause before suggesting').fill('1800')
   await dialog.getByLabel('Suggestion length').selectOption('short')
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   await editor.fill(original.slice(0, -fragment.length))
 
-  dialog = await preferences(page, 'External models')
-  await dialog.getByLabel('Configure provider').selectOption('openrouter')
-  await dialog.getByLabel('Model', { exact: true }).fill(model)
-  await dialog.getByLabel('API key', { exact: true }).fill(syntheticKey)
-  await dialog.getByRole('button', { name: 'Save key', exact: true }).click()
+  dialog = await preferences(page, 'Models')
+  const external = dialog.getByRole('region', {
+    name: 'External providers',
+    exact: true,
+  })
+  await external.getByRole('radio', { name: 'OpenRouter', exact: true }).click()
+  await external.getByLabel('Model', { exact: true }).fill(model)
+  await external.getByLabel('API key', { exact: true }).fill(syntheticKey)
+  await external.getByRole('button', { name: 'Save key', exact: true }).click()
   await expect(
-    dialog.getByText('Ready for this session.', { exact: true })
+    external.getByText('Ready for this session.', { exact: true })
   ).toBeVisible()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
 
-  dialog = await preferences(page, 'Local suggestions')
+  dialog = await preferences(page, 'Suggestions')
   await dialog.getByRole('switch', { name: /^Suggest after a pause/ }).check()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   await page
@@ -146,18 +147,15 @@ test('the captured demo provider response stays a preview, accepts with a separa
     name: 'Choose your suggestion engine',
   })
   await chooser
-    .getByRole('group', { name: 'External providers' })
-    .getByRole('button', { name: 'OpenRouter', exact: true })
-    .click()
-  await chooser
-    .getByRole('button', { name: 'Use OpenRouter continuously', exact: true })
+    .getByRole('group', { name: 'OpenRouter', exact: true })
+    .getByRole('option', { name: model, exact: true })
     .click()
   expect(requests, 'Setup and activation must not send writing.').toHaveLength(
     0
   )
 
   await editor.focus()
-  await editor.press('Control+End')
+  await editor.press('ControlOrMeta+End')
   await editor.pressSequentially(fragment, { delay: 15 })
   const ghost = page.locator('.cm-ghost-text')
   await expect(ghost).toBeVisible()
@@ -195,11 +193,11 @@ test('the captured demo provider response stays a preview, accepts with a separa
   expect(await writingText(editor)).toContain('Bramble House There is room')
   expect(await writingText(editor)).not.toContain('HouseThere')
   await expect(editor).toBeFocused()
-  await editor.press('Control+z')
+  await editor.press('ControlOrMeta+z')
   await expect.poll(() => writingText(editor)).toBe(original)
 
   // Cancel the next automatic offer through the same user-facing control.
-  dialog = await preferences(page, 'Local suggestions')
+  dialog = await preferences(page, 'Suggestions')
   await dialog.getByRole('switch', { name: /^Suggest after a pause/ }).uncheck()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   await expect.poll(() => savedWriting(page)).toBe(original)

@@ -1,3 +1,4 @@
+import { startNote } from './support/notes'
 import {
   expect,
   test,
@@ -26,19 +27,12 @@ const choices = (page: Page) =>
 async function preferences(page: Page) {
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Make yourself at home' })
-  await dialog
-    .getByRole('tab', { name: 'Local suggestions', exact: true })
-    .click()
+  await dialog.getByRole('tab', { name: 'Suggestions', exact: true }).click()
   return dialog
 }
 
 async function createNote(page: Page) {
-  await page.getByRole('button', { name: 'Start a note', exact: true }).click()
-  const dialog = page.getByRole('dialog', {
-    name: 'Where would you like to begin?',
-  })
-  await dialog.getByLabel('Title', { exact: true }).fill('A patient morning')
-  await dialog.getByRole('button', { name: 'Create note', exact: true }).click()
+  await startNote(page, 'A patient morning')
   await expect(editor(page)).toBeVisible()
   return editor(page)
 }
@@ -150,8 +144,13 @@ async function setupEmbedded(
   await dialog
     .getByRole('switch', { name: /^Suggest after a pause/ })
     .setChecked(automatic)
-  await dialog.getByLabel('Pause before suggesting').selectOption('650')
+  await dialog.getByLabel('Pause before suggesting').fill('650')
   await dialog.getByLabel('Suggestion length').selectOption('short')
+  await dialog.getByRole('tab', { name: 'Models', exact: true }).click()
+  await dialog
+    .getByRole('region', { name: 'On this device', exact: true })
+    .getByRole('radio', { name: 'Built-in model', exact: true })
+    .click()
   const panel = dialog.getByRole('region', { name: 'Built-in offline model' })
   const nextWorker = page.waitForEvent('worker')
   await panel
@@ -159,9 +158,8 @@ async function setupEmbedded(
     .click()
   const worker = await nextWorker
   expect(worker.url()).toContain('/src/services/builtin-engine.worker.ts')
-  await panel
-    .getByRole('button', { name: 'Use this model', exact: true })
-    .click()
+  // Choosing the Built-in model card already makes it the local engine.
+  await expect(panel.getByText('In use', { exact: true })).toBeVisible()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   expect((await workerState(worker)).loads).toBe(1)
   return { content, worker, outgoing, errors }
@@ -222,7 +220,7 @@ for (const fixture of malformedOutputs) {
     expect(await writingText(content)).toBe('I want to')
     await content.press('Tab')
     expect(await writingText(content)).toBe('I want to' + automaticInsertion)
-    await content.press('Control+z')
+    await content.press('ControlOrMeta+z')
     expect(await writingText(content)).toBe('I want to')
 
     const settings = await preferences(page)
@@ -233,8 +231,8 @@ for (const fixture of malformedOutputs) {
     // A different cursor prompt forces the manual path through actual generation
     // rather than accepting the already-filtered automatic cache entry.
     await content.fill('The next step is')
-    await content.press('Control+End')
-    await content.press('Control+Space')
+    await content.press('ControlOrMeta+End')
+    await content.press('ControlOrMeta+Space')
     await expect
       .poll(async () => (await workerState(worker)).prompts.length)
       .toBe(2)
@@ -258,7 +256,7 @@ for (const fixture of malformedOutputs) {
     await expect
       .poll(() => savedText(page))
       .toBe('The next step is' + manualInsertion)
-    await content.press('Control+z')
+    await content.press('ControlOrMeta+z')
     await expect.poll(() => savedText(page)).toBe('The next step is')
     expect(
       (await workerState(worker)).prompts.map(prompt => prompt.inCode)
@@ -281,8 +279,8 @@ test('an unmatched prose cursor with malformed embedded output stays unchanged w
   )
   const original = 'I’m just testing if'
   await content.fill(original)
-  await content.press('Control+End')
-  await content.press('Control+Space')
+  await content.press('ControlOrMeta+End')
+  await content.press('ControlOrMeta+Space')
   await expect
     .poll(async () => (await workerState(worker)).prompts.length)
     .toBe(1)
@@ -310,10 +308,10 @@ test('the author’s actual fenced HTML context still accepts embedded code betw
   const suffix = '\n</div>\n```\n'
   const original = prefix + suffix
   await content.fill(original)
-  await content.press('Control+Home')
+  await content.press('ControlOrMeta+Home')
   for (let index = 0; index < prefix.length; index++)
     await content.press('ArrowRight')
-  await content.press('Control+Space')
+  await content.press('ControlOrMeta+Space')
   await expect
     .poll(async () => (await workerState(worker)).prompts.length)
     .toBe(1)
@@ -330,7 +328,7 @@ test('the author’s actual fenced HTML context still accepts embedded code betw
   await expect(choices(page)).toHaveCount(0)
   expect(await writingText(content)).toBe(prefix + insertion + suffix)
   await expect.poll(() => savedText(page)).toBe(prefix + insertion + suffix)
-  await content.press('Control+z')
+  await content.press('ControlOrMeta+z')
   await expect.poll(() => savedText(page)).toBe(original)
   expect(outgoing).toEqual([])
   expect(errors).toEqual([])

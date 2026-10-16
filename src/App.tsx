@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  lazy,
+  memo,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { EditorView } from '@codemirror/view'
 import {
   ArrowUpRight,
@@ -23,8 +32,9 @@ import {
   X,
   Paperclip,
   Link as LinkIcon,
-  Focus,
   Save,
+  Waypoints,
+  X as Close,
 } from 'lucide-react'
 import {
   MarkdownEditor,
@@ -39,8 +49,40 @@ import {
   openNote,
   PROVIDERS,
   relativeDate,
+  titleFromContent,
+  UNTITLED,
   wordCount,
 } from './notebook/model'
+import { ZenMenu } from './notebook/ZenMenu'
+import {
+  activeHeading,
+  addWordsToday,
+  LinkedFrom,
+  NoteOutline,
+  outlineOf,
+  WritingStats,
+  wordsToday,
+} from './notebook/WritingAids'
+import { backlinks } from './notebook/note-links'
+import { HuggingFaceGuide } from './notebook/HuggingFaceGuide'
+import { GitSyncStatus } from './notebook/GitSyncStatus'
+import {
+  CommandPalette,
+  type PaletteAction,
+  type PaletteHeading,
+} from './notebook/CommandPalette'
+import { tableTemplate } from './components/notebook/markdown-editing'
+import { syncNow, useGitSync } from './notebook/useGitSync'
+import { installEmbeddingRuntime } from './services/embedding-runtime'
+import { installSpeechRuntime } from './services/speech-runtime'
+import { downloadBuiltinModel } from './services/builtin-engine'
+import { downloadWhistleModel } from './services/whistle'
+import { mediaKind, importMediaFile } from './services/media-sources'
+import {
+  focusSemanticStatus,
+  prepareSemanticIndex,
+} from './services/semantic-retrieval'
+import type { ZenLevel } from './types/notebook'
 import { Modal } from './notebook/Modal'
 import { ContextPanel } from './notebook/ContextPanel'
 import { ModelChooser } from './notebook/ModelChooser'
@@ -69,7 +111,17 @@ import {
   stripLinkedText,
   resolvedContextBudget,
 } from './notebook/note-context'
-import { Preferences, type PreferencePane } from './notebook/Preferences'
+import type { PreferencePane } from './notebook/preferences/types'
+
+// Opened rarely: load on first use so the writing space starts sooner.
+const Preferences = lazy(() =>
+  import('./notebook/Preferences').then(module => ({
+    default: module.Preferences,
+  }))
+)
+const NoteGraph = lazy(() =>
+  import('./notebook/NoteGraph').then(module => ({ default: module.NoteGraph }))
+)
 import { applyPalette } from './notebook/palette'
 import { isDesktop } from './services/native'
 import {
@@ -81,9 +133,167 @@ import {
 import { importContextFile, importWebsite } from './services/sources'
 import type { ContextSource, Note, Workspace } from './types/notebook'
 import './App.css'
+import './app-shell.css'
 
 const MAX_STORED_CONTEXT_CHARACTERS = 2_000_000
 const BRAND_ICON_URL = `${import.meta.env.BASE_URL}Icon.png`
+// macOS shows native traffic lights at the top left of a transparent title bar.
+const MAC_DESKTOP =
+  isDesktop() &&
+  /Mac/iu.test(
+    typeof navigator === 'undefined'
+      ? ''
+      : navigator.platform || navigator.userAgent
+  )
+const MAC_KEYS =
+  typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad/iu.test(navigator.platform || navigator.userAgent)
+const SUPPORTED_SOURCE =
+  /\.(txt|text|md|markdown|mdown|pdf|docx|png|jpe?g|webp|gif|bmp|wav|mp3|m4a|aac|ogg|flac|mp4|m4v|webm|mov)$/i
+
+export function displayTitle(note: Pick<Note, 'title'>) {
+  return note.title.trim() || UNTITLED
+}
+
+/**
+ * An untitled note takes its title from its first line. A title the writer
+ * types ends this; clearing the title starts it again.
+ */
+function autoTitlePatch(note: Note, patch: Partial<Note>): Partial<Note> {
+  if (patch.title !== undefined)
+    return patch.title.trim()
+      ? { autoTitle: undefined }
+      : { autoTitle: true, title: titleFromContent(note.content) }
+  if (note.autoTitle && patch.content !== undefined)
+    return { title: titleFromContent(patch.content) || UNTITLED }
+  return {}
+}
+
+interface NoteRow {
+  id: string
+  title: string
+  detail: string
+}
+
+const NoteListItem = memo(function NoteListItem({
+  row,
+  active,
+  onSelect,
+  onDelete,
+}: {
+  row: NoteRow
+  active: boolean
+  onSelect(id: string): void
+  onDelete(id: string): void
+}) {
+  return (
+    <div className={`note-list-item ${active ? 'active' : ''}`}>
+      <button
+        className="note-select"
+        onClick={() => onSelect(row.id)}
+        aria-current={active ? 'page' : undefined}
+      >
+        <FileText size={16} />
+        <span>
+          <strong>{row.title}</strong>
+          <small>{row.detail}</small>
+        </span>
+      </button>
+      <button
+        className="icon-button note-delete"
+        aria-label={`Delete ${row.title}`}
+        onClick={() => onDelete(row.id)}
+      >
+        <Trash2 size={13} />
+      </button>
+    </div>
+  )
+})
+
+/**
+ * The note list re-renders only when a visible row changes. Typing changes
+ * one note's text on every key, which no row shows.
+ */
+function NoteList({
+  notes,
+  activeId,
+  empty,
+  onSelect,
+  onDelete,
+}: {
+  notes: Note[]
+  activeId: string | null
+  empty: string
+  onSelect(note: Note): void
+  onDelete(id: string): void
+}) {
+  const rows = useMemo(
+    () =>
+      notes.map(item => ({
+        id: item.id,
+        title: displayTitle(item),
+        detail: `${relativeDate(item.updatedAt)}${
+          item.sources.length > 0
+            ? ` · ${item.sources.length} source${item.sources.length > 1 ? 's' : ''}`
+            : ''
+        }`,
+      })),
+    [notes]
+  )
+  const signature = rows
+    .map(row => `${row.id}\u0000${row.title}\u0000${row.detail}`)
+    .join('\u0001')
+  const stable = useRef({ signature: '', rows })
+  if (stable.current.signature !== signature)
+    stable.current = { signature, rows }
+  const latest = useRef(notes)
+  latest.current = notes
+  const select = useCallback(
+    (id: string) => {
+      const item = latest.current.find(candidate => candidate.id === id)
+      if (item) onSelect(item)
+    },
+    [onSelect]
+  )
+  return (
+    <NoteListBody
+      rows={stable.current.rows}
+      activeId={activeId}
+      empty={empty}
+      onSelect={select}
+      onDelete={onDelete}
+    />
+  )
+}
+
+const NoteListBody = memo(function NoteListBody({
+  rows,
+  activeId,
+  empty,
+  onSelect,
+  onDelete,
+}: {
+  rows: NoteRow[]
+  activeId: string | null
+  empty: string
+  onSelect(id: string): void
+  onDelete(id: string): void
+}) {
+  return (
+    <div className="note-list">
+      {rows.map(row => (
+        <NoteListItem
+          key={row.id}
+          row={row}
+          active={row.id === activeId}
+          onSelect={onSelect}
+          onDelete={onDelete}
+        />
+      ))}
+      {!rows.length && <p className="sidebar-empty">{empty}</p>}
+    </div>
+  )
+})
 
 function App() {
   const {
@@ -98,9 +308,6 @@ function App() {
     getWorkspace,
     waitForPendingSave,
   } = useNotebook()
-  const [newNoteOpen, setNewNoteOpen] = useState(false)
-  const [draftTitle, setDraftTitle] = useState('')
-  const [draftContext, setDraftContext] = useState('')
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [preferencePane, setPreferencePane] =
     useState<PreferencePane>('writing')
@@ -118,6 +325,18 @@ function App() {
     null
   )
   const [focusMode, setFocusMode] = useState(false)
+  const [revealChrome, setRevealChrome] = useState(false)
+  const [graphOpen, setGraphOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  // Keep a lazy dialog mounted after its first use, so it can animate closed.
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false)
+  const [graphLoaded, setGraphLoaded] = useState(false)
+  if (preferencesOpen && !preferencesLoaded) setPreferencesLoaded(true)
+  if (graphOpen && !graphLoaded) setGraphLoaded(true)
+  const focusModeRef = useRef(focusMode)
+  focusModeRef.current = focusMode
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingEditorFocus = useRef(false)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<EditorStatus>({ state: 'idle' })
   const [darkAppearance, setDarkAppearance] = useState(false)
@@ -183,10 +402,54 @@ function App() {
         item.content.toLocaleLowerCase().includes(query)
     )
   }, [workspace.notes, search])
+  // Counting a long note on every key would compete with typing, so the
+  // count follows a short pause. Switching notes counts at once.
+  const [countedContent, setCountedContent] = useState(note?.content ?? '')
+  const countedNote = useRef(note?.id)
+  useEffect(() => {
+    const content = note?.content ?? ''
+    if (countedNote.current !== note?.id) {
+      countedNote.current = note?.id
+      setCountedContent(content)
+      return
+    }
+    const timer = setTimeout(() => setCountedContent(content), 400)
+    return () => clearTimeout(timer)
+  }, [note?.content, note?.id])
   const activeWordCount = useMemo(
-    () => wordCount(note?.content ?? ''),
-    [note?.content]
+    () => wordCount(countedContent),
+    [countedContent]
   )
+  // Words written today: growth of each note's count while you write.
+  const [todayWords, setTodayWords] = useState(wordsToday)
+  const countedWords = useRef<{ id?: string; words: number }>({ words: 0 })
+  useEffect(() => {
+    const previous = countedWords.current
+    countedWords.current = { id: note?.id, words: activeWordCount }
+    if (
+      previous.id &&
+      previous.id === note?.id &&
+      activeWordCount > previous.words
+    )
+      setTodayWords(addWordsToday(activeWordCount - previous.words))
+  }, [activeWordCount, note?.id])
+  // The outline and backlinks follow the same pause as the word count.
+  const headings = useMemo(() => outlineOf(countedContent), [countedContent])
+  const headingsRef = useRef(headings)
+  headingsRef.current = headings
+  const [activeHeadingIndex, setActiveHeadingIndex] = useState(-1)
+  const [linkedFrom, setLinkedFrom] = useState<Note[]>([])
+  useEffect(() => {
+    const current = getWorkspace()
+    const target = current.notes.find(item => item.id === note?.id)
+    setLinkedFrom(target ? backlinks(target, current.notes) : [])
+  }, [
+    countedContent,
+    note?.id,
+    note?.title,
+    workspace.notes.length,
+    getWorkspace,
+  ])
   const selectedForDeletion = workspace.notes.find(item => item.id === deleteId)
   const notesVisible = sidebarVisible && !focusMode
   const toggleNotes = useCallback(() => {
@@ -248,6 +511,7 @@ function App() {
             ? {
                 ...item,
                 ...patch,
+                ...autoTitlePatch(item, patch),
                 ...(patch.sources
                   ? { sources: stripLinkedText(patch.sources) }
                   : {}),
@@ -271,6 +535,128 @@ function App() {
     },
     [setWorkspace]
   )
+
+  /** Create a note at once. Title and intent can be set later. */
+  const createNote = useCallback(
+    (title = '') => {
+      try {
+        const created = newNote(title)
+        setWorkspace(value => {
+          const next = openNote(value, created)
+          assertWorkspaceFits(next)
+          return next
+        })
+        setStatus({ state: 'idle' })
+        pendingEditorFocus.current = true
+        if (window.innerWidth < 760) setSidebarVisible(false)
+        return created.id
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error))
+        return null
+      }
+    },
+    [notify, setWorkspace]
+  )
+  const openNoteById = useCallback(
+    (id: string) => {
+      const target = getWorkspace().notes.find(item => item.id === id)
+      if (target) selectNote(target)
+    },
+    [getWorkspace, selectNote]
+  )
+  useEffect(() => {
+    if (!pendingEditorFocus.current || !note) return
+    pendingEditorFocus.current = false
+    requestAnimationFrame(() => editorRef.current?.focus())
+  }, [note?.id, note])
+
+  useGitSync(workspace, getWorkspace, setWorkspace, notify)
+
+  const zenLevel: ZenLevel = settings.zenLevel ?? 'chrome'
+  const enterZen = useCallback(
+    (level?: ZenLevel) => {
+      if (level && level !== getWorkspace().settings.zenLevel)
+        setWorkspace(value => ({
+          ...value,
+          settings: { ...value.settings, zenLevel: level },
+        }))
+      setFocusMode(true)
+      setRevealChrome(false)
+    },
+    [getWorkspace, setWorkspace]
+  )
+  // Full screen follows the full zen level on desktop and in browsers.
+  useEffect(() => {
+    const full = focusMode && zenLevel === 'full'
+    if (isDesktop()) {
+      void import('@tauri-apps/api/window')
+        .then(({ getCurrentWindow }) => getCurrentWindow().setFullscreen(full))
+        .catch(() => undefined)
+    } else if (full && !document.fullscreenElement) {
+      void document.documentElement.requestFullscreen?.().catch(() => undefined)
+    } else if (!full && document.fullscreenElement) {
+      void document.exitFullscreen?.().catch(() => undefined)
+    }
+  }, [focusMode, zenLevel])
+  useEffect(() => {
+    if (!focusMode || isDesktop()) return
+    // Leaving browser full screen with the browser's own key leaves zen too.
+    const left = () => {
+      if (!document.fullscreenElement && zenLevel === 'full')
+        setFocusMode(false)
+    }
+    document.addEventListener('fullscreenchange', left)
+    return () => document.removeEventListener('fullscreenchange', left)
+  }, [focusMode, zenLevel])
+  useEffect(() => {
+    if (!focusMode) return
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        event.key === 'Escape' &&
+        !event.defaultPrevented &&
+        !document.querySelector('[role="dialog"], [role="menu"]')
+      )
+        setFocusMode(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focusMode])
+  const trackEdges = (event: React.MouseEvent) => {
+    if (!focusMode || zenLevel === 'sidebars') return
+    const nearEdge =
+      event.clientY < 18 || event.clientY > window.innerHeight - 18
+    const inChrome = (event.target as HTMLElement).closest(
+      '.app-toolbar, .note-tabs, .suggestion-bar, .editor-footer, .zen-exit'
+    )
+    if (nearEdge || inChrome) {
+      if (revealTimer.current) clearTimeout(revealTimer.current)
+      revealTimer.current = null
+      if (!revealChrome) setRevealChrome(true)
+    } else if (revealChrome && !revealTimer.current) {
+      revealTimer.current = setTimeout(() => {
+        revealTimer.current = null
+        setRevealChrome(false)
+      }, 700)
+    }
+  }
+  useEffect(
+    () => () => {
+      if (revealTimer.current) clearTimeout(revealTimer.current)
+    },
+    []
+  )
+
+  useEffect(() => {
+    focusSemanticStatus(note?.id ?? null)
+  }, [note?.id])
+  useEffect(() => {
+    if (!note || !settings.semantic.enabled) return
+    // Index after typing pauses; unchanged passages are never embedded again.
+    const timer = setTimeout(() => {
+      void prepareSemanticIndex(note, getWorkspace().settings)
+    }, settings.timing.indexDelay)
+    return () => clearTimeout(timer)
+  }, [note, settings.semantic, settings.timing.indexDelay, getWorkspace])
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -300,7 +686,7 @@ function App() {
     const timer = setTimeout(() => setNotice(''), 6500)
     return () => clearTimeout(timer)
   }, [notice])
-  const activeTitle = note?.title
+  const activeTitle = note ? displayTitle(note) : undefined
   useEffect(() => {
     document.title = activeTitle ? `${activeTitle} · TypeNext` : 'TypeNext'
   }, [activeTitle])
@@ -529,14 +915,14 @@ function App() {
       if (document.querySelector('[role="dialog"]')) {
         if (
           ['n', 'o', 's', ',', 'b', 'p'].includes(key) ||
-          (key === 'f' && event.shiftKey)
+          (['f', 'g'].includes(key) && event.shiftKey)
         )
           event.preventDefault()
         return
       }
       if (key === 'n') {
         event.preventDefault()
-        setNewNoteOpen(true)
+        createNote()
       } else if (key === 'o') {
         event.preventDefault()
         void openFile()
@@ -551,20 +937,24 @@ function App() {
         toggleNotes()
       } else if (key === 'f' && event.shiftKey) {
         event.preventDefault()
-        setFocusMode(value => !value)
+        if (focusModeRef.current) setFocusMode(false)
+        else enterZen()
+      } else if (key === 'g' && event.shiftKey) {
+        event.preventDefault()
+        setGraphOpen(true)
       } else if (key === 'p') {
         event.preventDefault()
-        setSidebarVisible(true)
-        setFocusMode(false)
-        setTimeout(() => recentSearch.current?.focus(), 0)
+        setPaletteOpen(value => !value)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openFile, exportNote, showPreferences, toggleNotes])
+  }, [openFile, exportNote, showPreferences, toggleNotes, createNote, enterZen])
 
   nativeHandlers.current = {
-    'menu-new-note': () => setNewNoteOpen(true),
+    'menu-new-note': () => {
+      createNote()
+    },
     'menu-open': () => {
       void openFile()
     },
@@ -911,12 +1301,12 @@ function App() {
     const activeId = getWorkspace().activeNoteId
     if (!files?.length) return
     const selectedFiles = Array.from(files).filter(
-      file =>
-        !file.webkitRelativePath ||
-        /\.(txt|text|md|markdown|mdown|pdf|docx)$/i.test(file.name)
+      file => !file.webkitRelativePath || SUPPORTED_SOURCE.test(file.name)
     )
     if (!selectedFiles.length) {
-      notify('This folder has no supported text, Markdown, PDF or Word files.')
+      notify(
+        'This folder has no supported text, Markdown, PDF, Word, image, audio or video files.'
+      )
       return
     }
     if (selectedFiles.length > 256) {
@@ -936,10 +1326,12 @@ function App() {
       for (const file of selectedFiles) {
         if (controller.signal.aborted) break
         try {
-          const source = {
-            ...(await importContextFile(file, controller.signal)),
-            folder: contextFolder(file),
-          }
+          const imported = mediaKind(file)
+            ? await importMediaFile(file, getWorkspace().settings.semantic, {
+                signal: controller.signal,
+              })
+            : await importContextFile(file, controller.signal)
+          const source = { ...imported, folder: contextFolder(file) }
           if (
             !controller.signal.aborted &&
             !appendContext(activeId, source, packageId)
@@ -1000,6 +1392,252 @@ function App() {
     }
   }
 
+  const paletteRefs = useRef({
+    openFile,
+    exportNote,
+    toggleNotes,
+    toggleContext,
+    showPreferences,
+    createNote,
+    enterZen,
+    openSample,
+  })
+  paletteRefs.current = {
+    openFile,
+    exportNote,
+    toggleNotes,
+    toggleContext,
+    showPreferences,
+    createNote,
+    enterZen,
+    openSample,
+  }
+  const gitEnabled = settings.git.enabled
+  const webFactsOn = settings.webFacts.enabled
+  const paletteActions = useMemo<PaletteAction[]>(() => {
+    const run = paletteRefs
+    const mac = MAC_KEYS
+    const key = (value: string) => (mac ? `⌘ ${value}` : `Ctrl ${value}`)
+    const pane = (
+      id: PreferencePane,
+      title: string,
+      keywords: string[] = []
+    ): PaletteAction => ({
+      id: `prefs-${id}`,
+      title: `Preferences: ${title}`,
+      section: 'Preferences',
+      keywords: ['settings', ...keywords],
+      run: () => run.current.showPreferences(id),
+    })
+    const actions: PaletteAction[] = [
+      {
+        id: 'new-note',
+        title: 'New note',
+        section: 'Actions',
+        shortcut: key('N'),
+        keywords: ['create', 'add'],
+        run: () => run.current.createNote(),
+      },
+      {
+        id: 'suggest',
+        title: 'Suggest at the cursor',
+        section: 'Actions',
+        shortcut: key('Space'),
+        keywords: ['ai', 'complete', 'continue'],
+        run: () => editorRef.current?.requestSuggestion(),
+      },
+      {
+        id: 'graph',
+        title: 'Open the note graph',
+        section: 'Actions',
+        shortcut: key('Shift G'),
+        keywords: ['map', 'links', 'network'],
+        run: () => setGraphOpen(true),
+      },
+      {
+        id: 'zen-sidebars',
+        title: 'Zen mode: hide side panels',
+        section: 'Actions',
+        keywords: ['focus', 'distraction'],
+        run: () => run.current.enterZen('sidebars'),
+      },
+      {
+        id: 'zen-chrome',
+        title: 'Zen mode: hide toolbars',
+        section: 'Actions',
+        shortcut: key('Shift F'),
+        keywords: ['focus', 'distraction'],
+        run: () => run.current.enterZen('chrome'),
+      },
+      {
+        id: 'zen-full',
+        title: 'Zen mode: full screen',
+        section: 'Actions',
+        keywords: ['focus', 'fullscreen'],
+        run: () => run.current.enterZen('full'),
+      },
+      {
+        id: 'context',
+        title: 'Show or hide the context panel',
+        section: 'Actions',
+        keywords: ['references', 'intent', 'objective'],
+        run: () => run.current.toggleContext(),
+      },
+      {
+        id: 'contexts',
+        title: 'Open contexts',
+        section: 'Actions',
+        keywords: ['library', 'references', 'files'],
+        run: () => setLibraryOpen(true),
+      },
+      {
+        id: 'dictate',
+        title: 'Start or stop dictation',
+        section: 'Actions',
+        shortcut: key('Shift D'),
+        keywords: ['voice', 'speech', 'microphone'],
+        run: () => dictationRef.current?.toggle(),
+      },
+      {
+        id: 'web-facts',
+        title: 'Search the web for facts',
+        section: 'Actions',
+        shortcut: key('Shift K'),
+        keywords: ['research', 'cite', 'source'],
+        disabled: !webFactsOn,
+        run: () => editorRef.current?.requestWebFacts(),
+      },
+      {
+        id: 'sidebar',
+        title: 'Show or hide notes',
+        section: 'Actions',
+        shortcut: key('B'),
+        keywords: ['sidebar'],
+        run: () => run.current.toggleNotes(),
+      },
+      {
+        id: 'theme',
+        title: 'Switch light or dark appearance',
+        section: 'Actions',
+        keywords: ['theme', 'dark mode', 'light mode'],
+        run: () =>
+          setWorkspace(value => ({
+            ...value,
+            settings: {
+              ...value.settings,
+              theme:
+                document.documentElement.dataset.theme === 'dark'
+                  ? 'light'
+                  : 'dark',
+            },
+          })),
+      },
+      {
+        id: 'suggestions',
+        title: 'Pause or resume suggestions',
+        section: 'Actions',
+        keywords: ['ghost', 'autocomplete', 'off'],
+        run: () =>
+          setWorkspace(value => ({
+            ...value,
+            settings: {
+              ...value.settings,
+              suggestionsEnabled: !value.settings.suggestionsEnabled,
+            },
+          })),
+      },
+      {
+        id: 'open',
+        title: 'Open a Markdown file',
+        section: 'Actions',
+        shortcut: key('O'),
+        keywords: ['import', 'file'],
+        run: () => void run.current.openFile(),
+      },
+      {
+        id: 'save',
+        title: 'Save as Markdown',
+        section: 'Actions',
+        shortcut: key('S'),
+        keywords: ['export', 'file'],
+        run: () => void run.current.exportNote(),
+      },
+      {
+        id: 'sync',
+        title: 'Sync with Git now',
+        section: 'Actions',
+        keywords: ['git', 'push', 'pull', 'commit'],
+        disabled: !gitEnabled,
+        run: () => void syncNow(),
+      },
+      {
+        id: 'sample',
+        title: 'Open the sample note',
+        section: 'Actions',
+        keywords: ['demo', 'try', 'example'],
+        run: () => run.current.openSample(),
+      },
+      {
+        id: 'insert-table',
+        title: 'Insert a table',
+        section: 'Insert',
+        keywords: ['grid', 'columns'],
+        run: () => {
+          editorRef.current?.focus()
+          editorRef.current?.insert(`\n${tableTemplate(3, 2)}\n`)
+        },
+      },
+      {
+        id: 'insert-date',
+        title: 'Insert today’s date',
+        section: 'Insert',
+        keywords: ['today', 'day'],
+        run: () => {
+          editorRef.current?.focus()
+          editorRef.current?.insert(
+            new Date().toLocaleDateString(undefined, {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })
+          )
+        },
+      },
+      pane('writing', 'Writing', ['font', 'typeface', 'palette', 'colour']),
+      pane('editor', 'Editor', [
+        'slash',
+        'typewriter',
+        'focus',
+        'goal',
+        'typography',
+      ]),
+      pane('suggestions', 'Suggestions', [
+        'delay',
+        'timing',
+        'length',
+        'creativity',
+      ]),
+      pane('models', 'Models', [
+        'openai',
+        'anthropic',
+        'cloudflare',
+        'openrouter',
+        'local',
+        'api key',
+      ]),
+      pane('knowledge', 'Knowledge', ['semantic', 'embedding', 'rag']),
+      pane('web', 'Web facts', ['search', 'openai']),
+      pane('dictation', 'Dictation', ['voice', 'whistle', 'fluid']),
+      pane('sync', 'Sync', ['git']),
+      pane('shortcuts', 'Shortcuts', ['keys', 'keyboard']),
+    ]
+    return actions
+  }, [gitEnabled, webFactsOn, setWorkspace])
+  const paletteHeadings = useMemo<PaletteHeading[]>(
+    () => headings.map(({ level, text, from }) => ({ level, text, from })),
+    [headings]
+  )
+
   if (loading)
     return (
       <div className="loading-workspace">
@@ -1052,7 +1690,8 @@ function App() {
 
   return (
     <div
-      className={`app-shell ${!sidebarVisible || focusMode ? 'sidebar-hidden' : ''} ${focusMode ? 'focus-mode' : ''}`}
+      className={`app-shell ${!sidebarVisible || focusMode ? 'sidebar-hidden' : ''} ${focusMode ? `focus-mode zen zen-${zenLevel}` : ''} ${revealChrome ? 'zen-reveal' : ''} ${MAC_DESKTOP ? 'platform-mac' : ''}`}
+      onMouseMove={focusMode ? trackEdges : undefined}
     >
       <aside className="note-sidebar" aria-label="Notebook">
         <div className="sidebar-brand" data-tauri-drag-region>
@@ -1071,7 +1710,9 @@ function App() {
         <div className="sidebar-actions">
           <button
             className="button new-note-button"
-            onClick={() => setNewNoteOpen(true)}
+            onClick={() => {
+              createNote()
+            }}
           >
             <Plus size={17} /> New note <kbd>⌘ / Ctrl N</kbd>
           </button>
@@ -1105,46 +1746,19 @@ function App() {
           <span>Your notes</span>
           <span>{workspace.notes.length}</span>
         </div>
-        <div className="note-list">
-          {visibleNotes.map(item => (
-            <div
-              key={item.id}
-              className={`note-list-item ${note?.id === item.id ? 'active' : ''}`}
-            >
-              <button
-                className="note-select"
-                onClick={() => selectNote(item)}
-                aria-current={note?.id === item.id ? 'page' : undefined}
-              >
-                <FileText size={16} />
-                <span>
-                  <strong>{item.title}</strong>
-                  <small>
-                    {relativeDate(item.updatedAt)}
-                    {item.sources.length > 0
-                      ? ` · ${item.sources.length} source${item.sources.length > 1 ? 's' : ''}`
-                      : ''}
-                  </small>
-                </span>
-              </button>
-              <button
-                className="icon-button note-delete"
-                aria-label={`Delete ${item.title}`}
-                onClick={() => setDeleteId(item.id)}
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
-          {!visibleNotes.length && (
-            <p className="sidebar-empty">
-              {search
-                ? 'No notes match your search.'
-                : 'Your notes will feel at home here.'}
-            </p>
-          )}
-        </div>
+        <NoteList
+          notes={visibleNotes}
+          activeId={note?.id ?? null}
+          empty={
+            search
+              ? 'No notes match your search.'
+              : 'Your notes will feel at home here.'
+          }
+          onSelect={selectNote}
+          onDelete={setDeleteId}
+        />
         <div className="sidebar-bottom">
+          <GitSyncStatus onOpenSettings={() => showPreferences('sync')} />
           <div className="local-promise">
             {usingExternal ? <Cloud size={16} /> : <ShieldCheck size={16} />}
             <span>
@@ -1210,7 +1824,7 @@ function App() {
               />
               <span className="breadcrumb-section">Notebook</span>
               <ChevronRight size={13} />
-              <span>{note?.title ?? 'A fresh start'}</span>
+              <span>{note ? displayTitle(note) : 'A fresh start'}</span>
             </div>
           </div>
           <div className="toolbar-actions">
@@ -1243,6 +1857,14 @@ function App() {
                   <Mic size={17} />
                 </button>
                 <button
+                  className="icon-button graph-button"
+                  aria-label="Open note graph"
+                  title="Note graph (Ctrl / ⌘ Shift G)"
+                  onClick={() => setGraphOpen(true)}
+                >
+                  <Waypoints size={17} />
+                </button>
+                <button
                   className="icon-button"
                   aria-label="Save Markdown"
                   title="Save Markdown (Ctrl / ⌘ S)"
@@ -1252,19 +1874,17 @@ function App() {
                 >
                   <Save size={17} />
                 </button>
-                <button
-                  className="icon-button"
-                  aria-label={
-                    focusMode ? 'Leave focus mode' : 'Enter focus mode'
+                <ZenMenu
+                  active={focusMode}
+                  level={zenLevel}
+                  onToggle={() =>
+                    focusMode ? setFocusMode(false) : enterZen()
                   }
-                  title="Focus mode (Ctrl / ⌘ Shift F)"
-                  onClick={() => setFocusMode(value => !value)}
-                >
-                  <Focus size={17} />
-                </button>
+                  onChoose={enterZen}
+                />
               </>
             )}
-            {isDesktop() && (
+            {isDesktop() && !MAC_DESKTOP && (
               <div className="window-controls">
                 <button
                   aria-label="Minimize window"
@@ -1311,11 +1931,11 @@ function App() {
                     aria-current={note?.id === id ? 'page' : undefined}
                   >
                     <FileText size={13} />
-                    <span>{item.title}</span>
+                    <span>{displayTitle(item)}</span>
                   </button>
                   <button
                     className="tab-close"
-                    aria-label={`Close ${item.title} tab`}
+                    aria-label={`Close ${displayTitle(item)} tab`}
                     onClick={() => {
                       setWorkspace(value => closeNote(value, id))
                       setStatus({ state: 'idle' })
@@ -1329,7 +1949,9 @@ function App() {
             <button
               className="icon-button add-tab"
               aria-label="Create another note"
-              onClick={() => setNewNoteOpen(true)}
+              onClick={() => {
+                createNote()
+              }}
             >
               <Plus size={16} />
             </button>
@@ -1348,6 +1970,13 @@ function App() {
                   } as React.CSSProperties
                 }
               >
+                {!contextVisible && (
+                  <NoteOutline
+                    headings={headings}
+                    active={activeHeadingIndex}
+                    onJump={heading => editorRef.current?.jumpTo(heading.from)}
+                  />
+                )}
                 <div className="document-scroll">
                   <div className="document-page">
                     <div className="document-meta">
@@ -1363,9 +1992,28 @@ function App() {
                     <input
                       className="note-title"
                       aria-label="Note title"
-                      value={note.title}
+                      // A title taken from the first line is shown, but the
+                      // stand-in "Untitled" is only a placeholder, and
+                      // focusing a derived title selects it so typing
+                      // replaces it.
+                      value={
+                        note.autoTitle && note.title === UNTITLED
+                          ? ''
+                          : note.title
+                      }
                       maxLength={160}
-                      placeholder="Untitled"
+                      placeholder={UNTITLED}
+                      onFocus={event => {
+                        if (!note.autoTitle) return
+                        const field = event.currentTarget
+                        field.select()
+                        // A click would put the caret back on mouse-up.
+                        field.addEventListener(
+                          'mouseup',
+                          up => up.preventDefault(),
+                          { once: true }
+                        )
+                      }}
                       onChange={event =>
                         updateNote(note.id, { title: event.target.value })
                       }
@@ -1380,11 +2028,31 @@ function App() {
                       key={note.id}
                       ref={editorRef}
                       note={note}
+                      notes={workspace.notes}
                       settings={settings}
                       onChange={content => updateNote(note.id, { content })}
                       onStatus={setStatus}
                       requestToken={requestToken}
+                      onOpenNote={openNoteById}
+                      onCreateNote={title => {
+                        createNote(title)
+                      }}
+                      onAction={action => {
+                        if (action === 'dictate') dictationRef.current?.toggle()
+                        else if (action === 'graph') setGraphOpen(true)
+                      }}
+                      zenFull={focusMode && zenLevel === 'full'}
+                      onCursorChange={context => {
+                        const index = activeHeading(
+                          headingsRef.current,
+                          context.cursor
+                        )
+                        setActiveHeadingIndex(value =>
+                          value === index ? value : index
+                        )
+                      }}
                     />
+                    <LinkedFrom notes={linkedFrom} onOpen={openNoteById} />
                     {!note.content && (
                       <div className="blank-page-hint">
                         <Keyboard size={14} />
@@ -1422,6 +2090,8 @@ function App() {
                 <InlineDictation
                   key={note.id}
                   ref={dictationRef}
+                  settings={settings.dictation}
+                  onOpenSettings={() => showPreferences('dictation')}
                   recoveryText={dictationRecovery}
                   onRecoveryTextChange={setDictationRecovery}
                   onActiveChange={setDictationActive}
@@ -1480,7 +2150,9 @@ function App() {
                     {status.state === 'loading' ? (
                       <>
                         <LoaderCircle size={13} className="spin" />
-                        <span>Finding a continuation…</span>
+                        <span>
+                          {status.message ?? 'Finding a continuation…'}
+                        </span>
                       </>
                     ) : status.state === 'suggestion' ? (
                       <span
@@ -1546,11 +2218,11 @@ function App() {
                   </button>
                 </div>
                 <footer className="editor-footer">
-                  <span>
-                    {activeWordCount.toLocaleString()} word
-                    {activeWordCount !== 1 ? 's' : ''}
-                    <span className="footer-divider">·</span>Markdown
-                  </span>
+                  <WritingStats
+                    words={activeWordCount}
+                    today={todayWords}
+                    goal={settings.editor.dailyGoal}
+                  />
                   <button
                     className={`save-indicator ${saveStatus === 'error' ? 'error' : ''}`}
                     title={storageError || 'Click to save the notebook locally'}
@@ -1580,6 +2252,10 @@ function App() {
                   notes={workspace.notes}
                   packages={workspace.contextPackages ?? []}
                   onDetachPackage={detachPackage}
+                  onAttachPackage={attachPackage}
+                  onCreatePackage={createPackage}
+                  settings={settings}
+                  onOpenKnowledgeSettings={() => showPreferences('knowledge')}
                   library={workspace.contextLibrary}
                   onLibrary={packageId => {
                     setLibraryPackageId(packageId)
@@ -1617,7 +2293,9 @@ function App() {
               <div className="welcome-actions">
                 <button
                   className="button primary"
-                  onClick={() => setNewNoteOpen(true)}
+                  onClick={() => {
+                    createNote()
+                  }}
                 >
                   <Plus size={16} />
                   Start a note
@@ -1655,77 +2333,6 @@ function App() {
           )}
         </div>
       </main>
-      <Modal
-        open={newNoteOpen}
-        onOpenChange={setNewNoteOpen}
-        title="Where would you like to begin?"
-        description="Give this note a name and a little direction. You can change both anytime."
-      >
-        <form
-          onSubmit={event => {
-            event.preventDefault()
-            if (!draftTitle.trim()) return
-            try {
-              const created = newNote(draftTitle, draftContext)
-              setWorkspace(value => {
-                const next = openNote(value, created)
-                assertWorkspaceFits(next)
-                return next
-              })
-              setNewNoteOpen(false)
-              setDraftTitle('')
-              setDraftContext('')
-              setStatus({ state: 'idle' })
-            } catch (error) {
-              notify(error instanceof Error ? error.message : String(error))
-            }
-          }}
-        >
-          <label className="field-label" htmlFor="new-note-title">
-            Title
-          </label>
-          <input
-            id="new-note-title"
-            value={draftTitle}
-            onChange={event => setDraftTitle(event.target.value)}
-            placeholder="A thought worth following"
-            required
-            maxLength={160}
-          />
-          <label className="field-label" htmlFor="new-note-context">
-            Context for suggestions{' '}
-            <span className="optional-label">optional</span>
-          </label>
-          <textarea
-            id="new-note-context"
-            rows={4}
-            value={draftContext}
-            onChange={event => setDraftContext(event.target.value)}
-            placeholder="What are you writing? Who is it for? A tone, a point of view, or a few details…"
-          />
-          <p className="field-help">
-            Keep the first line for your objective if that helps. Context stays
-            local unless you enable an external model.
-          </p>
-          <div className="dialog-footer">
-            <button
-              type="button"
-              className="button subtle"
-              onClick={() => setNewNoteOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="button primary"
-              disabled={!draftTitle.trim()}
-            >
-              Create note
-              <ChevronRight size={15} />
-            </button>
-          </div>
-        </form>
-      </Modal>
       <ContextLibrary
         open={libraryOpen}
         onOpenChange={setLibraryOpen}
@@ -1761,20 +2368,72 @@ function App() {
           setWebsiteOpen(true)
         }}
         onUseNote={useNoteAsContext}
-      />
-      <Preferences
-        open={preferencesOpen}
-        onOpenChange={setPreferencesOpen}
-        pane={preferencePane}
-        onPaneChange={setPreferencePane}
         settings={settings}
-        onChange={next =>
-          setWorkspace(value => ({
-            ...value,
-            settings: next,
-          }))
-        }
+        onOpenKnowledgeSettings={() => showPreferences('knowledge')}
       />
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        notes={workspace.notes}
+        activeNoteId={workspace.activeNoteId}
+        headings={paletteHeadings}
+        actions={paletteActions}
+        onOpenNote={openNoteById}
+        onCreateNote={title => {
+          createNote(title)
+        }}
+        onJumpToHeading={heading => editorRef.current?.jumpTo(heading.from)}
+      />
+      <HuggingFaceGuide
+        onRetry={source => {
+          const { semantic } = getWorkspace().settings
+          const retry =
+            source === 'embedding'
+              ? installEmbeddingRuntime(semantic.quantization, semantic.media)
+              : source === 'speech'
+                ? installSpeechRuntime()
+                : source === 'builtin'
+                  ? downloadBuiltinModel()
+                  : source === 'whistle'
+                    ? downloadWhistleModel()
+                    : null
+          // The download panels show progress and any further error.
+          void retry?.catch(() => undefined)
+        }}
+      />
+      {graphLoaded && (
+        <Suspense fallback={null}>
+          <NoteGraph
+            open={graphOpen}
+            onOpenChange={setGraphOpen}
+            notes={workspace.notes}
+            library={workspace.contextLibrary}
+            packages={workspace.contextPackages}
+            activeNoteId={workspace.activeNoteId}
+            onOpenNote={openNoteById}
+            onCreateNote={title => {
+              createNote(title)
+            }}
+          />
+        </Suspense>
+      )}
+      {preferencesLoaded && (
+        <Suspense fallback={null}>
+          <Preferences
+            open={preferencesOpen}
+            onOpenChange={setPreferencesOpen}
+            pane={preferencePane}
+            onPaneChange={setPreferencePane}
+            settings={settings}
+            onChange={next =>
+              setWorkspace(value => ({
+                ...value,
+                settings: next,
+              }))
+            }
+          />
+        </Suspense>
+      )}
       <Modal
         open={websiteOpen}
         onOpenChange={open => {
@@ -1921,6 +2580,15 @@ function App() {
           </button>
         </div>
       </Modal>
+      {focusMode && zenLevel !== 'sidebars' && (
+        <button
+          className="zen-exit"
+          onClick={() => setFocusMode(false)}
+          aria-label="Leave zen mode"
+        >
+          <Close size={12} /> Leave zen <kbd>Esc</kbd>
+        </button>
+      )}
       {(notice || storageError) && (
         <div className="notice" role="status">
           <span>{notice || storageError}</span>

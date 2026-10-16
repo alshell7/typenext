@@ -24,6 +24,19 @@ export interface WhistleRecordingOptions {
   onLevel?(level: number): void
 }
 
+export interface DictationRecording {
+  /** Resolves after the last chunk on Stop or the limit; rejects on cancel. */
+  finished: Promise<void>
+  stop(): void
+  cancel(): void
+}
+export interface DictationRecordingOptions extends WhistleRecordingOptions {
+  /** Stops by itself after this long. */
+  maxSeconds: number
+  /** 16 kHz mono PCM about every 100 ms, then the final partial chunk. */
+  onChunk(samples: Float32Array): void
+}
+
 function aborted(): DOMException {
   return new DOMException('Recording cancelled.', 'AbortError')
 }
@@ -32,6 +45,43 @@ function aborted(): DOMException {
 export async function startWhistleRecording(
   options: WhistleRecordingOptions = {}
 ): Promise<WhistleRecording> {
+  return startCapture(options, null)
+}
+
+/**
+ * Streaming capture for live dictation: chunks reach `onChunk` while the
+ * writer speaks, so the page can detect pauses and transcribe phrases.
+ */
+export async function startDictationRecording(
+  options: DictationRecordingOptions
+): Promise<DictationRecording> {
+  const recording = await startCapture(options, {
+    maxSeconds: Math.max(1, options.maxSeconds),
+    onChunk: options.onChunk,
+  })
+  return {
+    finished: recording.finished.then(() => undefined),
+    stop: recording.stop,
+    cancel: recording.cancel,
+  }
+}
+
+function cleanChunk(samples: unknown): Float32Array | null {
+  if (!(samples instanceof Float32Array)) return null
+  for (let index = 0; index < samples.length; index++) {
+    const value = samples[index]!
+    if (!Number.isFinite(value)) samples[index] = 0
+    else if (value > 1) samples[index] = 1
+    else if (value < -1) samples[index] = -1
+  }
+  return samples
+}
+
+async function startCapture(
+  options: WhistleRecordingOptions,
+  streaming: Pick<DictationRecordingOptions, 'maxSeconds' | 'onChunk'> | null
+): Promise<WhistleRecording> {
+  const maxSeconds = streaming?.maxSeconds ?? WHISTLE_MAX_SECONDS
   if (options.signal?.aborted || document.visibilityState === 'hidden')
     throw aborted()
   const selectedId = normalizedMicrophoneId(options.deviceId)
@@ -150,7 +200,15 @@ export async function startWhistleRecording(
       outputChannelCount: [1],
       channelCount: 1,
       channelCountMode: 'explicit',
-      processorOptions: { emitLevel: typeof options.onLevel === 'function' },
+      processorOptions: {
+        emitLevel: typeof options.onLevel === 'function',
+        ...(streaming
+          ? {
+              stream: true,
+              maxSamples: Math.round(maxSeconds * WHISTLE_SAMPLE_RATE),
+            }
+          : {}),
+      },
     })
     const finished = new Promise<Float32Array>((resolve, reject) => {
       let settled = false
@@ -170,20 +228,33 @@ export async function startWhistleRecording(
       }
     })
     node.port.onmessage = event => {
-      if (
-        event.data?.type === 'progress' &&
-        Number.isFinite(event.data.seconds)
-      )
+      const type = event.data?.type
+      const timed = type === 'progress' || (streaming && type === 'chunk')
+      if (timed && Number.isFinite(event.data.seconds))
         options.onDuration?.(
-          Math.min(WHISTLE_MAX_SECONDS, Math.max(0, event.data.seconds))
+          Math.min(maxSeconds, Math.max(0, event.data.seconds))
         )
-      if (
-        !stopping &&
-        event.data?.type === 'progress' &&
-        Number.isFinite(event.data.level)
-      )
+      if (!stopping && timed && Number.isFinite(event.data.level))
         options.onLevel?.(Math.min(1, Math.max(0, event.data.level)))
-      if (event.data?.type === 'complete') {
+      if (streaming && type === 'chunk') {
+        const samples = cleanChunk(event.data.samples)
+        if (samples?.length && complete) streaming.onChunk(samples)
+        return
+      }
+      if (streaming && type === 'complete') {
+        const samples = cleanChunk(event.data.samples)
+        try {
+          if (samples?.length) streaming.onChunk(samples)
+          complete?.(samples ?? new Float32Array(0))
+        } catch (error) {
+          complete?.(
+            undefined,
+            error instanceof Error ? error : new Error('Dictation stopped.')
+          )
+        }
+        return
+      }
+      if (type === 'complete') {
         try {
           validateWhistleAudio(event.data.samples)
           complete?.(event.data.samples)
@@ -229,7 +300,7 @@ export async function startWhistleRecording(
         2_000
       )
     }
-    timer = setTimeout(stop, WHISTLE_MAX_SECONDS * 1_000)
+    timer = setTimeout(stop, maxSeconds * 1_000)
     return { finished, stop, cancel }
   } catch (error) {
     const wasCancelled = cancelled || options.signal?.aborted

@@ -97,6 +97,8 @@ function makeSettings(): NotebookSettings {
     autoSuggest: true,
     temperature: 0.3,
     suggestionDelay: 500,
+    // These tests check exact timings; adaptive timing has its own tests.
+    timing: { ...defaultSettings().timing, adaptiveDelay: false },
     maxTokens: 80,
     suggestionLength: 'adaptive',
     externalAutoEnabled: false,
@@ -121,6 +123,7 @@ function makeSettings(): NotebookSettings {
         model: 'test',
         protocol: 'chat',
       },
+      cloudflare: defaultSettings().profiles.cloudflare,
       anthropic: {
         endpoint: 'https://api.anthropic.com/v1',
         model: 'test',

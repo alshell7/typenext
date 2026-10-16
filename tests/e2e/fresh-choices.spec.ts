@@ -1,3 +1,4 @@
+import { startNote } from './support/notes'
 import {
   expect,
   test,
@@ -72,51 +73,49 @@ async function writingText(editor: Locator): Promise<string> {
   })
 }
 async function note(page: Page, title: string) {
-  const start = page.getByRole('button', { name: 'Start a note', exact: true })
-  if (await start.isVisible()) await start.click()
-  else await page.getByRole('button', { name: /^New note/ }).click()
-  const dialog = page.getByRole('dialog', {
-    name: 'Where would you like to begin?',
-  })
-  await dialog.getByLabel('Title', { exact: true }).fill(title)
-  await dialog
-    .getByLabel(/^Context for suggestions/)
-    .fill('Complete only the missing phrase without changing either side.')
-  await dialog.getByRole('button', { name: 'Create note', exact: true }).click()
+  await startNote(
+    page,
+    title,
+    'Complete only the missing phrase without changing either side.'
+  )
   await expect(
     page.getByRole('textbox', { name: 'Note title', exact: true })
   ).toHaveValue(title)
   return content(page)
 }
-async function preferences(
-  page: Page,
-  pane: 'Local suggestions' | 'External models'
-) {
+async function preferences(page: Page, pane: 'Suggestions' | 'Models') {
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Make yourself at home' })
   await dialog.getByRole('tab', { name: pane, exact: true }).click()
   return dialog
 }
 async function automatic(page: Page, enabled: boolean) {
-  const dialog = await preferences(page, 'Local suggestions')
+  const dialog = await preferences(page, 'Suggestions')
   await dialog
     .getByRole('switch', { name: /^Suggest after a pause/ })
     .setChecked(enabled)
-  await dialog.getByLabel('Pause before suggesting').selectOption('1800')
+  await dialog.getByLabel('Pause before suggesting').fill('1800')
   await dialog.getByLabel('Suggestion length').selectOption('short')
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
 }
 async function configure(page: Page, provider: Provider) {
   await automatic(page, false)
-  const dialog = await preferences(page, 'External models')
-  await dialog.getByLabel('Configure provider').selectOption(provider)
-  await dialog
+  const dialog = await preferences(page, 'Models')
+  const external = dialog.getByRole('region', {
+    name: 'External providers',
+    exact: true,
+  })
+  await external
+    .getByRole('radiogroup', { name: 'Configure provider', exact: true })
+    .getByRole('radio', { name: providers[provider].label, exact: true })
+    .click()
+  await external
     .getByLabel('Model', { exact: true })
     .fill('synthetic-writing-model')
-  await dialog.getByLabel('API key', { exact: true }).fill(key)
-  await dialog.getByRole('button', { name: 'Save key', exact: true }).click()
+  await external.getByLabel('API key', { exact: true }).fill(key)
+  await external.getByRole('button', { name: 'Save key', exact: true }).click()
   await expect(
-    dialog.getByText('Ready for this session.', { exact: true })
+    external.getByText('Ready for this session.', { exact: true })
   ).toBeVisible()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   await page
@@ -126,19 +125,13 @@ async function configure(page: Page, provider: Provider) {
     name: 'Choose your suggestion engine',
   })
   await chooser
-    .getByRole('group', { name: 'External providers' })
-    .getByRole('button', { name: providers[provider].label, exact: true })
-    .click()
-  await chooser
-    .getByRole('button', {
-      name: `Use ${providers[provider].label} continuously`,
-      exact: true,
-    })
+    .getByRole('group', { name: providers[provider].label, exact: true })
+    .getByRole('option', { name: 'synthetic-writing-model', exact: true })
     .click()
 }
 async function cursorAt(editor: Locator, position: number) {
   await editor.focus()
-  await editor.press('Control+Home')
+  await editor.press('ControlOrMeta+Home')
   for (let index = 0; index < position; index++)
     await editor.press('ArrowRight')
 }
@@ -173,8 +166,10 @@ for (const provider of ['openai', 'openrouter', 'anthropic'] as const) {
       const body = request.postDataJSON() as Payload
       requests.push(body)
       expect(body.model).toBe('synthetic-writing-model')
-      expect(body.max_tokens).toBeGreaterThan(0)
-      expect(body.max_tokens).toBeLessThanOrEqual(isOptions(body) ? 384 : 128)
+      // OpenAI models take max_completion_tokens; other providers max_tokens.
+      const limit = Number(body.max_tokens ?? body.max_completion_tokens)
+      expect(limit).toBeGreaterThan(0)
+      expect(limit).toBeLessThanOrEqual(isOptions(body) ? 384 : 128)
       expect(body.response_format).toBeUndefined()
       expect(body.n).toBeUndefined()
       expect(JSON.stringify(body)).not.toContain(key)
@@ -211,12 +206,12 @@ for (const provider of ['openai', 'openrouter', 'anthropic'] as const) {
     ).toHaveCount(0)
     expect(await writingText(editor)).toBe(prefix + suffix)
 
-    await editor.press('Control+Space')
+    await editor.press('ControlOrMeta+Space')
     await expect(page.locator('.cm-suggestion-option-text')).toHaveText(
       options[0]!
     )
     expect(requests).toHaveLength(2)
-    await editor.press('Control+Space')
+    await editor.press('ControlOrMeta+Space')
     await expect(page.locator('.cm-suggestion-option-text')).toHaveText(
       options[1]!
     )
@@ -232,10 +227,10 @@ for (const provider of ['openai', 'openrouter', 'anthropic'] as const) {
     await editor.press('Enter')
     await expect(editor).toHaveText(prefix + 'unhurried' + suffix)
     await expect(editor).toBeFocused()
-    await editor.press('Control+z')
+    await editor.press('ControlOrMeta+z')
     await expect(editor).toHaveText(prefix + suffix)
 
-    await editor.press('Control+Space')
+    await editor.press('ControlOrMeta+Space')
     await expect(page.locator('.cm-suggestion-option-text')).toHaveText(
       options[2]!
     )
@@ -246,7 +241,7 @@ for (const provider of ['openai', 'openrouter', 'anthropic'] as const) {
       .click()
     await expect(editor).toBeFocused()
     await expect(editor).toHaveText(prefix + 'clear' + suffix)
-    await editor.press('Control+z')
+    await editor.press('ControlOrMeta+z')
     await expect(editor).toHaveText(prefix + suffix)
     await automatic(page, false)
     expect(requests).toHaveLength(4)
@@ -292,7 +287,7 @@ test('the recorded real-model choices keep a separator at a complete-word cursor
   await configure(page, 'openrouter')
   await editor.fill(gardenPrefix + gardenSuffix)
   await cursorAt(editor, gardenPrefix.length)
-  await editor.press('Control+Space')
+  await editor.press('ControlOrMeta+Space')
   await expect(page.locator('.cm-suggestion-option-text')).toHaveText(recorded)
   const list = page.getByRole('listbox', { name: 'Suggestions' })
   for (let index = 0; index < recorded.length; index++) {
@@ -317,7 +312,7 @@ test('the recorded real-model choices keep a separator at a complete-word cursor
     'At dawn, the garden held its breath while the city was still asleep.'
   )
   await expect(page.locator('.cm-ghost-text')).toHaveCount(0)
-  await editor.press('Control+z')
+  await editor.press('ControlOrMeta+z')
   await expect(editor).toHaveText(gardenPrefix + gardenSuffix)
   expect(posts).toBe(1)
   expect(errors).toEqual([])
@@ -334,6 +329,7 @@ test('a late hosted choices response is aborted on note change and cannot enter 
   const gate = new Promise<void>(resolve => {
     release = resolve
   })
+  let abortedAtRoute = false
   page.on('requestfailed', request => {
     if (request.url() === providers.openai.endpoint) aborted += 1
   })
@@ -359,7 +355,11 @@ test('a late hosted choices response is aborted on note change and cannot enter 
       JSON.stringify({
         insertions: ['STALE FIRST', 'STALE SECOND', 'STALE THIRD'],
       })
-    ).catch(() => {})
+    ).catch(() => {
+      // The page aborted the request while the route was paused. Playwright
+      // may report this here instead of as a requestfailed event.
+      abortedAtRoute = true
+    })
   })
   try {
     await page.goto('/')
@@ -367,12 +367,15 @@ test('a late hosted choices response is aborted on note change and cannot enter 
     await configure(page, 'openai')
     await editor.fill(prefix + suffix)
     await cursorAt(editor, prefix.length)
-    await editor.press('Control+Space')
+    await editor.press('ControlOrMeta+Space')
     await expect.poll(() => postCount).toBe(1)
     const next = await note(page, 'A separate next note')
     await next.fill('A new beginning remains mine.')
     release()
-    await expect.poll(() => aborted).toBe(1)
+    await expect
+      .poll(() => aborted + (abortedAtRoute ? 1 : 0))
+      .toBeGreaterThan(0)
+    expect(aborted).toBeLessThanOrEqual(1)
     await expect(
       page.getByRole('listbox', { name: 'Suggestions' })
     ).toHaveCount(0)

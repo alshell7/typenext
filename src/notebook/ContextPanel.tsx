@@ -1,15 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   ArrowUpRight,
-  FileText,
-  Globe,
   Link,
   LoaderCircle,
-  LibraryBig,
   Notebook,
-  Paperclip,
   ShieldCheck,
-  Search,
   Upload,
   X,
 } from 'lucide-react'
@@ -17,21 +12,58 @@ import type {
   ContextPackage,
   ContextSource,
   Note,
-  RetrievedChunk,
+  NotebookSettings,
 } from '../types/notebook'
-import { retrieveContext } from '../services/retrieval'
-import { relativeDate, wordCount } from './model'
+import { relativeDate } from './model'
 import { Modal } from './Modal'
 import { resolveNoteContext } from './note-context'
-import './ContextLibrary.css'
+import { MAX_CONTEXT_PACKAGES_PER_NOTE } from './context-library'
+import { AttachedSearch } from './context/AttachedSearch'
+import { ConnectionBoard, type BoardPackage } from './context/ConnectionBoard'
+import { IntentSection } from './context/IntentSection'
+import { MediaHint } from './context/MediaHint'
+import { ReferenceList, WordTotal } from './context/ReferenceList'
+import {
+  hasMediaFiles,
+  mediaNeedsSetup,
+  SOURCE_ACCEPT,
+  SOURCE_FORMATS_HELP,
+  SOURCE_FORMATS_SHORT,
+} from './context/media'
+import {
+  formatBytes,
+  isMediaSource,
+  mediaDetail,
+  safeThumbnail,
+  sourceKindName,
+} from './context/source-kinds'
+import './context/context-panel.css'
 
 const EMPTY_LIBRARY: ContextSource[] = []
 const EMPTY_PACKAGES: ContextPackage[] = []
 const EMPTY_NOTE_IDS = new Set<string>()
 
-function WordTotal({ text }: { text: string }) {
-  const count = useMemo(() => wordCount(text), [text])
-  return <>{count.toLocaleString()} words</>
+export interface ContextPanelProps {
+  note: Note
+  notes: Note[]
+  library?: ContextSource[]
+  packages?: ContextPackage[]
+  importing: boolean
+  onUpdate(patch: Partial<Note>): void
+  onClose(): void
+  /** Without a package id the files attach directly to this note. */
+  onFiles(files: FileList | null, packageId?: string): Promise<void>
+  onWebsite(): void
+  onUseNote(id: string): void
+  onLibrary?(packageId?: string): void
+  onDetachPackage?(id: string): void
+  /** Attach a named context. Falls back to updating the note directly. */
+  onAttachPackage?(id: string): void
+  /** Create a named context from the quick field; returns its id or null. */
+  onCreatePackage?(name: string): string | null
+  /** Enables meaning search, index progress and the media setup hint. */
+  settings?: NotebookSettings
+  onOpenKnowledgeSettings?(): void
 }
 
 export function ContextPanel({
@@ -47,31 +79,24 @@ export function ContextPanel({
   onUseNote,
   onLibrary,
   onDetachPackage,
-}: {
-  note: Note
-  notes: Note[]
-  library?: ContextSource[]
-  packages?: ContextPackage[]
-  importing: boolean
-  onUpdate(patch: Partial<Note>): void
-  onClose(): void
-  onFiles(files: FileList | null): Promise<void>
-  onWebsite(): void
-  onUseNote(id: string): void
-  onLibrary?(packageId?: string): void
-  onDetachPackage?(id: string): void
-}) {
+  onAttachPackage,
+  onCreatePackage,
+  settings,
+  onOpenKnowledgeSettings,
+}: ContextPanelProps) {
   const input = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const dragDepth = useRef(0)
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [choosingNote, setChoosingNote] = useState(false)
   const [noteQuery, setNoteQuery] = useState('')
-  const [contextQuery, setContextQuery] = useState('')
-  const [retrieval, setRetrieval] = useState<{
-    snapshot: (string | boolean)[]
-    results: RetrievedChunk[]
-  } | null>(null)
+  const [mediaHint, setMediaHint] = useState(false)
+  const [announcement, setAnnouncement] = useState('')
+  const announce = useCallback((message: string) => {
+    // Re-announce identical messages by clearing first.
+    setAnnouncement('')
+    window.requestAnimationFrame(() => setAnnouncement(message))
+  }, [])
   const libraryIds = useMemo(
     () => new Set(library.map(item => item.id)),
     [library]
@@ -106,39 +131,25 @@ export function ContextPanel({
       source => byId.get(source.id) ?? { ...source, text: '', enabled: false }
     )
   }, [note, notes, library])
-  const attachedPackages = useMemo(() => {
-    if (!note.contextPackageIds?.length) return EMPTY_PACKAGES
+  const attachedPackages = useMemo<BoardPackage[]>(() => {
+    if (!note.contextPackageIds?.length) return []
     const byId = new Map(packages.map(context => [context.id, context]))
-    return note.contextPackageIds.map(
-      id =>
-        byId.get(id) ?? {
-          id,
-          name: 'Unavailable context',
-          sourceIds: [],
-          createdAt: 0,
-          updatedAt: 0,
-        }
-    )
+    return note.contextPackageIds.map(id => {
+      const context = byId.get(id)
+      return context
+        ? { context, available: true }
+        : {
+            context: {
+              id,
+              name: 'Unavailable context',
+              sourceIds: [],
+              createdAt: 0,
+              updatedAt: 0,
+            },
+            available: false,
+          }
+    })
   }, [note.contextPackageIds, packages])
-  const packageIds = useMemo(
-    () => new Set(packages.map(context => context.id)),
-    [packages]
-  )
-  const retrievalSnapshot = [
-    note.id,
-    ...resolved.sources.flatMap(source => [
-      source.id,
-      source.name,
-      source.text,
-      source.enabled,
-    ]),
-  ]
-  const retrievalCurrent =
-    retrieval &&
-    retrieval.snapshot.length === retrievalSnapshot.length &&
-    retrieval.snapshot.every(
-      (value, index) => value === retrievalSnapshot[index]
-    )
   const source = directSources.find(item => item.id === previewId)
   const enabled = resolved.sources.filter(item => item.enabled).length
   const availableNotes = useMemo(() => {
@@ -161,6 +172,39 @@ export function ContextPanel({
     )
   }, [availableNotes, noteQuery])
   const sourceAvailable = !source || sourceIsAvailable(source)
+  const includedDirect = directSources.filter(item => item.enabled).length
+
+  function sendFiles(files: FileList | null, packageId?: string) {
+    if (!files?.length) return Promise.resolve()
+    if (hasMediaFiles(files) && mediaNeedsSetup(settings)) setMediaHint(true)
+    return packageId ? onFiles(files, packageId) : onFiles(files)
+  }
+  function toggleSource(item: ContextSource, value: boolean) {
+    onUpdate({
+      sources: note.sources.map(candidate =>
+        candidate.id === item.id ? { ...candidate, enabled: value } : candidate
+      ),
+    })
+    announce(`${item.name} ${value ? 'included' : 'left out'}`)
+  }
+  function attachPackage(id: string) {
+    if (onAttachPackage) onAttachPackage(id)
+    else
+      onUpdate({
+        contextPackageIds: [...(note.contextPackageIds ?? []), id],
+      })
+  }
+  function detachPackage(id: string) {
+    if (onDetachPackage) onDetachPackage(id)
+    else
+      onUpdate({
+        contextPackageIds: note.contextPackageIds?.filter(key => key !== id),
+      })
+  }
+  function resetDrag() {
+    dragDepth.current = 0
+    setDragging(false)
+  }
 
   return (
     <>
@@ -180,353 +224,194 @@ export function ContextPanel({
             event.dataTransfer.dropEffect = 'copy'
           }
         }}
-        onDragLeave={() => {
+        onDragLeave={event => {
+          if (!event.dataTransfer.types.includes('Files')) return
           dragDepth.current--
-          if (dragDepth.current <= 0) {
-            dragDepth.current = 0
-            setDragging(false)
-          }
+          if (dragDepth.current <= 0) resetDrag()
         }}
         onDrop={event => {
+          if (!event.dataTransfer.types.includes('Files')) return
           event.preventDefault()
-          dragDepth.current = 0
-          setDragging(false)
-          if (!importing) void onFiles(event.dataTransfer.files)
+          resetDrag()
+          // A context card already routed these files into its package.
+          if (
+            event.target instanceof Element &&
+            event.target.closest('[data-file-target]')
+          )
+            return
+          if (!importing) {
+            const count = event.dataTransfer.files.length
+            if (count)
+              announce(
+                `Attaching ${count} ${count === 1 ? 'file' : 'files'} to this note`
+              )
+            void sendFiles(event.dataTransfer.files)
+          }
         }}
       >
         {dragging && (
-          <div className="context-drop-overlay">
-            <Upload size={28} strokeWidth={1.4} />
-            <strong>Drop your references here</strong>
-            <span>Text, Markdown, PDF, or Word</span>
-          </div>
-        )}
-        <div className="context-heading">
-          <h2>Context</h2>
-          <button
-            className="icon-button"
-            aria-label="Close context panel"
-            onClick={onClose}
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <p className="panel-description">
-          The intention and details behind your words.
-        </p>
-        <label className="field-label" htmlFor="note-objective">
-          Objective
-        </label>
-        <textarea
-          id="note-objective"
-          rows={2}
-          placeholder="What do you want to say?"
-          value={note.objective}
-          onChange={event => onUpdate({ objective: event.target.value })}
-        />
-        <p className="field-help">
-          Leave this empty to use the first line of your note.
-        </p>
-        <label className="field-label" htmlFor="note-context">
-          Background & voice
-        </label>
-        <textarea
-          id="note-context"
-          rows={4}
-          placeholder="Audience, tone, and anything worth knowing."
-          value={note.context}
-          onChange={event => onUpdate({ context: event.target.value })}
-        />
-        <div className="sources-heading">
-          <h3>Contexts</h3>
-          <span>
-            {attachedPackages.length
-              ? `${attachedPackages.length} attached`
-              : 'None yet'}
-          </span>
-        </div>
-        <div className="attached-context-list" aria-label="Attached contexts">
-          {attachedPackages.map(context => (
-            <div className="attached-context-item" key={context.id}>
-              <button
-                className="source-preview-button"
-                aria-label={`Manage ${context.name}`}
-                onClick={() => onLibrary?.(context.id)}
-              >
-                <LibraryBig size={16} />
-                <span>
-                  <strong title={context.name}>{context.name}</strong>
-                  <small>
-                    {packageIds.has(context.id)
-                      ? `${context.sourceIds.length} ${context.sourceIds.length === 1 ? 'source' : 'sources'} · Changes follow this note`
-                      : 'Unavailable · Detach it or choose another context'}
-                  </small>
-                </span>
-              </button>
-              <button
-                className="icon-button"
-                aria-label={`Detach ${context.name}`}
-                onClick={() =>
-                  onDetachPackage
-                    ? onDetachPackage(context.id)
-                    : onUpdate({
-                        contextPackageIds: note.contextPackageIds?.filter(
-                          id => id !== context.id
-                        ),
-                      })
-                }
-              >
-                <X size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
-        {onLibrary && (
-          <button
-            className="button secondary manage-contexts"
-            onClick={() => onLibrary()}
-          >
-            <LibraryBig size={15} /> Manage contexts
-          </button>
-        )}
-        {note.sources.length > 0 && (
-          <div className="sources-heading">
-            <h3>Direct references</h3>
-            <span>
-              {directSources.filter(source => source.enabled).length} of{' '}
-              {note.sources.length} included
+          <div className="context-drop-overlay" aria-hidden="true">
+            <span className="context-drop-icon">
+              <Upload size={20} strokeWidth={1.6} />
             </span>
+            <strong>Drop your references here</strong>
+            <span>
+              Release anywhere to attach to this note, or over a context to add
+              them there.
+            </span>
+            <small>{SOURCE_FORMATS_SHORT}</small>
           </div>
         )}
-        <div className="source-list">
-          {directSources.map(item => (
-            <div
-              className={`source-item ${item.enabled ? '' : 'disabled'}`}
-              key={item.id}
+        <div className="context-panel-scroll">
+          <div className="context-heading">
+            <h2>Context</h2>
+            <button
+              className="icon-button"
+              aria-label="Close context panel"
+              onClick={onClose}
             >
-              <input
-                type="checkbox"
-                checked={item.enabled}
-                disabled={!sourceIsAvailable(item)}
-                aria-label={`Use ${item.name} as context`}
-                onChange={event =>
-                  onUpdate({
-                    sources: note.sources.map(candidate =>
-                      candidate.id === item.id
-                        ? { ...candidate, enabled: event.target.checked }
-                        : candidate
-                    ),
-                  })
-                }
-              />
-              <button
-                className="source-preview-button"
-                aria-label={`Preview ${item.name}`}
-                onClick={() => setPreviewId(item.id)}
-              >
-                {item.kind === 'website' ? (
-                  <Globe size={15} />
-                ) : item.kind === 'note' ? (
-                  <Notebook size={15} />
-                ) : (
-                  <FileText size={15} />
-                )}
-                <span>
-                  <strong title={item.name}>{item.name}</strong>
-                  <small>
-                    {item.kind === 'note'
-                      ? sourceIsAvailable(item)
-                        ? 'Linked note · Live context'
-                        : 'Linked note · Unavailable'
-                      : item.kind === 'website'
-                        ? 'Website'
-                        : item.kind === 'markdown'
-                          ? 'Markdown'
-                          : item.kind === 'text'
-                            ? 'Text'
-                            : item.kind.toUpperCase()}{' '}
-                    · <WordTotal text={item.text} />
-                    {item.libraryId &&
-                      !libraryIds.has(item.libraryId) &&
-                      ' · Unavailable'}
-                    {!item.enabled && ' · Left out'}
-                  </small>
-                </span>
-              </button>
-              <button
-                className="icon-button"
-                aria-label={`Remove ${item.name}`}
-                onClick={() =>
+              <X size={16} />
+            </button>
+          </div>
+          <p className="panel-description">
+            The intention and the details behind your words.
+          </p>
+
+          <IntentSection note={note} onUpdate={onUpdate} />
+
+          <ConnectionBoard
+            noteTitle={note.title.trim() || 'Untitled note'}
+            reach={enabled}
+            attached={attachedPackages}
+            packages={packages}
+            library={library}
+            importing={importing}
+            canAttach={
+              (note.contextPackageIds?.length ?? 0) <
+              MAX_CONTEXT_PACKAGES_PER_NOTE
+            }
+            onAttach={attachPackage}
+            onDetach={detachPackage}
+            onManage={onLibrary ? id => onLibrary(id) : undefined}
+            onLibrary={onLibrary ? () => onLibrary() : undefined}
+            onCreate={onCreatePackage}
+            onPackageFiles={(files, id) => void sendFiles(files, id)}
+            announce={announce}
+          />
+
+          <section
+            className="context-references"
+            aria-labelledby="direct-references-heading"
+          >
+            <div className="context-section-heading">
+              <h3 id="direct-references-heading">Direct references</h3>
+              <span>
+                {note.sources.length
+                  ? `${includedDirect} of ${note.sources.length} included`
+                  : 'Just for this note'}
+              </span>
+            </div>
+            {note.sources.length > 0 && (
+              <ReferenceList
+                sources={directSources}
+                isAvailable={sourceIsAvailable}
+                onToggle={toggleSource}
+                onPreview={item => setPreviewId(item.id)}
+                onRemove={item => {
                   onUpdate({
                     sources: note.sources.filter(
                       candidate => candidate.id !== item.id
                     ),
                   })
-                }
+                  announce(`${item.name} removed`)
+                }}
+              />
+            )}
+            <div
+              className="context-reference-actions"
+              role="group"
+              aria-label="Add a direct reference"
+            >
+              <button
+                className="context-action"
+                disabled={importing}
+                onClick={() => input.current?.click()}
               >
-                <X size={13} />
+                {importing ? (
+                  <LoaderCircle size={14} className="spin" />
+                ) : (
+                  <Upload size={14} />
+                )}
+                <span>
+                  {importing ? 'Reading references…' : 'Attach files'}
+                </span>
+              </button>
+              <button
+                className="context-action"
+                disabled={importing}
+                onClick={onWebsite}
+              >
+                <Link size={14} />
+                <span>Add a website</span>
+              </button>
+              <button
+                className="context-action"
+                disabled={importing}
+                onClick={() => {
+                  setNoteQuery('')
+                  setChoosingNote(true)
+                }}
+              >
+                <Notebook size={14} />
+                <span>Use a note</span>
               </button>
             </div>
-          ))}
-        </div>
-        {!note.sources.length && !attachedPackages.length && onLibrary && (
-          <p className="field-help context-empty-copy">
-            Choose contexts with the files, websites, and notes behind your
-            writing.
-          </p>
-        )}
-        {!note.sources.length && !attachedPackages.length && !onLibrary && (
-          <button
-            className="context-empty drop-zone"
-            onClick={() => input.current?.click()}
-            disabled={importing}
-          >
-            <Paperclip size={25} strokeWidth={1.3} />
-            <span>
-              <strong>Bring the details that matter.</strong>
-              <small>
-                Choose named contexts with files, websites, or other notes.
-              </small>
-            </span>
-          </button>
-        )}
-        {note.sources.length > 0 && (
-          <p className="field-help source-inclusion-help">
-            Click a reference to preview its text. Uncheck it to leave it out of
-            suggestions.
-          </p>
-        )}
-        <input
-          ref={input}
-          type="file"
-          disabled={importing}
-          multiple
-          accept=".txt,.md,.markdown,.pdf,.docx"
-          className="visually-hidden"
-          aria-label="Attach reference files"
-          onChange={event => {
-            const files = event.target.files
-            void onFiles(files).finally(() => {
-              if (input.current) input.current.value = ''
-            })
-          }}
-        />
-        <details className="context-direct-attachments">
-          <summary>Attach a single reference</summary>
-          <p>
-            Keep a direct attachment for this note. Group reusable sources in a
-            context.
-          </p>
-          <div className="source-actions">
-            <button
-              className="button secondary"
-              disabled={importing}
-              onClick={() => input.current?.click()}
-            >
-              {importing ? (
-                <LoaderCircle size={15} className="spin" />
-              ) : (
-                <Upload size={15} />
-              )}
-              {importing ? 'Reading references…' : 'Attach files'}
-            </button>
-            <button
-              className="button subtle"
-              disabled={importing}
-              onClick={onWebsite}
-            >
-              <Link size={15} />
-              Add a website
-            </button>
-            <button
-              className="button subtle"
-              disabled={importing}
-              onClick={() => {
-                setNoteQuery('')
-                setChoosingNote(true)
-              }}
-            >
-              <Notebook size={15} />
-              Use a note
-            </button>
-          </div>
-        </details>
-        <details className="context-attached-search">
-          <summary>
-            <Search size={14} /> Find in attached context
-          </summary>
-          <p>
-            BM25 finds relevant passages on this device; model receives only
-            matching excerpts.
-          </p>
-          <form
-            onSubmit={event => {
-              event.preventDefault()
-              if (!contextQuery.trim() || !enabled) return
-              setRetrieval({
-                snapshot: retrievalSnapshot,
-                results: retrieveContext(resolved, contextQuery, 4),
-              })
-            }}
-          >
-            <label className="field-label" htmlFor="attached-context-search">
-              Search attached references
-            </label>
+            <p className="field-help context-formats">
+              {note.sources.length
+                ? 'Click a reference to preview it. Switch it off to leave it out of suggestions. '
+                : 'Keep a single file, site or note just for this draft. '}
+              {SOURCE_FORMATS_HELP}
+            </p>
+            {mediaHint && (
+              <MediaHint
+                onOpenSettings={onOpenKnowledgeSettings}
+                onDismiss={() => setMediaHint(false)}
+              />
+            )}
             <input
-              id="attached-context-search"
-              type="search"
-              value={contextQuery}
-              placeholder="A detail, phrase, or topic"
-              maxLength={4000}
+              ref={input}
+              type="file"
+              disabled={importing}
+              multiple
+              accept={SOURCE_ACCEPT}
+              className="visually-hidden"
+              aria-label="Attach reference files"
               onChange={event => {
-                setContextQuery(event.target.value)
-                setRetrieval(null)
+                const files = event.target.files
+                void sendFiles(files).finally(() => {
+                  if (input.current) input.current.value = ''
+                })
               }}
             />
-            <button
-              type="submit"
-              className="button secondary"
-              disabled={!contextQuery.trim() || !enabled}
-            >
-              Find passages
-            </button>
-          </form>
-          {!enabled && (
-            <p className="context-attached-empty">
-              Include a reference above to search its text.
-            </p>
-          )}
-          {retrievalCurrent && (
-            <div
-              className="context-attached-results"
-              aria-label="Matching context passages"
-            >
-              <p role="status">
-                {retrieval.results.length
-                  ? `${retrieval.results.length} matching ${retrieval.results.length === 1 ? 'passage' : 'passages'}`
-                  : 'No matching passages. Try another phrase.'}
-              </p>
-              {retrieval.results.map((passage, index) => (
-                <article key={`${passage.sourceId}-${index}`}>
-                  <h4>{passage.sourceName}</h4>
-                  <p>{passage.text}</p>
-                </article>
-              ))}
-            </div>
-          )}
-          {retrieval && !retrievalCurrent && (
-            <p role="status" className="context-attached-empty">
-              References changed. Search again for current passages.
-            </p>
-          )}
-        </details>
-        <p className="context-privacy">
-          <ShieldCheck size={14} />
-          <span>
-            Files stay on this device. Only the references you include inform
-            suggestions.
-          </span>
-        </p>
+          </section>
+
+          <AttachedSearch
+            resolved={resolved}
+            enabled={enabled}
+            settings={settings}
+          />
+
+          <p className="context-privacy">
+            <ShieldCheck size={14} />
+            <span>
+              Files stay on this device. Only the references you include inform
+              suggestions.
+            </span>
+          </p>
+          <p className="visually-hidden" role="status" aria-live="polite">
+            {announcement}
+          </p>
+        </div>
       </aside>
       <Modal
         open={Boolean(source)}
@@ -539,6 +424,14 @@ export function ContextPanel({
       >
         {source && (
           <>
+            {isMediaSource(source) && safeThumbnail(source) && (
+              <figure className="source-preview-media">
+                <img
+                  src={safeThumbnail(source)}
+                  alt={`${sourceKindName(source)} preview of ${source.name}`}
+                />
+              </figure>
+            )}
             <div className="source-preview-meta">
               <span>
                 {source.kind === 'note' ? (
@@ -547,19 +440,35 @@ export function ContextPanel({
                   ) : (
                     'Linked note · Unavailable'
                   )
+                ) : isMediaSource(source) ? (
+                  [
+                    sourceKindName(source),
+                    mediaDetail(source),
+                    formatBytes(source.media?.bytes),
+                    'Embedded on this device',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
                 ) : (
                   <>
                     <WordTotal text={source.text} /> · Cached locally
                   </>
                 )}
               </span>
-              {source.origin && source.kind !== 'note' && (
-                <a href={source.origin} target="_blank" rel="noreferrer">
-                  View original
-                  <ArrowUpRight size={12} />
-                </a>
-              )}
+              {source.origin &&
+                source.kind !== 'note' &&
+                /^https?:\/\//iu.test(source.origin) && (
+                  <a href={source.origin} target="_blank" rel="noreferrer">
+                    View original
+                    <ArrowUpRight size={12} />
+                  </a>
+                )}
             </div>
+            {isMediaSource(source) && (
+              <p className="source-preview-caption-label">
+                Caption used for search and suggestions
+              </p>
+            )}
             <div className="source-preview-text" tabIndex={0}>
               {source.text ||
                 (!sourceAvailable && source.libraryId && source.kind !== 'note'
@@ -576,15 +485,7 @@ export function ContextPanel({
                   type="checkbox"
                   checked={source.enabled}
                   disabled={!sourceAvailable}
-                  onChange={event =>
-                    onUpdate({
-                      sources: note.sources.map(item =>
-                        item.id === source.id
-                          ? { ...item, enabled: event.target.checked }
-                          : item
-                      ),
-                    })
-                  }
+                  onChange={event => toggleSource(source, event.target.checked)}
                 />
                 Include in suggestions
               </label>
@@ -630,6 +531,7 @@ export function ContextPanel({
                   onUseNote(candidate.id)
                   setChoosingNote(false)
                   setNoteQuery('')
+                  announce(`${candidate.title} linked`)
                 }}
               >
                 <Notebook size={18} strokeWidth={1.5} />

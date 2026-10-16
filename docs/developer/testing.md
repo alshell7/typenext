@@ -1,484 +1,106 @@
 # Testing
 
-Testing patterns and utilities for both Rust and TypeScript code, with comprehensive test coverage and quality gates.
+This guide tells you how to run and write tests for TypeNext. The record of verification runs and the live test commands are in [docs/testing.md](../testing.md).
 
-## Quick Start
+## Quick start
 
-### Running Tests
-
-```bash
-# Run all tests and checks
-npm run check:all
-
-# Individual test commands
-npm run test        # TypeScript tests (watch mode)
-npm run test:run    # TypeScript tests (single run)
-npm run rust:test   # Rust tests
+```sh
+npm run check:all                                   # typecheck, lint, unit tests, cargo fmt --check, clippy
+npm run test                                        # Vitest in watch mode
+npm run test:run                                    # Vitest, one run
+npm run test:e2e                                    # Playwright browser tests
+cargo test --manifest-path src-tauri/Cargo.toml     # Rust tests
+npm run test:all                                    # Vitest and cargo test
 ```
 
-### Writing a Simple Test
+`npm run check:all` does not run `cargo test` or Playwright. Run them before a pull request. CI (`.github/workflows/check.yml`) runs typecheck, lint, Vitest, the build and Playwright on Chromium. It also runs `cargo fmt --check`, `cargo test --locked`, clippy with `-D warnings` and a `tauri build --no-bundle` for each target.
 
-```typescript
-// src/components/ui/Button.test.tsx
-import { render, screen } from '@testing-library/react'
-import { Button } from './Button'
+CAUTION: Do not start a second dev server or Playwright run while another run is active. Playwright starts its own dev server on `http://127.0.0.1:1420`.
 
-test('renders button with text', () => {
-  render(<Button>Click me</Button>)
-  expect(screen.getByRole('button', { name: 'Click me' })).toBeInTheDocument()
-})
-```
+## Layout
 
-## TypeScript Testing
+| Location                                  | Runner     | Notes                                                                   |
+| ----------------------------------------- | ---------- | ----------------------------------------------------------------------- |
+| `src/notebook/**/*.test.{ts,tsx}`         | Vitest     | Components, preferences, graph, context panel, model and storage logic. |
+| `src/services/*.test.ts`                  | Vitest     | Completion, retrieval, semantic search, web facts, media, providers.    |
+| `src/components/notebook/*.test.{ts,tsx}` | Vitest     | CodeMirror editor and Markdown editing commands.                        |
+| `tests/e2e/*.spec.ts`                     | Playwright | Browser flows. Helpers are in `tests/e2e/support/notes.ts`.             |
+| `src-tauri/src/**` (`#[cfg(test)]`)       | cargo      | Native storage, HTTP, credentials and the embedding runtime manager.    |
 
-### Test Framework: Vitest + Testing Library
+`vitest.config.ts` includes only the three Vitest paths above. Tests in `src/store` and `src/test` belong to the original template and do not run. The setup file is `src/notebook/test-setup.ts`. It loads `@testing-library/jest-dom` and mocks `window.matchMedia`.
 
-**Setup:**
+## Unit test patterns
 
-- **Vitest**: Fast test runner with Jest-compatible API
-- **@testing-library/react**: React component testing utilities
-- **@testing-library/jest-dom**: Additional matchers
+### Mock the native bridge
 
-### Test Structure
+Services call Tauri through `src/services/native.ts`. Mock this module, not `@tauri-apps/api`:
 
-```typescript
-// src/lib/utils.test.ts
-import { describe, it, expect } from 'vitest'
-import { cn } from './utils'
-
-describe('cn utility', () => {
-  it('combines classes correctly', () => {
-    expect(cn('class1', 'class2')).toBe('class1 class2')
-  })
-
-  it('handles conditional classes', () => {
-    expect(cn('base', false && 'hidden', 'visible')).toBe('base visible')
-  })
-})
-```
-
-### Component Testing
-
-```typescript
-// src/components/layout/MainWindow.test.tsx
-import { render, screen } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MainWindow } from './MainWindow'
-
-// Test wrapper with providers
-function TestWrapper({ children }: { children: React.ReactNode }) {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  })
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  )
-}
-
-test('renders main layout components', () => {
-  render(
-    <TestWrapper>
-      <MainWindow />
-    </TestWrapper>
-  )
-
-  expect(screen.getByRole('banner')).toBeInTheDocument() // Title bar
-  expect(screen.getByRole('complementary')).toBeInTheDocument() // Sidebar
-})
-```
-
-### Hook Testing
-
-```typescript
-// src/hooks/useUIStore.test.ts
-import { renderHook, act } from '@testing-library/react'
-import { useUIStore } from './useUIStore'
-
-test('toggles sidebar visibility', () => {
-  const { result } = renderHook(() => useUIStore())
-
-  expect(result.current.leftSidebarVisible).toBe(true)
-
-  act(() => {
-    result.current.setLeftSidebarVisible(false)
-  })
-
-  expect(result.current.leftSidebarVisible).toBe(false)
-})
-```
-
-### Mocking Tauri APIs
-
-```typescript
-// src/test/setup.ts
-import { vi } from 'vitest'
-
-// Mock Tauri APIs for tests
-vi.mock('@tauri-apps/api/event', () => ({
-  listen: vi.fn().mockResolvedValue(() => {}),
-}))
-
-vi.mock('@tauri-apps/plugin-updater', () => ({
-  check: vi.fn().mockResolvedValue(null),
-}))
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
+```ts
+vi.mock('./native', () => ({
+  isDesktop: () => false,
+  asError: (error: unknown) =>
+    error instanceof Error ? error : new Error(String(error)),
+  getSecret: vi.fn(async () => 'sk-test'),
+  requestJson: vi.fn(),
+  requestText: vi.fn(),
 }))
 ```
 
-### Testing Async Operations
+Then assert the request with `vi.mocked(requestJson).mock.calls`. Use synthetic text and fake keys only.
 
-```typescript
-// src/services/preferences.test.ts
-import { renderHook, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { vi } from 'vitest'
-import { invoke } from '@tauri-apps/api/core'
-import { usePreferences } from './preferences'
+### Test editor commands
 
-const mockInvoke = vi.mocked(invoke)
+`markdown-editing.ts` contains pure functions over an `EditorView`. Create a view with the text and selection, run the command, then compare the document and the selection. Test the insert menu sources (`slashSource`, `wikiLinkSource`) through a `CompletionContext`. See `src/components/notebook/markdown-editing.test.ts`.
 
-test('loads preferences successfully', async () => {
-  const mockPreferences = { theme: 'dark' }
-  mockInvoke.mockResolvedValue(mockPreferences)
+### Test semantic search
 
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  })
+`src/services/semantic.test.ts` replaces the embedding server with a fake `fetch`. Return 768-value vectors from `/v1/embeddings` and a `/props` body with `media_marker` and `modalities`. Check that queries go before background jobs, that a slow server falls back to BM25 within the budget, and that cached vectors are reused.
 
-  const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  )
+### Test Preferences panes
 
-  const { result } = renderHook(() => usePreferences(), { wrapper })
+`src/notebook/Preferences.test.tsx` mocks `../services/native` and `../services/builtin-engine`. Find controls by their accessible names, for example `getByRole('switch', { name: 'Semantic search' })`. Keep the visible labels and the tests in agreement. The user guide quotes the same labels.
 
-  await waitFor(() => {
-    expect(result.current.isSuccess).toBe(true)
-  })
+## Browser test patterns
 
-  expect(result.current.data).toEqual(mockPreferences)
-  expect(mockInvoke).toHaveBeenCalledWith('load_preferences')
-})
+- Start each test from an empty notebook: go to `/`, clear `localStorage`, reload, then wait for the heading **A little room to think.**
+- Use `startNote(page, title?, context?)` to create a note. It fills the title and **Background & voice** only when you give them.
+- Use `noteEditor(page)` for the editor (`Note content`) and `savedMarkdown(page, expected)` to wait for autosave.
+- Use `process.platform === 'darwin' ? 'Meta' : 'Control'` for Ctrl/⌘ shortcuts.
+- Prefer roles and accessible names over CSS classes. Use classes such as `.cm-insert-menu`, `.cm-lp-table` and `.cm-link-card` only for CodeMirror widgets without a role.
+
+### Performance budget
+
+`tests/e2e/editor-features.spec.ts` contains a typing-latency test on a long note with lists, tables and links. The median frame must be below 40 ms and the 95th percentile below 120 ms. Do not raise these limits to make a change pass. Find the slow extension instead.
+
+## Rust tests
+
+Put unit tests in a `#[cfg(test)] mod tests` block in the same file. Use `tempfile` folders for file operations. `src-tauri/src/embedding.rs` has tests for the pinned archives and URLs, safe archive extraction, server arguments, the key in the environment and orphan cleanup.
+
+Ignored tests need real files or processes:
+
+| Test                                             | Needs                                                                            |
+| ------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `managed_server_serves_authenticated_embeddings` | `TYPENEXT_EMBEDDING_TEST_DIR` with the pinned llama.cpp archive and model files. |
+| `orphan_fixture_child`                           | A helper process for the orphan-cleanup test. Do not run it alone.               |
+| Two tests in `src-tauri/src/workspace.rs`        | Diagnostic helpers.                                                              |
+
+Run the managed server test:
+
+```sh
+TYPENEXT_EMBEDDING_TEST_DIR=/path/to/folder \
+cargo test --manifest-path src-tauri/Cargo.toml managed_server -- --ignored
 ```
 
-### Configuration
+## Live tests
 
-```typescript
-// vitest.config.ts
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-import path from 'path'
+Live tests are skipped by default. They contact a real embedding server or a real provider. The commands and environment variables are in [docs/testing.md](../testing.md#opt-in-live-tests).
 
-export default defineConfig({
-  plugins: [react()],
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-})
-```
+CAUTION: Never write a key in a test, a document or a commit. Read keys from the local `.env` file or from `CREDENTIALS.txt`. Both are in `.gitignore`.
 
-## Rust Testing
+## Rules
 
-### Test Structure
-
-```rust
-// src-tauri/src/lib.rs
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_preferences_default() {
-        let prefs = AppPreferences::default();
-        assert_eq!(prefs.theme, "system");
-    }
-
-    #[tokio::test]
-    async fn test_save_emergency_data() {
-        // Create a test app handle (requires more setup)
-        // This is a simplified example
-        let filename = "test-data".to_string();
-        let data = serde_json::json!({"test": "value"});
-
-        // Test the function logic
-        assert!(filename.len() > 0);
-        assert!(!filename.contains(".."));
-    }
-}
-```
-
-### Integration Tests
-
-```rust
-// src-tauri/tests/integration_test.rs
-use tauri::test::{mock_app, mock_context};
-
-#[tokio::test]
-async fn test_app_commands() {
-    let app = mock_app();
-    let context = mock_context();
-
-    // Test Tauri commands in isolation
-    // This requires more setup depending on your commands
-}
-```
-
-### Testing File Operations
-
-```rust
-#[cfg(test)]
-mod file_tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_filename_validation() {
-        // Test valid filenames
-        assert!(is_valid_filename("test-file"));
-        assert!(is_valid_filename("data123"));
-
-        // Test invalid filenames
-        assert!(!is_valid_filename("../etc/passwd"));
-        assert!(!is_valid_filename("test/file"));
-        assert!(!is_valid_filename("test\\file"));
-    }
-
-    #[tokio::test]
-    async fn test_file_operations() {
-        let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("test.json");
-
-        let test_data = serde_json::json!({"key": "value"});
-
-        // Test write operation
-        let content = serde_json::to_string_pretty(&test_data).unwrap();
-        fs::write(&file_path, content).unwrap();
-
-        // Test read operation
-        let read_content = fs::read_to_string(&file_path).unwrap();
-        let parsed_data: serde_json::Value = serde_json::from_str(&read_content).unwrap();
-
-        assert_eq!(parsed_data, test_data);
-    }
-}
-
-fn is_valid_filename(filename: &str) -> bool {
-    !filename.contains("..") && !filename.contains("/") && !filename.contains("\\")
-}
-```
-
-## Quality Gates
-
-### The `check:all` Command
-
-```json
-// package.json
-{
-  "scripts": {
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,css,md}\"",
-    "rust:fmt:check": "cd src-tauri && cargo fmt --check",
-    "rust:clippy": "cd src-tauri && cargo clippy -- -D warnings",
-    "rust:test": "cd src-tauri && cargo test",
-    "test:run": "vitest run",
-    "check:all": "npm run typecheck && npm run lint && npm run format:check && npm run test:run && npm run rust:fmt:check && npm run rust:clippy && npm run rust:test"
-  }
-}
-```
-
-### CI Integration
-
-```yaml
-# .github/workflows/test.yml
-name: Test
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-
-      - run: npm ci
-      - run: npm run check:all
-```
-
-## Test Organization
-
-### File Structure
-
-```
-src/
-├── components/
-│   ├── ui/
-│   │   ├── Button.tsx
-│   │   └── Button.test.tsx
-│   └── layout/
-│       ├── MainWindow.tsx
-│       └── MainWindow.test.tsx
-├── hooks/
-│   ├── useUIStore.ts
-│   └── useUIStore.test.ts
-├── services/
-│   ├── preferences.ts
-│   └── preferences.test.ts
-└── test/
-    ├── setup.ts          # Global test setup
-    ├── utils.ts          # Test utilities
-    └── mocks/            # Mock data
-        └── preferences.ts
-
-src-tauri/
-├── src/
-│   └── lib.rs            # Includes #[cfg(test)] modules
-└── tests/
-    └── integration_test.rs
-```
-
-### Test Utilities
-
-```typescript
-// src/test/utils.ts
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactNode } from 'react'
-
-export function createTestQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        cacheTime: 0,
-      },
-      mutations: {
-        retry: false,
-      },
-    },
-  })
-}
-
-export function TestProviders({ children }: { children: ReactNode }) {
-  const queryClient = createTestQueryClient()
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  )
-}
-```
-
-### Mock Data
-
-```typescript
-// src/test/mocks/preferences.ts
-export const mockPreferences = {
-  theme: 'dark',
-  // Add other mock preference fields
-}
-
-export const mockPreferencesDefault = {
-  theme: 'system',
-}
-```
-
-## Testing Patterns
-
-### Testing State Management
-
-```typescript
-// Test Zustand store
-test('store state updates correctly', () => {
-  const { result } = renderHook(() => useUIStore())
-
-  act(() => {
-    result.current.setLeftSidebarVisible(false)
-  })
-
-  expect(result.current.leftSidebarVisible).toBe(false)
-})
-```
-
-### Testing Commands
-
-```typescript
-// Test command execution
-test('command executes correctly', () => {
-  const mockContext = {
-    showToast: vi.fn(),
-    openPreferences: vi.fn(),
-  }
-
-  const command = navigationCommands.find(cmd => cmd.id === 'toggle-sidebar')
-  command?.execute(mockContext)
-
-  // Assert expected behavior
-})
-```
-
-### Testing Error Handling
-
-```typescript
-test('handles API errors gracefully', async () => {
-  mockInvoke.mockRejectedValue(new Error('Network error'))
-
-  const { result } = renderHook(() => usePreferences(), {
-    wrapper: TestProviders,
-  })
-
-  await waitFor(() => {
-    expect(result.current.isError).toBe(true)
-  })
-
-  expect(result.current.error).toBeInstanceOf(Error)
-})
-```
-
-## Best Practices
-
-### TypeScript Testing
-
-1. **Use Testing Library**: Prefer user-centric testing with @testing-library
-2. **Mock external dependencies**: Mock Tauri APIs and external services
-3. **Test user interactions**: Focus on how users interact with components
-4. **Avoid implementation details**: Test behavior, not internal implementation
-5. **Use proper cleanup**: Ensure tests don't affect each other
-
-### Rust Testing
-
-1. **Unit test pure functions**: Test business logic in isolation
-2. **Use temporary directories**: For file system tests
-3. **Test error conditions**: Ensure proper error handling
-4. **Mock external dependencies**: Use dependency injection for testability
-5. **Test async code properly**: Use `#[tokio::test]` for async tests
-
-### General Testing
-
-1. **Write tests first**: Consider TDD for complex features
-2. **Keep tests simple**: One assertion per test when possible
-3. **Use descriptive names**: Test names should explain the scenario
-4. **Test edge cases**: Include boundary conditions and error cases
-5. **Maintain test coverage**: Aim for high coverage of critical paths
-
-The testing system ensures code quality and reliability while making it easy to add tests for new features as the application grows.
+1. Add tests for each change to business logic: retrieval, completion, storage, editing commands.
+2. Keep tests deterministic. Use seeded layouts, fake timers and mocked servers.
+3. Test cancellation and stale results for every asynchronous request.
+4. Test the privacy boundary. An offline flow must make no network request.
+5. Keep the labels in tests, the app and the user guide the same.

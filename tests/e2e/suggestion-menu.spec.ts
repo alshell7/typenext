@@ -1,3 +1,4 @@
+import { startNote } from './support/notes'
 import { expect, test, type Page } from '@playwright/test'
 
 const workspaceKey = 'typenext.workspace.v1'
@@ -20,9 +21,7 @@ const suggestions = (page: Page) =>
   page.getByRole('listbox', { name: 'Suggestions', exact: true })
 
 async function createNote(page: Page, title: string) {
-  await page.getByRole('button', { name: 'Start a note', exact: true }).click()
-  await page.getByLabel('Title', { exact: true }).fill(title)
-  await page.getByRole('button', { name: 'Create note', exact: true }).click()
+  await startNote(page, title)
   await expect(editor(page)).toBeVisible()
   return editor(page)
 }
@@ -30,9 +29,7 @@ async function createNote(page: Page, title: string) {
 async function localPreferences(page: Page) {
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Make yourself at home' })
-  await dialog
-    .getByRole('tab', { name: 'Local suggestions', exact: true })
-    .click()
+  await dialog.getByRole('tab', { name: 'Suggestions', exact: true }).click()
   return dialog
 }
 
@@ -70,7 +67,7 @@ test('a blank note needs no references or model: preview choices, accept one, un
 }) => {
   const outgoing = watchOutsideRequests(page)
   const content = await createNote(page, 'A slower morning')
-  await content.press('Control+Space')
+  await content.press('ControlOrMeta+Space')
   const menu = suggestions(page)
   await expect(menu).toBeVisible()
   const count = await menu.getByRole('option').count()
@@ -91,9 +88,9 @@ test('a blank note needs no references or model: preview choices, accept one, un
   await expect(menu).toHaveCount(0)
   await expect(page.locator('.cm-ghost-suggestion')).toHaveCount(0)
   await expect.poll(async () => (await savedText(page))?.content).toBe(second)
-  await content.press('Control+z')
+  await content.press('ControlOrMeta+z')
   await expect.poll(async () => (await savedText(page))?.content).toBe('')
-  await content.press('Control+Space')
+  await content.press('ControlOrMeta+Space')
   await expect(menu).toBeVisible()
   await content.press('Escape')
   await expect(menu).toHaveCount(0)
@@ -115,7 +112,7 @@ test('pausing gives an inline starter; Ctrl+Space reveals choices and a pointer 
   await expect(page.locator('.suggestion-message')).toContainText(
     'Writing starter'
   )
-  await content.press('Control+Space')
+  await content.press('ControlOrMeta+Space')
   const menu = suggestions(page)
   await expect(menu).toBeVisible()
   await content.press('ArrowDown')
@@ -131,10 +128,10 @@ test('pausing gives an inline starter; Ctrl+Space reveals choices and a pointer 
   await dialog.getByRole('switch', { name: /^Suggest after a pause/ }).uncheck()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   await content.fill('The next step is')
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await page.waitForTimeout(1300)
   await expect(page.locator('.cm-ghost-suggestion')).toHaveCount(0)
-  await content.press('Control+Space')
+  await content.press('ControlOrMeta+Space')
   await expect(menu).toBeVisible()
   await content.press('x')
   await expect(menu).toHaveCount(0)
@@ -172,16 +169,22 @@ test('a local model can suggest without references and manual choices use only o
   const content = await createNote(page, 'A small observation')
   const dialog = await localPreferences(page)
   await dialog.getByRole('switch', { name: /^Suggest after a pause/ }).uncheck()
-  await dialog
+  await dialog.getByRole('tab', { name: 'Models', exact: true }).click()
+  const local = dialog.getByRole('region', {
+    name: 'On this device',
+    exact: true,
+  })
+  await local.getByRole('radio', { name: 'Local server', exact: true }).click()
+  await local
     .getByLabel('Server address', { exact: true })
     .fill('http://127.0.0.1:1337/v1')
-  await dialog
+  await local
     .getByLabel('Model', { exact: true })
     .fill('synthetic-local-writer')
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   await content.fill('A small detail')
-  await content.press('Control+End')
-  await content.press('Control+Space')
+  await content.press('ControlOrMeta+End')
+  await content.press('ControlOrMeta+Space')
   await expect(suggestions(page)).toBeVisible()
   expect(await previewText(page)).toBe(' comes into focus.')
   await expect(suggestions(page)).toContainText('Local model')
@@ -209,8 +212,8 @@ test('the dark suggestion menu fits a narrow viewport, follows reduced motion an
   await page.reload()
   const content = await createNote(page, 'Small observations')
   await content.fill('The next step is')
-  await content.press('Control+End')
-  await content.press('Control+Space')
+  await content.press('ControlOrMeta+End')
+  await content.press('ControlOrMeta+Space')
   const menu = suggestions(page)
   await expect(menu).toBeVisible()
   const panel = page.locator('.cm-suggestion-menu')

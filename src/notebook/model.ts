@@ -1,4 +1,10 @@
-import type { Note, NotebookSettings, Workspace } from '../types/notebook'
+import type {
+  EditorSettings,
+  Note,
+  NotebookSettings,
+  SemanticSettings,
+  Workspace,
+} from '../types/notebook'
 import {
   migrateContextLibrary,
   migrateContextPackages,
@@ -25,8 +31,40 @@ export const PROVIDERS = {
   openrouter: 'OpenRouter',
   openai: 'OpenAI',
   anthropic: 'Anthropic',
+  cloudflare: 'Cloudflare',
   custom: 'Custom endpoint',
 } as const
+
+export function defaultSemanticSettings(): SemanticSettings {
+  return {
+    enabled: false,
+    // Tests mock the native module, so read the Tauri marker directly.
+    runtime:
+      typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+        ? 'managed'
+        : 'server',
+    endpoint: 'http://127.0.0.1:8080',
+    quantization: 'UD-Q4_K_XL',
+    dimensions: 512,
+    media: false,
+  }
+}
+
+export function defaultEditorSettings(): EditorSettings {
+  return {
+    slashMenu: true,
+    slashTrigger: '/',
+    customCommands: [],
+    livePreview: true,
+    linkPreviews: 'all',
+    selectionToolbar: true,
+    typewriter: false,
+    focus: 'off',
+    zenFocus: true,
+    smartTypography: true,
+    dailyGoal: 0,
+  }
+}
 
 export function defaultSettings(): NotebookSettings {
   return {
@@ -52,6 +90,30 @@ export function defaultSettings(): NotebookSettings {
     localEngine: 'recall',
     externalProvider: 'openrouter',
     websiteImporter: 'direct',
+    semantic: defaultSemanticSettings(),
+    webFacts: { enabled: false, model: 'gpt-5.4-mini', withSuggestions: false },
+    zenLevel: 'chrome',
+    editor: defaultEditorSettings(),
+    git: {
+      enabled: false,
+      folder: '',
+      autoSync: true,
+      delaySeconds: 60,
+      pullMinutes: 10,
+      push: true,
+    },
+    dictation: {
+      engine: 'whistle',
+      silenceStopSeconds: 4,
+      livePhrases: true,
+      voiceCommands: true,
+    },
+    timing: {
+      adaptiveDelay: true,
+      minCharacters: 0,
+      indexDelay: 1200,
+      hoverDelay: 320,
+    },
     profiles: {
       local: {
         endpoint: 'http://localhost:1234/v1',
@@ -72,6 +134,12 @@ export function defaultSettings(): NotebookSettings {
         endpoint: 'https://api.anthropic.com/v1',
         model: '',
         protocol: 'chat',
+      },
+      cloudflare: {
+        endpoint: 'https://api.cloudflare.com/client/v4/accounts',
+        model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+        protocol: 'chat',
+        accountId: '',
       },
       custom: { endpoint: '', model: '', protocol: 'chat' },
     },
@@ -102,6 +170,12 @@ export function normalizeWorkspace(value: Workspace): Workspace {
       value.settings?.localEngine ??
       (value.settings?.profiles?.local?.model ? 'server' : 'recall'),
     profiles: { ...defaults.profiles, ...value.settings?.profiles },
+    semantic: { ...defaults.semantic, ...value.settings?.semantic },
+    webFacts: { ...defaults.webFacts, ...value.settings?.webFacts },
+    editor: { ...defaults.editor, ...value.settings?.editor },
+    git: { ...defaults.git, ...value.settings?.git },
+    dictation: { ...defaults.dictation, ...value.settings?.dictation },
+    timing: { ...defaults.timing, ...value.settings?.timing },
   }
   settings.fontSize = Math.min(
     32,
@@ -138,6 +212,8 @@ export function normalizeWorkspace(value: Workspace): Workspace {
   }
 }
 
+export const UNTITLED = 'Untitled'
+
 export function newNote(
   title: string,
   context = '',
@@ -145,9 +221,11 @@ export function newNote(
   filePath?: string
 ): Note {
   const now = Date.now()
+  const named = title.trim()
   return {
     id: crypto.randomUUID(),
-    title: title.trim() || 'Untitled',
+    title: named || UNTITLED,
+    ...(named ? {} : { autoTitle: true }),
     context: context.trim(),
     objective: '',
     content,
@@ -223,4 +301,28 @@ export function relativeDate(date: number): string {
     month: 'short',
     day: 'numeric',
   })
+}
+
+/** A short title from the first line of writing, without Markdown markers. */
+export function titleFromContent(content: string): string {
+  for (const raw of content.split('\n', 24)) {
+    const line = raw
+      .replace(
+        /^\s{0,3}(?:#{1,6}\s+|>\s*|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/u,
+        ''
+      )
+      .replace(
+        /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gu,
+        (_, target, alias) => alias ?? target
+      )
+      .replace(/\[([^\]]*)\]\([^)]*\)/gu, '$1')
+      .replace(/[*_`~]+/gu, '')
+      .trim()
+    if (!line || /^[|:\-\s]+$/u.test(line)) continue
+    if (line.length <= 80) return line
+    const cut = line.slice(0, 80)
+    const space = cut.lastIndexOf(' ')
+    return `${(space > 40 ? cut.slice(0, space) : cut).trimEnd()}…`
+  }
+  return ''
 }

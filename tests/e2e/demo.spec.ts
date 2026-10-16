@@ -1,3 +1,4 @@
+import { startNote } from './support/notes'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { unzipSync } from 'fflate'
@@ -91,16 +92,14 @@ async function openContexts(page: Page) {
   return dialog
 }
 async function createNote(page: Page, title: string) {
-  await page.getByRole('button', { name: 'Start a note', exact: true }).click()
-  const dialog = page.getByRole('dialog', {
-    name: 'Where would you like to begin?',
-  })
-  await dialog.getByLabel('Title', { exact: true }).fill(title)
-  await dialog.getByRole('button', { name: 'Create note', exact: true }).click()
+  await startNote(page, title)
   await expect(content(page)).toBeVisible()
   return content(page)
 }
-async function preferences(page: Page, pane: 'Writing' | 'Local suggestions') {
+async function preferences(
+  page: Page,
+  pane: 'Writing' | 'Suggestions' | 'Models'
+) {
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Make yourself at home' })
   await dialog.getByRole('tab', { name: pane, exact: true }).click()
@@ -147,7 +146,7 @@ test('the welcome sample is optional, installs its own contexts, recalls at the 
   expect(original).toMatch(/Guests arrive at Bramble House$/u)
   expect(await writingText(content(page))).toBe(original)
   // No click or cursor movement is necessary after opening a fresh sample.
-  await content(page).press('Control+Space')
+  await content(page).press('ControlOrMeta+Space')
   await expect(page.locator('.cm-ghost-text')).toHaveText(continuation)
   await expect(
     page.getByRole('listbox', { name: 'Suggestions' })
@@ -157,7 +156,7 @@ test('the welcome sample is optional, installs its own contexts, recalls at the 
   await expect
     .poll(async () => (await savedDemo(page))?.content)
     .toBe(original + continuation)
-  await content(page).press('Control+z')
+  await content(page).press('ControlOrMeta+z')
   await expect.poll(async () => (await savedDemo(page))?.content).toBe(original)
   await page.reload()
   await expect(
@@ -195,7 +194,7 @@ test('typing and pausing recalls each sample fact automatically without a model'
     ],
   ]) {
     await editor.fill(fragment.slice(0, -1))
-    await editor.press('Control+End')
+    await editor.press('ControlOrMeta+End')
     await editor.press(fragment.slice(-1))
     await expect(page.locator('.cm-ghost-text')).toHaveText(expected)
     await expect(
@@ -204,7 +203,7 @@ test('typing and pausing recalls each sample fact automatically without a model'
     expect(await writingText(editor)).toBe(fragment)
     await editor.press('Tab')
     expect(await writingText(editor)).toBe(fragment + expected)
-    await editor.press('Control+z')
+    await editor.press('ControlOrMeta+z')
     expect(await writingText(editor)).toBe(fragment)
   }
 })
@@ -214,22 +213,31 @@ test('existing writers can try and reopen the sample without changing their note
 }) => {
   const own = await createNote(page, 'My existing draft')
   await own.fill('A thought I wrote before opening any sample.')
-  let settings = await preferences(page, 'Local suggestions')
+  let settings = await preferences(page, 'Suggestions')
   await settings
     .getByRole('switch', { name: /^Suggest after a pause/ })
     .uncheck()
-  await settings
-    .getByLabel('Use on this device', { exact: true })
-    .selectOption('server')
-  await settings
+  await settings.getByRole('tab', { name: 'Models', exact: true }).click()
+  const local = settings.getByRole('region', {
+    name: 'On this device',
+    exact: true,
+  })
+  await local
+    .getByRole('radiogroup', { name: 'Use on this device', exact: true })
+    .getByRole('radio', { name: 'Local server', exact: true })
+    .click()
+  await local
     .getByLabel('Server address', { exact: true })
     .fill('http://127.0.0.1:1337/v1')
-  await settings
+  await local
     .getByLabel('Model', { exact: true })
     .fill('preserved-local-writer')
   await settings.getByRole('button', { name: 'Done', exact: true }).click()
   settings = await preferences(page, 'Writing')
-  await settings.getByLabel('Appearance', { exact: true }).selectOption('dark')
+  await settings
+    .getByRole('radiogroup', { name: 'Appearance', exact: true })
+    .getByRole('radio', { name: 'Dark', exact: true })
+    .click()
   await settings.getByRole('switch', { name: /^Autosave/ }).uncheck()
   await settings.getByRole('button', { name: 'Done', exact: true }).click()
   await page
@@ -267,7 +275,7 @@ test('existing writers can try and reopen the sample without changing their note
     .uncheck()
   await library.getByRole('button', { name: 'Done', exact: true }).click()
   await content(page).focus()
-  await content(page).press('Control+Home')
+  await content(page).press('ControlOrMeta+Home')
   await content(page).press('ArrowRight')
   await content(page).press('ArrowRight')
   await content(page).press('ArrowRight')
@@ -312,7 +320,7 @@ test('sample files download as a real local ZIP and the flow fits a narrow dark 
     await page.getByRole('button', { name: 'Dismiss notification' }).isVisible()
   )
     await page.getByRole('button', { name: 'Dismiss notification' }).click()
-  await content(page).press('Control+Space')
+  await content(page).press('ControlOrMeta+Space')
   await expect(page.locator('.cm-ghost-text')).toHaveText(continuation)
   if (capture) {
     await page

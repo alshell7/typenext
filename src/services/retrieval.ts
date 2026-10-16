@@ -39,7 +39,7 @@ interface ContextIndex {
 const indexes = new Map<string, ContextIndex>()
 let cachedCharacters = 0
 
-function tokenize(text: string): string[] {
+export function tokenize(text: string): string[] {
   const normalized = text.normalize('NFKC').toLowerCase()
   const words = normalized.match(/[\p{L}\p{N}][\p{L}\p{M}\p{N}]*/gu) ?? []
   const tokens: string[] = []
@@ -63,11 +63,16 @@ function tokenize(text: string): string[] {
   return tokens
 }
 
-function chunkText(text: string): string[] {
+/** Split text near paragraph, line, sentence or word boundaries. */
+export function chunkText(
+  text: string,
+  size = CHUNK_SIZE,
+  overlap = CHUNK_OVERLAP
+): string[] {
   const chunks: string[] = []
   let start = 0
   while (start < text.length) {
-    let end = Math.min(start + CHUNK_SIZE, text.length)
+    let end = Math.min(start + size, text.length)
     if (end < text.length) {
       const window = text.slice(start, end)
       const boundary = Math.max(
@@ -76,14 +81,14 @@ function chunkText(text: string): string[] {
         window.lastIndexOf('. '),
         window.lastIndexOf(' ')
       )
-      if (boundary >= CHUNK_SIZE * 0.6) end = start + boundary + 1
+      if (boundary >= size * 0.6) end = start + boundary + 1
       const lastCode = text.charCodeAt(end - 1)
       if (lastCode >= 0xd800 && lastCode <= 0xdbff) end--
     }
     const chunk = text.slice(start, end).trim()
     if (chunk) chunks.push(chunk)
     if (end >= text.length) break
-    start = Math.max(start + 1, end - CHUNK_OVERLAP)
+    start = Math.max(start + 1, end - overlap)
     const firstCode = text.charCodeAt(start)
     if (firstCode >= 0xdc00 && firstCode <= 0xdfff) start++
   }

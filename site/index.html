@@ -3,26 +3,73 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="TypeNext is an open-source, local-first Markdown notepad. Write in your own voice, with a suggestion when you need one." />
-    <meta name="theme-color" content="#f4f5f1" />
-    <title>TypeNext · A place for your words</title>
-    <link rel="icon" href="assets/Icon.png" type="image/png" />
-    <link rel="apple-touch-icon" href="assets/Icon.png" />
-    <link rel="stylesheet" href="style.css" />
+    <title>TypeNext · A local-first Markdown notepad</title>
+    <meta
+      name="description"
+      content="TypeNext is a free, open-source, local-first Markdown notepad for Windows and macOS. You write; a suggestion at the cursor helps you continue, and Tab accepts it. Your notes stay on your device."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f5f6f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#161718" media="(prefers-color-scheme: dark)" />
+    <link rel="canonical" href="https://alshell7.github.io/typenext/" />
+    <link rel="icon" type="image/png" href="/assets/Icon.png" />
+    <link rel="apple-touch-icon" href="/assets/Icon512.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TypeNext" />
+    <meta property="og:title" content="TypeNext · Your words. A little room to keep going." />
+    <meta
+      property="og:description"
+      content="A free, local-first Markdown notepad. You write; a suggestion at the cursor helps you continue. Notes stay on your device."
+    />
+    <meta property="og:url" content="https://alshell7.github.io/typenext/" />
+    <meta property="og:image" content="https://alshell7.github.io/typenext/assets/writing-light.png" />
+    <meta property="og:image:width" content="1440" />
+    <meta property="og:image:height" content="960" />
+    <meta property="og:image:alt" content="The TypeNext writing space with a Markdown note and a faint suggestion at the cursor." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TypeNext · Your words. A little room to keep going." />
+    <meta
+      name="twitter:description"
+      content="A free, local-first Markdown notepad. You write; a suggestion at the cursor helps you continue."
+    />
+    <meta name="twitter:image" content="https://alshell7.github.io/typenext/assets/writing-light.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TypeNext",
+        "applicationCategory": "ProductivityApplication",
+        "operatingSystem": "Windows, macOS",
+        "description": "A local-first Markdown notepad with suggestions at the cursor.",
+        "license": "https://opensource.org/license/mit",
+        "url": "https://alshell7.github.io/typenext/",
+        "downloadUrl": "https://github.com/alshell7/typenext/releases/latest",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+
+    <script>
+      // Apply a saved theme before the first paint. Without one, CSS follows the system.
+      try {
+        var saved = localStorage.getItem('typenext-site-theme')
+        if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved
+      } catch (e) {}
+    </script>
   </head>
   <body>
-    <header class="site-header"><a class="wordmark" href="#"><img src="assets/Icon.png" width="28" height="28" alt="" />TypeNext</a><nav aria-label="Main navigation"><a href="#writing">The writing space</a><a href="https://github.com/alshell7/typenext">GitHub <span aria-hidden="true">↗</span></a></nav></header>
-    <main>
-      <section class="introduction"><h1>Your thoughts.<br />A little room to keep going.</h1><p>A local-first Markdown notepad with a suggestion when you need one. You set the intention. You choose the words.</p><div class="intro-actions"><a class="primary-link" href="https://github.com/alshell7/typenext/releases/latest">Download TypeNext <span aria-hidden="true">↗</span></a><a href="https://github.com/alshell7/typenext">View source</a></div><p class="platforms">Windows & macOS downloads · Linux source builds · Open source</p></section>
-      <section class="product-view" id="writing" aria-label="The TypeNext writing space"><div class="image-controls"><span>A quiet page, with context close by.</span><div role="group" aria-label="Screenshot appearance"><button aria-pressed="true" data-theme="light">Light</button><button aria-pressed="false" data-theme="dark">Dark</button></div></div><img id="writing-screenshot" src="assets/writing-light.png" width="1440" height="960" alt="TypeNext with a Markdown note, a short inline continuation from a local reference, and an open context panel." fetchpriority="high" /><p class="image-caption">A real app screenshot with example writing. The faint continuation stays out of the note until accepted.</p></section>
-      <section class="writing-rhythm"><h2>Keep your attention on the sentence.</h2><div class="rhythm-grid"><div><h3>Begin with your intention.</h3><p>Name a note and add a little background. Your first line can set the objective.</p></div><div><h3>Bring the details that matter.</h3><p>Create named contexts from folders, files, websites and live notes. Attach several to a note, and reuse them in another. Shared reference text is stored once.</p></div><div><h3>Keep only what fits.</h3><p>Tab accepts a continuation. Ctrl or Command plus Right accepts a word. Escape lets the thought go.</p></div></div></section>
-      <section class="privacy-section"><div><h2>Your writing stays with you.</h2><p>Start with short offline writing prompts, or recall phrases from your writing and references. Attachments are optional. Ctrl or Command plus Space opens a few ways forward; a local model can provide richer continuations.</p><p>OpenRouter, OpenAI, Anthropic, and custom endpoints are optional. Choose an external model explicitly to keep its suggestions active. With a hosted chat model, Ctrl or Command plus Space requests up to three fresh choices in one call. Previewing a choice makes no further requests. You can return to local at any time.</p><p>Speak while you write with optional Whistle dictation, a one-time 17 MB download. Choose your microphone; Ctrl or Command plus Shift plus D starts and stops. A clip lasts up to 30 seconds and is transcribed on your device. Words enter the note when you stop, and automatic suggestions resume when enabled.</p></div><img src="assets/context-preview.png" width="1440" height="960" loading="lazy" alt="A reference preview in TypeNext showing locally cached source text." /></section>
-      <section class="build-section" id="run"><h2>Make it your own.</h2><p>TypeNext is licensed under MIT. The app uses Tauri, React, and a small Markdown editor. Download a small optional writing model inside TypeNext, or connect your own local server. Your words lead; suggestions wait for your acceptance.</p><p class="prerequisites">To build the desktop app, install Node.js 22.13 or later, stable Rust, and the <a href="https://v2.tauri.app/start/prerequisites/">Tauri prerequisites</a> for your system.</p><pre><code>git clone https://github.com/alshell7/typenext.git
-cd typenext
-npm ci
-npm run tauri:dev</code></pre><a href="https://github.com/alshell7/typenext#development">Build it locally <span aria-hidden="true">↗</span></a></section>
-    </main>
-    <footer><a class="wordmark" href="#"><img src="assets/Icon.png" width="22" height="22" alt="" />TypeNext</a><span>A place for your words.</span><a href="https://github.com/alshell7/typenext">Source & contributions</a></footer>
-    <script src="site.js"></script>
+    <div id="root"></div>
+    <noscript>
+      <main style="max-width: 640px; margin: 64px auto; padding: 0 16px; font-family: system-ui, sans-serif; line-height: 1.6">
+        <h1>TypeNext</h1>
+        <p>A free, local-first Markdown notepad for Windows and macOS. You write; a suggestion at the cursor helps you continue.</p>
+        <p>
+          <a href="https://github.com/alshell7/typenext/releases/latest">Download TypeNext</a> ·
+          <a href="https://github.com/alshell7/typenext">Source on GitHub</a>
+        </p>
+      </main>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

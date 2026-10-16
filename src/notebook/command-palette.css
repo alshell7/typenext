@@ -1,0 +1,289 @@
+/* The command palette: one field, grouped results, keyboard first.
+   Shares the row vocabulary of the engine chooser (model-chooser.css). */
+
+.command-palette {
+  position: fixed;
+  left: 50%;
+  top: clamp(16px, 18vh, 160px);
+  z-index: 51;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(calc(100dvh - clamp(16px, 18vh, 160px) - 24px), 520px);
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+  transform-origin: 50% 0;
+  animation: command-palette-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+.command-palette-overlay {
+  animation-duration: 120ms;
+}
+
+/* Search field: borderless, large, the dialog's own top edge. */
+.palette-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.palette-search > svg {
+  color: var(--muted);
+}
+.command-palette .palette-search > input {
+  flex: 1;
+  min-width: 0;
+  height: 50px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+.command-palette .palette-search > input:focus {
+  box-shadow: none;
+}
+.palette-mode {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  animation: palette-fade 120ms ease-out;
+}
+
+/* Results */
+.palette-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 8px 8px;
+  scrollbar-width: thin;
+  scroll-padding: 28px 0 6px;
+}
+.palette-group-label {
+  padding: 10px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.palette-option {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 36px;
+  padding: 5px 10px 5px calc(10px + var(--palette-indent, 0px));
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 90ms ease-out;
+}
+.palette-option[aria-selected='true'] {
+  background: var(--hover);
+}
+.palette-option[aria-disabled='true'] {
+  cursor: default;
+}
+.palette-option[aria-disabled='true'] .palette-option-text,
+.palette-option[aria-disabled='true'] .palette-option-icon {
+  opacity: 0.45;
+}
+.palette-option-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--secondary);
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+.palette-option[aria-selected='true'] .palette-option-icon {
+  background: var(--paper);
+  color: var(--ink);
+}
+.palette-option.is-active .palette-option-icon,
+.palette-option[data-kind='create'] .palette-option-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.palette-option-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.palette-option-title,
+.palette-option-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-option-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.palette-option[data-kind='action'] .palette-option-title,
+.palette-option[data-kind='heading'] .palette-option-title {
+  font-weight: 500;
+}
+.palette-option[data-kind='create'] .palette-option-title {
+  font-weight: 500;
+  color: var(--secondary);
+}
+.palette-create-title {
+  color: var(--ink);
+  font-weight: 600;
+}
+.palette-option-detail {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.palette-snippet {
+  color: var(--secondary);
+}
+.palette-option mark {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}
+.palette-snippet mark {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.palette-option-end {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.palette-shortcut,
+.palette-level {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.palette-shortcut {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+}
+.palette-option[aria-selected='true'] .palette-shortcut {
+  background: var(--paper);
+}
+.palette-empty {
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Hint row */
+.palette-hints {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px 7px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+}
+.palette-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.palette-sep {
+  margin: 0 4px;
+  opacity: 0.6;
+}
+.palette-prefixes {
+  display: inline-flex;
+  gap: 2px;
+}
+.palette-prefixes > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+.palette-prefixes > button:hover {
+  background: var(--hover);
+  color: var(--secondary);
+}
+.palette-prefixes > button.is-on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.palette-prefixes > button.is-on kbd {
+  color: inherit;
+}
+
+@keyframes command-palette-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+@keyframes palette-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .palette-keys {
+    display: none;
+  }
+  .palette-hints {
+    justify-content: flex-end;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .command-palette,
+  .command-palette-overlay,
+  .palette-mode {
+    animation: none;
+  }
+  .palette-option,
+  .palette-option-icon,
+  .palette-prefixes > button {
+    transition: none;
+  }
+}

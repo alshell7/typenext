@@ -1,30 +1,43 @@
-import { copyFileSync, cpSync, mkdirSync, writeFileSync } from 'node:fs'
+// Builds the project website (site/, a Vite + React app) into site-dist/.
+//
+//   node scripts/build-site.mjs         install site dependencies and build
+//   node scripts/build-site.mjs --dev   start the site dev server
+//
+// The site has its own package.json and lockfile, so the app's dependencies
+// are not needed. Screenshots come from docs/screenshots (see
+// site/scripts/sync-assets.mjs).
+import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { gzipSync } from 'node:zlib'
 
-mkdirSync('site-dist/assets', { recursive: true })
-for (const file of ['index.html', 'style.css', 'site.js'])
-  copyFileSync(`site/${file}`, `site-dist/${file}`)
-for (const file of [
-  'writing-light.png',
-  'writing-dark.png',
-  'context-preview.png',
-])
-  copyFileSync(`docs/screenshots/${file}`, `site-dist/assets/${file}`)
-copyFileSync('public/Icon.png', 'site-dist/assets/Icon.png')
-copyFileSync(
-  'public/notices/Lucide-LICENSE.txt',
-  'site-dist/assets/Lucide-LICENSE.txt'
-)
-copyFileSync(
-  'node_modules/@fontsource/source-sans-pro/files/source-sans-pro-latin-400-normal.woff2',
-  'site-dist/assets/source-sans-pro.woff2'
-)
-copyFileSync(
-  'node_modules/@fontsource/source-sans-pro/files/source-sans-pro-latin-600-normal.woff2',
-  'site-dist/assets/source-sans-pro-semibold.woff2'
-)
-cpSync(
-  'node_modules/@fontsource/source-sans-pro/LICENSE',
-  'site-dist/assets/Source-Sans-Pro-LICENSE.txt'
-)
-writeFileSync('site-dist/.nojekyll', '')
-console.log('Built static GitHub Pages site in site-dist.')
+const dev = process.argv.includes('--dev')
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+
+const run = (args) => {
+  const result = spawnSync(npm, ['--prefix', 'site', ...args], {
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  })
+  if (result.status !== 0) process.exit(result.status ?? 1)
+}
+
+if (dev) {
+  if (!existsSync('site/node_modules')) run(['ci', '--no-audit', '--no-fund'])
+  run(['run', 'dev'])
+} else {
+  run(['ci', '--no-audit', '--no-fund'])
+  run(['run', 'build'])
+  writeFileSync('site-dist/.nojekyll', '')
+
+  let total = 0
+  let gzip = 0
+  for (const name of readdirSync('site-dist/static')) {
+    if (!/\.(js|css)$/.test(name)) continue
+    const file = join('site-dist/static', name)
+    total += statSync(file).size
+    gzip += gzipSync(readFileSync(file)).length
+  }
+  const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`
+  console.log(`Built the project site in site-dist (JS and CSS: ${kb(total)}, ${kb(gzip)} gzip).`)
+}

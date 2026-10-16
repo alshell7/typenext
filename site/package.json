@@ -1,0 +1,35 @@
+{
+  "name": "typenext-site",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "The TypeNext project website (GitHub Pages).",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "assets": "node scripts/sync-assets.mjs",
+    "predev": "npm run assets",
+    "dev": "vite",
+    "prebuild": "npm run assets",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "reactbits": "node scripts/add-reactbits.mjs"
+  },
+  "dependencies": {
+    "@fontsource/merriweather": "5.2.11",
+    "@fontsource/source-sans-pro": "5.2.5",
+    "motion": "12.43.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "5.2.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  }
+}
