@@ -97,6 +97,33 @@ describe('dictation at the writing position', () => {
     })
     expect(view.state.doc.toString()).toBe('Hello brave tomorrow.')
   })
+  it('suggests again after a dictation of live phrases ends with words', async () => {
+    const { view, ref } = mount()
+    let capture!: ReturnType<MarkdownEditorHandle['captureDictation']>
+    act(() => {
+      capture = ref.current!.captureDictation()
+    })
+    act(() => {
+      capture.insert!([{ lead: [], words: 'world', trail: [] }])
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+    expect(suggest).not.toHaveBeenCalled()
+    act(() => capture.cancel(true))
+    expect(view.state.field(dictationAnchorField)).toBeNull()
+    await act(async () => vi.advanceTimersByTimeAsync(500))
+    expect(suggest).toHaveBeenCalledTimes(1)
+  })
+  it('stays quiet when a dictation is cancelled', async () => {
+    const { view, ref } = mount()
+    let capture!: ReturnType<MarkdownEditorHandle['captureDictation']>
+    act(() => {
+      capture = ref.current!.captureDictation()
+    })
+    act(() => capture.cancel())
+    expect(view.state.field(dictationAnchorField)).toBeNull()
+    await act(async () => vi.advanceTimersByTimeAsync(1500))
+    expect(suggest).not.toHaveBeenCalled()
+  })
   it('keeps the captured position when the writer moves the caret', () => {
     const { view, ref } = mount()
     let capture!: ReturnType<MarkdownEditorHandle['captureDictation']>

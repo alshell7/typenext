@@ -101,6 +101,7 @@ import {
 import {
   dictationAnchorField,
   dictationAnchorDecoration,
+  dictationFinished,
   startDictationCapture,
   type DictationCapture,
 } from './dictation-anchor'
@@ -1181,6 +1182,14 @@ export const MarkdownEditor = forwardRef<
           if (update.docChanged && historyNeedsTrimming(update.state))
             boundHistory()
         }
+        // Phrases enter while the dictation position is held, which pauses
+        // suggestions. When a dictation with words ends, suggest again.
+        if (
+          update.transactions.some(transaction =>
+            transaction.annotation(dictationFinished)
+          )
+        )
+          scheduleAutomatic()
         const previous = update.startState.field(inlineSuggestionField)
         const next = update.state.field(inlineSuggestionField)
         const previousMenu = update.startState.field(suggestionMenuField)
