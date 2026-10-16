@@ -1,108 +1,94 @@
+/* Dictation: a quiet chip at the writing position, and a strip below the
+   page only when something needs the writer (setup, an error, recovery). */
 .inline-dictation {
   position: relative;
   flex-shrink: 0;
   border-top: 1px solid var(--line);
   background: var(--paper);
-  padding: 9px 22px;
+  padding: 9px 52px 9px 22px;
   font-family: 'Source Sans Pro', 'Segoe UI', sans-serif;
   z-index: 15;
 }
 .dictation-strip {
   display: flex;
   align-items: center;
-  gap: 9px;
+  flex-wrap: wrap;
+  gap: 10px;
   max-width: 850px;
   margin: auto;
   min-height: 36px;
 }
-.dictation-feedback {
+.dictation-close.dictation-close {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+}
+
+/* Setup: one clear next step. */
+.dictation-setup {
+  display: grid;
+  gap: 8px;
+  max-width: 850px;
+  margin: auto;
+  padding-block: 2px;
+}
+.dictation-setup-text {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 9px;
+  margin: 0;
   color: var(--secondary);
-  font-size: 12px;
-  flex: 1;
-  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
 }
-.dictation-feedback > span:not(.dictation-meter) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.is-active .dictation-feedback {
+.dictation-setup-text svg {
+  flex-shrink: 0;
+  margin-top: 2px;
   color: var(--accent);
 }
-.dictation-strip .button {
+.dictation-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-left: 24px;
+}
+.dictation-setup-actions .button {
   font-size: 12px;
-  padding: 7px 11px;
+  padding: 7px 12px;
   min-height: 32px;
 }
-.dictation-elapsed {
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
-.dictation-input-button {
-  display: flex;
+.dictation-setup-progress {
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px;
-  color: var(--secondary);
+  gap: 6px;
+  color: var(--muted);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
-.dictation-input-panel {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 16px;
-  width: min(430px, calc(100vw - 32px));
-  max-height: min(560px, 65dvh);
-  overflow: auto;
-  padding: 20px;
-  border-radius: 12px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  box-shadow: 0 12px 44px rgb(0 0 0 / 0.2);
+.dictation-setup-hint {
+  margin: 0;
+  padding-left: 24px;
+  color: var(--muted);
+  font-size: 11px;
 }
-.dictation-input-fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 12px;
-}
-.dictation-input-fields label,
-.dictation-recovery label {
-  display: grid;
-  gap: 7px;
-  color: var(--secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-.dictation-input-fields select {
-  width: 100%;
-  min-width: 0;
-  font-weight: 400;
-  padding: 8px;
-  font-size: 12px;
-}
-.dictation-input-panel .field-help {
-  line-height: 1.7;
-}
-.dictation-input-panel .whistle-model {
-  border: 0;
-  padding-bottom: 0;
-}
-.dictation-inline-error,
-.dictation-inline-hint {
+
+.dictation-inline-error {
   margin: 6px auto 0;
   max-width: 850px;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--secondary);
-}
-.dictation-inline-error {
   color: var(--error);
 }
 .dictation-recovery {
   max-width: 850px;
-  margin: 12px auto 0;
+  margin: 10px auto 0;
+}
+.dictation-recovery label {
+  display: block;
+  color: var(--secondary);
+  font-size: 12px;
+  font-weight: 600;
 }
 .dictation-recovery textarea {
   width: 100%;
@@ -110,29 +96,20 @@
   max-height: 140px;
   resize: vertical;
 }
-.dictation-meter {
+.dictation-recovery-actions {
   display: flex;
-  align-items: center;
-  height: 18px;
-  gap: 2px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
-.dictation-meter i {
-  display: block;
-  width: 2px;
-  height: 14px;
-  border-radius: 2px;
-  background: currentColor;
-  transform: scaleY(calc(0.18 + var(--voice-level) * 0.82));
-  transition: transform 160ms ease-out;
-}
-.dictation-meter i:nth-child(2n) {
-  height: 9px;
-}
-.dictation-meter i:nth-child(3) {
-  height: 18px;
-}
+
+/* The position marker in the editor. Without the React chip it shows a
+   plain word, as before. */
 .cm-dictation-anchor {
+  display: inline;
+  user-select: none;
+  white-space: nowrap;
+}
+.cm-dictation-fallback {
   display: inline-block;
   margin-inline: 7px;
   padding-inline: 5px;
@@ -143,29 +120,183 @@
     'Segoe UI',
     sans-serif;
   vertical-align: baseline;
+}
+.cm-dictation-anchor[data-live='true'] .cm-dictation-fallback {
+  display: none;
+}
+.cm-dictation-host {
+  white-space: normal;
+}
+
+/* The phrase in progress: provisional like a suggestion, marked as speech. */
+.dictation-preview {
+  color: var(--ghost);
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  text-underline-offset: 0.28em;
+  white-space: pre-wrap;
+}
+.dictation-preview.is-strip {
+  flex-basis: 100%;
+  font-family: var(--writing-font, Merriweather, Georgia, serif);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.dictation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 24px;
+  padding: 0 3px 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--secondary);
+  font:
+    500 11.5px/1 'Source Sans Pro',
+    'Segoe UI',
+    sans-serif;
+  letter-spacing: 0;
   white-space: nowrap;
+  vertical-align: 0.12em;
   user-select: none;
+  cursor: default;
+}
+.dictation-chip.is-inline {
+  margin-inline-start: 8px;
+}
+.dictation-chip.is-strip {
+  height: 30px;
+  font-size: 12px;
+}
+.dictation-chip[data-tone='listening'] .dictation-meter {
+  color: var(--accent);
+}
+.dictation-chip[data-tone='waiting'] .dictation-meter {
+  color: var(--muted);
+}
+.dictation-chip[data-tone='warn'] .dictation-chip-label {
+  color: var(--error);
+}
+.dictation-chip-spinner {
+  color: var(--secondary);
+}
+.dictation-chip-label {
+  color: var(--ink);
+}
+.dictation-chip-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.dictation-chip-time.is-near-limit {
+  color: var(--error);
+}
+.dictation-chip-engine {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10.5px;
+}
+.dictation-chip-hint {
+  color: var(--muted);
+  font-weight: 400;
+}
+.dictation-chip-hint kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--secondary);
+  font: inherit;
+  font-size: 10.5px;
+}
+.dictation-chip-button {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+}
+.dictation-chip-button:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.dictation-chip.is-strip .dictation-chip-button {
+  width: 24px;
+  height: 24px;
+}
+.dictation-chip-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.dictation-meter {
+  display: inline-flex;
+  align-items: center;
+  height: 14px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.dictation-meter i {
+  display: block;
+  width: 2px;
+  height: 12px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: scaleY(calc(0.18 + var(--voice-level, 0) * 0.82));
+  transition: transform 140ms ease-out;
+}
+.dictation-meter i:nth-child(2n) {
+  height: 8px;
+}
+.dictation-meter i:nth-child(3) {
+  height: 14px;
+}
+
+/* Words that just arrived, briefly. */
+.cm-dictation-fresh {
+  border-radius: 2px;
+  animation: dictation-fresh 1.6s ease-out forwards;
+}
+@keyframes dictation-fresh {
+  from {
+    background-color: var(--accent-soft);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@media (max-width: 760px) {
+  .dictation-chip-hint {
+    display: none;
+  }
 }
 @media (max-width: 600px) {
   .inline-dictation {
-    padding: 8px 12px;
+    padding: 8px 46px 8px 12px;
   }
-  .dictation-strip {
-    gap: 4px;
+  .dictation-setup-actions,
+  .dictation-setup-hint {
+    padding-left: 0;
   }
-  .dictation-input-button span {
-    display: none;
-  }
-  .dictation-feedback {
-    gap: 6px;
-    font-size: 11px;
-  }
-  .dictation-elapsed {
+  .dictation-chip-time {
     display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .dictation-meter i {
     transition: none;
+  }
+  .cm-dictation-fresh {
+    animation: none;
+    background-color: var(--accent-soft);
   }
 }

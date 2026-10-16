@@ -14,6 +14,11 @@ import {
 import { getSecret } from '../../services/native'
 import type { NotebookSettings } from '../../types/notebook'
 import { BuiltinModelPanel } from '../BuiltinModelPanel'
+import { KeyField } from './KeyField'
+import {
+  HUGGING_FACE_SECRET,
+  HUGGING_FACE_TOKEN_URL,
+} from '../../services/huggingface'
 import { PROVIDERS } from '../model'
 import { Callout, Pill, Section, TileGroup, type TileOption } from './controls'
 import {
@@ -160,6 +165,7 @@ const PROVIDER_BLURBS: Record<ExternalProvider, string> = {
   openrouter: 'Many models with one key, including free ones.',
   openai: 'GPT models with your OpenAI key.',
   anthropic: 'Claude models with your Anthropic key.',
+  cloudflare: 'Workers AI models with a Cloudflare token.',
   custom: 'Any OpenAI-compatible endpoint.',
 }
 
@@ -311,6 +317,24 @@ export function ModelsPane(
             onDeactivate={() => apply(activateLocal(latest()))}
           />
         </div>
+      </Section>
+      <Section
+        id="models-downloads"
+        title="Model downloads"
+        description="Models download from Hugging Face. Most need no account. Add a free read token if Hugging Face asks for one or limits downloads."
+      >
+        <KeyField
+          id={HUGGING_FACE_SECRET}
+          label="Hugging Face token (optional)"
+          placeholder="hf_…"
+        />
+        <p className="pref-help">
+          TypeNext sends this token only to huggingface.co, and only to download
+          models.{' '}
+          <a href={HUGGING_FACE_TOKEN_URL} target="_blank" rel="noreferrer">
+            Create a read token
+          </a>
+        </p>
       </Section>
     </>
   )

@@ -28,7 +28,11 @@ function mount(text = 'Hello tomorrow.') {
     <MarkdownEditor
       ref={ref}
       note={note}
-      settings={{ ...defaultSettings(), suggestionDelay: 500 }}
+      settings={{
+        ...defaultSettings(),
+        suggestionDelay: 500,
+        timing: { ...defaultSettings().timing, adaptiveDelay: false },
+      }}
       onChange={onChange}
       onStatus={() => {}}
       requestToken={0}

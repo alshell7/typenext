@@ -357,12 +357,52 @@ function selectionTouchesTables(transaction: Transaction, set: DecorationSet) {
   return touched
 }
 
+/** Whether an edit can create, change or remove a table. */
+function editTouchesTables(
+  transaction: Transaction,
+  decorations: DecorationSet
+) {
+  let touched = false
+  transaction.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+    if (touched) return
+    if (inserted.toString().includes('|')) touched = true
+    else if (transaction.startState.sliceDoc(fromA, toA).includes('|'))
+      touched = true
+    else {
+      const doc = transaction.state.doc
+      const first = doc.lineAt(fromB)
+      const last = doc.lineAt(toB)
+      // A table can begin or end on a line next to the edit.
+      const from =
+        first.number > 1 ? doc.line(first.number - 1).from : first.from
+      const to =
+        last.number < doc.lines ? doc.line(last.number + 1).to : last.to
+      if (doc.sliceString(from, to).includes('|')) touched = true
+    }
+    decorations.between(fromA, toA, () => {
+      touched = true
+      return false
+    })
+  })
+  return touched
+}
+
 const tablePreview = StateField.define<DecorationSet>({
   create: tableDecorations,
   update(decorations, transaction) {
-    const treeChanged =
-      syntaxTree(transaction.startState) !== syntaxTree(transaction.state)
-    if (transaction.docChanged || treeChanged)
+    if (transaction.docChanged) {
+      // Typing in prose only maps rendered tables; a full scan of a long
+      // note on every key would cost more than the edit itself.
+      if (editTouchesTables(transaction, decorations))
+        return tableDecorations(transaction.state)
+      const mapped = decorations.map(transaction.changes)
+      return transaction.selection &&
+        selectionTouchesTables(transaction, mapped)
+        ? tableDecorations(transaction.state)
+        : mapped
+    }
+    // Background parsing finished more of the document.
+    if (syntaxTree(transaction.startState) !== syntaxTree(transaction.state))
       return tableDecorations(transaction.state)
     if (transaction.selection) {
       const mapped = decorations.map(transaction.changes)

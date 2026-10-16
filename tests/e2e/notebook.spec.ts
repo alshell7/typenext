@@ -1120,7 +1120,7 @@ test('a remote address placed in local settings is blocked for both automatic an
   })
   const content = await createNote(page, 'Keep local private')
   const dialog = await preferences(page, 'Suggestions')
-  await dialog.getByLabel('Pause before suggesting').selectOption('650')
+  await dialog.getByLabel('Pause before suggesting').fill('650')
   const local = await selectLocalServer(dialog)
   await local
     .getByLabel('Server address', { exact: true })
@@ -1730,9 +1730,7 @@ test('focus mode hides surrounding panels and its keyboard shortcut restores the
   await page
     .getByRole('button', { name: 'Choose zen mode level', exact: true })
     .click()
-  await page
-    .getByRole('menuitemradio', { name: /Hide side panels/ })
-    .click()
+  await page.getByRole('menuitemradio', { name: /Hide side panels/ }).click()
   await expect(
     page.getByRole('complementary', { name: 'Notebook', exact: true })
   ).not.toBeVisible()

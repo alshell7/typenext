@@ -28,6 +28,8 @@ export interface LinkHost {
   notes(): Note[]
   noteId(): string
   previews(): 'off' | 'notes' | 'all'
+  /** Milliseconds before a hover card opens. Read when the editor opens. */
+  hoverDelay?(): number
   openNote(id: string): void
   createNote(title: string): void
   openUrl(url: string): void
@@ -286,7 +288,7 @@ function linkHover(host: LinkHost) {
         }),
       }
     },
-    { hoverTime: 320, hideOnChange: true }
+    { hoverTime: Math.max(0, host.hoverDelay?.() ?? 320), hideOnChange: true }
   )
 }
 

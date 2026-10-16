@@ -1,6 +1,9 @@
 mod credentials;
 mod embedding;
+mod git_sync;
 mod http;
+mod runtime_common;
+mod speech;
 mod workspace;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -116,6 +119,7 @@ pub fn run() {
         )
         .manage(workspace::WorkspaceState::default())
         .manage(credentials::CredentialState::default())
+        .manage(git_sync::GitSyncState::default())
         .manage(ExitState::default())
         .setup(|app| {
             app.manage(http::HttpState::new()?);
@@ -125,6 +129,15 @@ pub fn run() {
                 move |status| {
                     if let Err(error) = handle.emit(embedding::STATUS_EVENT, status) {
                         log::warn!("Could not report the embedding runtime status: {error}");
+                    }
+                },
+            ));
+            let handle = app.handle().clone();
+            app.manage(speech::SpeechState::new(
+                app.path().app_data_dir()?.join("speech"),
+                move |status| {
+                    if let Err(error) = handle.emit(speech::STATUS_EVENT, status) {
+                        log::warn!("Could not report the speech runtime status: {error}");
                     }
                 },
             ));
@@ -160,6 +173,17 @@ pub fn run() {
             embedding::embedding_runtime_start,
             embedding::embedding_runtime_stop,
             embedding::embedding_runtime_remove,
+            speech::speech_runtime_status,
+            speech::speech_runtime_install,
+            speech::speech_runtime_cancel,
+            speech::speech_runtime_start,
+            speech::speech_runtime_stop,
+            speech::speech_runtime_remove,
+            speech::speech_runtime_transcribe,
+            speech::speech_runtime_cancel_transcribe,
+            git_sync::git_sync_check,
+            git_sync::git_sync_init,
+            git_sync::git_sync_run,
             exit_app,
         ])
         .build(tauri::generate_context!())
@@ -178,10 +202,13 @@ pub fn run() {
                 api.prevent_exit();
                 let _ = app.emit("native-close-requested", ());
             }
-            // Managed state is not dropped on exit, so stop llama-server here.
+            // Managed state is not dropped on exit, so stop the servers here.
             tauri::RunEvent::Exit => {
                 if let Some(embedding) = app.try_state::<embedding::EmbeddingState>() {
                     embedding.shutdown();
+                }
+                if let Some(speech) = app.try_state::<speech::SpeechState>() {
+                    speech.shutdown();
                 }
             }
             _ => {}

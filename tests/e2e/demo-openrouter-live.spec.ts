@@ -245,7 +245,7 @@ test('the shipped demo grounds one real free automatic OpenRouter suggestion aft
     await dialog
       .getByRole('switch', { name: /^Suggest after a pause/ })
       .uncheck()
-    await dialog.getByLabel('Pause before suggesting').selectOption('1800')
+    await dialog.getByLabel('Pause before suggesting').fill('1800')
     await dialog.getByLabel('Suggestion length').selectOption('short')
     await dialog.getByRole('button', { name: 'Done', exact: true }).click()
     // Re-type only the unfinished sample line; retain its public introduction.

@@ -31,6 +31,7 @@ export const PROVIDERS = {
   openrouter: 'OpenRouter',
   openai: 'OpenAI',
   anthropic: 'Anthropic',
+  cloudflare: 'Cloudflare',
   custom: 'Custom endpoint',
 } as const
 
@@ -56,6 +57,12 @@ export function defaultEditorSettings(): EditorSettings {
     customCommands: [],
     livePreview: true,
     linkPreviews: 'all',
+    selectionToolbar: true,
+    typewriter: false,
+    focus: 'off',
+    zenFocus: true,
+    smartTypography: true,
+    dailyGoal: 0,
   }
 }
 
@@ -87,6 +94,26 @@ export function defaultSettings(): NotebookSettings {
     webFacts: { enabled: false, model: 'gpt-5.4-mini', withSuggestions: false },
     zenLevel: 'chrome',
     editor: defaultEditorSettings(),
+    git: {
+      enabled: false,
+      folder: '',
+      autoSync: true,
+      delaySeconds: 60,
+      pullMinutes: 10,
+      push: true,
+    },
+    dictation: {
+      engine: 'whistle',
+      silenceStopSeconds: 4,
+      livePhrases: true,
+      voiceCommands: true,
+    },
+    timing: {
+      adaptiveDelay: true,
+      minCharacters: 0,
+      indexDelay: 1200,
+      hoverDelay: 320,
+    },
     profiles: {
       local: {
         endpoint: 'http://localhost:1234/v1',
@@ -107,6 +134,12 @@ export function defaultSettings(): NotebookSettings {
         endpoint: 'https://api.anthropic.com/v1',
         model: '',
         protocol: 'chat',
+      },
+      cloudflare: {
+        endpoint: 'https://api.cloudflare.com/client/v4/accounts',
+        model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+        protocol: 'chat',
+        accountId: '',
       },
       custom: { endpoint: '', model: '', protocol: 'chat' },
     },
@@ -140,6 +173,9 @@ export function normalizeWorkspace(value: Workspace): Workspace {
     semantic: { ...defaults.semantic, ...value.settings?.semantic },
     webFacts: { ...defaults.webFacts, ...value.settings?.webFacts },
     editor: { ...defaults.editor, ...value.settings?.editor },
+    git: { ...defaults.git, ...value.settings?.git },
+    dictation: { ...defaults.dictation, ...value.settings?.dictation },
+    timing: { ...defaults.timing, ...value.settings?.timing },
   }
   settings.fontSize = Math.min(
     32,

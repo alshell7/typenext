@@ -341,8 +341,8 @@ describe('web facts preferences', () => {
     render(<Harness pane="web" />)
     await user.click(screen.getByRole('switch', { name: /^Web facts/ }))
     expect(latest.webFacts.enabled).toBe(true)
-    await user.click(screen.getByRole('button', { name: 'gpt-5.4' }))
-    expect(latest.webFacts.model).toBe('gpt-5.4')
+    await user.click(screen.getByRole('button', { name: 'gpt-6-luna' }))
+    expect(latest.webFacts.model).toBe('gpt-6-luna')
     const model = screen.getByLabelText('Search model')
     await user.clear(model)
     await user.type(model, 'gpt-custom')
@@ -382,7 +382,9 @@ describe('model preferences', () => {
       name: 'Search models',
     })
     await user.type(search, 'mini')
-    expect(within(external).getAllByRole('option')).toHaveLength(1)
+    expect(
+      within(within(external).getByRole('listbox')).getAllByRole('option')
+    ).toHaveLength(1)
     await user.keyboard('{Enter}')
     expect(latest.profiles.openai.model).toBe('gpt-4.1-mini')
 
@@ -416,5 +418,45 @@ describe('model preferences', () => {
     await user.click(await within(local).findByRole('option', { name: /qwen/ }))
     expect(latest.profiles.local.model).toBe('qwen-writer')
     expect(latest.profiles.local.endpoint).toBe('http://localhost:1234/v1')
+  })
+})
+
+describe('shipped model catalog', () => {
+  it('offers recommended Claude models in a dropdown without loading', async () => {
+    const user = userEvent.setup()
+    render(<Harness pane="models" />)
+    const external = screen.getByRole('region', { name: 'External providers' })
+    await user.click(within(external).getByRole('radio', { name: 'Anthropic' }))
+    const select = within(external).getByLabelText('Choose a model')
+    expect(
+      within(select).getByRole('option', { name: /Claude Haiku 5\.5/ })
+    ).toBeInTheDocument()
+    await user.selectOptions(select, 'claude-sonnet-5-5')
+    expect(latest.profiles.anthropic.model).toBe('claude-sonnet-5-5')
+  })
+
+  it('asks for a Cloudflare account ID and validates it', async () => {
+    const user = userEvent.setup()
+    render(<Harness pane="models" />)
+    const external = screen.getByRole('region', { name: 'External providers' })
+    await user.click(
+      within(external).getByRole('radio', { name: 'Cloudflare' })
+    )
+    const account = within(external).getByLabelText('Account ID')
+    await user.type(account, 'not-an-id')
+    expect(
+      within(external).getByText('An account ID has 32 letters and numbers.')
+    ).toBeInTheDocument()
+    await user.clear(account)
+    await user.type(account, '0123456789abcdef0123456789abcdef')
+    expect(latest.profiles.cloudflare.accountId).toBe(
+      '0123456789abcdef0123456789abcdef'
+    )
+    expect(
+      within(within(external).getByLabelText('Choose a model')).getByRole(
+        'option',
+        { name: /Llama 3\.3 70B/ }
+      )
+    ).toBeInTheDocument()
   })
 })

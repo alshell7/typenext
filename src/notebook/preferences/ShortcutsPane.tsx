@@ -10,7 +10,7 @@ function groups(trigger: string) {
         ['Open a file', 'Ctrl / ⌘ O'],
         ['Save', 'Ctrl / ⌘ S'],
         ['Save as', 'Ctrl / ⌘ Shift S'],
-        ['Search notes', 'Ctrl / ⌘ P'],
+        ['Command palette', 'Ctrl / ⌘ P'],
         ['Show or hide notes', 'Ctrl / ⌘ B'],
         ['Preferences', 'Ctrl / ⌘ ,'],
       ],

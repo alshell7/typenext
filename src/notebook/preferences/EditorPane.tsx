@@ -362,6 +362,78 @@ export function EditorPane({ settings, update, latest }: PaneProps) {
           </Row>
         </Group>
       </Section>
+      <Section
+        title="Writing flow"
+        description="Small aids that stay out of the way until you need them."
+      >
+        <Group>
+          <SwitchRow
+            label="Format bar on selection"
+            description="Bold, italic, link, note link, quote and web facts above selected text."
+            checked={editor.selectionToolbar}
+            onChange={selectionToolbar => patch({ selectionToolbar })}
+          />
+          <SwitchRow
+            label="Typewriter scrolling"
+            description="Keep the line you write near the middle of the window."
+            checked={editor.typewriter}
+            onChange={typewriter => patch({ typewriter })}
+          />
+          <Row
+            label="Focus"
+            description="Dim the text around the paragraph or the sentence you write."
+          >
+            <Segmented
+              label="Focus"
+              value={editor.focus}
+              onChange={focus => patch({ focus })}
+              options={[
+                { value: 'off', label: 'Off' },
+                { value: 'paragraph', label: 'Paragraph' },
+                { value: 'sentence', label: 'Sentence' },
+              ]}
+            />
+          </Row>
+          <SwitchRow
+            label="Focus in full zen"
+            description="Full zen turns on typewriter scrolling and paragraph focus."
+            checked={editor.zenFocus}
+            onChange={zenFocus => patch({ zenFocus })}
+          />
+          <SwitchRow
+            label="Smart typography"
+            description="Type -- for an em dash (—), ... for an ellipsis (…), -> and <- for arrows. Code is not changed."
+            checked={editor.smartTypography}
+            onChange={smartTypography => patch({ smartTypography })}
+          />
+          <Row
+            label="Daily word goal"
+            htmlFor="daily-goal"
+            description="A small ring in the status bar fills as you write. 0 hides it."
+          >
+            <input
+              id="daily-goal"
+              type="number"
+              min={0}
+              max={100000}
+              step={50}
+              value={editor.dailyGoal}
+              onChange={event =>
+                patch({
+                  dailyGoal: Math.min(
+                    100_000,
+                    Math.max(0, Math.round(Number(event.target.value) || 0))
+                  ),
+                })
+              }
+            />
+          </Row>
+        </Group>
+        <p className="pref-help">
+          Paste a web address to make a link. With link previews set to Notes
+          &amp; web, TypeNext uses the page title as the link text.
+        </p>
+      </Section>
     </>
   )
 }

@@ -1,6 +1,7 @@
 import type { EmbeddingQuantization, SemanticSettings } from '../types/notebook'
 import { invoke } from '@tauri-apps/api/core'
 import { isDesktop } from './native'
+import { huggingFaceToken } from './huggingface'
 
 /**
  * TypeNext can install a pinned llama.cpp build and EmbeddingGemma 2 weights,
@@ -49,6 +50,8 @@ export interface EmbeddingRuntimeStatus {
   }
   progress?: { file: string; downloadedBytes: number; totalBytes: number }
   error?: string
+  /** Set when Hugging Face refused the download (see huggingface.ts). */
+  errorCode?: 'huggingface-auth' | 'huggingface-rate-limit'
   /** Bytes used by installed runtime and model files. */
   diskBytes: number
 }
@@ -133,7 +136,11 @@ export async function installEmbeddingRuntime(
   await listen()
   publish(
     await invokeRuntime('embedding_runtime_install', {
-      request: { quantization, media },
+      request: {
+        quantization,
+        media,
+        hfToken: (await huggingFaceToken()) || null,
+      },
     })
   )
   return initialStatus()

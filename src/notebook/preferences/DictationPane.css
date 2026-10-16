@@ -1,0 +1,86 @@
+.dictation-engines {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+.dictation-engines .pref-tile {
+  min-height: 112px;
+}
+.pref-section .whistle-model {
+  padding: 16px 18px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.pref-section .whistle-model h3 {
+  font-size: 15px;
+}
+.dictation-mic-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.dictation-test {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 10px;
+}
+.dictation-test .pref-status {
+  flex: 1 1 220px;
+  margin: 0;
+}
+.dictation-test-meter {
+  display: block;
+  width: 120px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--hover);
+}
+.dictation-test-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-fill);
+  transform: scaleX(var(--level, 0));
+  transform-origin: left center;
+  transition: transform 120ms ease-out;
+}
+.dictation-commands {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 18px;
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 12px;
+}
+.dictation-commands > li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  min-width: 0;
+}
+.dictation-command-say {
+  color: var(--ink);
+}
+.dictation-command-does {
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 600px) {
+  .dictation-engines,
+  .dictation-commands {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dictation-test-meter > span {
+    transition: none;
+  }
+}

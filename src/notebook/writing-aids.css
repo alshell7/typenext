@@ -1,0 +1,157 @@
+/* The outline is placed in the editor column. */
+.editor-column {
+  position: relative;
+}
+
+/* Outline in the margin: short marks that open into heading names. */
+.note-outline {
+  position: absolute;
+  top: 120px;
+  right: 18px;
+  z-index: 5;
+  max-height: calc(100% - 200px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 8px 6px;
+  border-radius: 10px;
+  transition:
+    background-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+.note-outline.is-open {
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  box-shadow: 0 6px 28px rgb(0 0 0 / 10%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.note-outline ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.note-outline button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 4px;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: right;
+}
+.note-outline-mark {
+  order: 2;
+  flex: 0 0 auto;
+  width: calc(18px - var(--depth, 0) * 4px);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+  transition:
+    background-color 160ms ease-out,
+    width 160ms ease-out;
+}
+.note-outline-text {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition:
+    max-width 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 140ms ease-out;
+  padding-left: calc(var(--depth, 0) * 8px);
+}
+.note-outline.is-open .note-outline-text {
+  max-width: 220px;
+  opacity: 1;
+}
+.note-outline button:hover {
+  color: var(--ink);
+}
+.note-outline button:hover .note-outline-mark {
+  background: var(--secondary);
+}
+.note-outline button.is-active {
+  color: var(--accent);
+}
+.note-outline button.is-active .note-outline-mark {
+  background: var(--accent);
+}
+@media (max-width: 1180px) {
+  .note-outline {
+    display: none;
+  }
+}
+
+/* Notes that link to this note. */
+.linked-from {
+  margin: 48px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.linked-from h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font:
+    600 11px/1.4 'Source Sans Pro',
+    'Segoe UI',
+    sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.linked-from div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.linked-from button {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--secondary);
+  font-size: 12px;
+}
+.linked-from button:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+
+/* Footer stats and the goal ring. */
+.writing-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+.goal-ring {
+  margin-right: 7px;
+  transform: rotate(-90deg);
+}
+.goal-ring circle {
+  fill: none;
+  stroke-width: 2.4;
+}
+.goal-ring-track {
+  stroke: var(--line);
+}
+.goal-ring-value {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dasharray 400ms ease-out;
+}
+.goal-ring.is-done .goal-ring-value {
+  stroke: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .note-outline,
+  .note-outline-text,
+  .note-outline-mark,
+  .goal-ring-value {
+    transition: none;
+  }
+}

@@ -15,6 +15,7 @@ import {
   prepareSemanticIndex,
 } from './semantic-retrieval'
 import { defaultSettings } from '../notebook/model'
+import { MODEL_CATALOG } from '../notebook/provider-catalog'
 import type {
   CursorContext,
   Note,
@@ -214,5 +215,33 @@ live('suggestions with real models (live)', () => {
       expect(result[0]?.text.startsWith(' ')).toBe(true)
     },
     120_000
+  )
+
+  const catalog = openAiKey ? it : it.skip
+  catalog(
+    'every shipped OpenAI model returns a usable continuation',
+    async () => {
+      const failures: string[] = []
+      for (const model of MODEL_CATALOG.openai ?? []) {
+        const { text, context } = at(
+          'The key box code is‸ and parking is behind the barn.'
+        )
+        try {
+          const result = await suggest(
+            { ...note(text), id: `catalog-${model.id}` },
+            context,
+            settings('openai', model.id)
+          )
+          if (!/2719/u.test(result.text))
+            failures.push(`${model.id}: ${JSON.stringify(result.text)}`)
+        } catch (error) {
+          failures.push(
+            `${model.id}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        }
+      }
+      expect(failures).toEqual([])
+    },
+    300_000
   )
 })

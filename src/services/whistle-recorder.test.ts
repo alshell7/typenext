@@ -339,3 +339,62 @@ describe('bounded microphone capture', () => {
     expect(track.stop).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('streaming dictation capture', () => {
+  it('delivers chunks with levels and duration, then the tail before finishing', async () => {
+    const { startDictationRecording } = await import('./whistle-recorder')
+    const chunks: Float32Array[] = []
+    const level = vi.fn()
+    const duration = vi.fn()
+    const capture = await startDictationRecording({
+      maxSeconds: 600,
+      onChunk: samples => chunks.push(samples),
+      onLevel: level,
+      onDuration: duration,
+    })
+    const node = nodes[0]!
+    node.reply({
+      type: 'chunk',
+      samples: new Float32Array([0.5, Number.NaN, 3]),
+      seconds: 45,
+      level: 0.4,
+    })
+    expect(Array.from(chunks[0]!)).toEqual([0.5, 0, 1])
+    expect(level).toHaveBeenLastCalledWith(0.4)
+    expect(duration).toHaveBeenLastCalledWith(45)
+    capture.stop()
+    expect(track.stop).toHaveBeenCalledTimes(1)
+    node.reply({ type: 'complete', samples: new Float32Array([0.1]) })
+    await expect(capture.finished).resolves.toBeUndefined()
+    expect(chunks).toHaveLength(2)
+    expect(contexts[0]?.close).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('asks the worklet to stream with its own limit and stops at that limit', async () => {
+    const { startDictationRecording } = await import('./whistle-recorder')
+    const capture = await startDictationRecording({
+      maxSeconds: 90,
+      onChunk: () => undefined,
+    })
+    vi.advanceTimersByTime(89_999)
+    expect(nodes[0]!.port.postMessage).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(nodes[0]!.port.postMessage).toHaveBeenCalledWith({ type: 'stop' })
+    nodes[0]!.reply({ type: 'complete', samples: new Float32Array(0) })
+    await expect(capture.finished).resolves.toBeUndefined()
+  })
+
+  it('ignores chunks after cancellation', async () => {
+    const { startDictationRecording } = await import('./whistle-recorder')
+    const onChunk = vi.fn()
+    const capture = await startDictationRecording({ maxSeconds: 60, onChunk })
+    const cancelled = expect(capture.finished).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    capture.cancel()
+    nodes[0]!.reply({ type: 'chunk', samples: new Float32Array([0.2]) })
+    await cancelled
+    expect(onChunk).not.toHaveBeenCalled()
+  })
+})

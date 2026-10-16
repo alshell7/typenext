@@ -7,8 +7,10 @@ import type { PaneProps } from './types'
 
 export const WEB_FACT_MODELS = [
   'gpt-5.4-mini',
-  'gpt-5.4',
+  'gpt-5.6-luna',
+  'gpt-6-luna',
   'gpt-5.5',
+  'gpt-6-sol',
   'gpt-4.1-mini',
 ] as const
 

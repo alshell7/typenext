@@ -1608,3 +1608,40 @@ input[type='checkbox'].pref-switch:checked {
     transition: none;
   }
 }
+
+/* Model catalog dropdown, Cloudflare account and repository facts. */
+.pref-catalog,
+.pref-cloudflare-account {
+  display: grid;
+  gap: 6px;
+}
+.pref-catalog select,
+.pref-cloudflare-account select {
+  width: 100%;
+}
+.pref-cloudflare-account input[aria-invalid='true'] {
+  border-color: var(--error);
+}
+.pref-facts {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 12px;
+}
+.pref-facts div {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+}
+.pref-facts dt {
+  color: var(--muted);
+}
+.pref-facts dd {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}

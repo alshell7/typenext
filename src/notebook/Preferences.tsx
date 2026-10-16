@@ -8,6 +8,8 @@ import {
   Sparkles,
   TextCursorInput,
   type LucideIcon,
+  GitBranch,
+  Mic,
 } from 'lucide-react'
 import type { NotebookSettings } from '../types/notebook'
 import { Modal } from './Modal'
@@ -23,6 +25,8 @@ import {
   type PreferencePane,
 } from './preferences/types'
 import { WebFactsPane } from './preferences/WebFactsPane'
+import { SyncPane } from './preferences/SyncPane'
+import { DictationPane } from './preferences/DictationPane'
 import { WritingPane } from './preferences/WritingPane'
 import './preferences.css'
 
@@ -69,6 +73,18 @@ export const PREFERENCE_PANES: {
     label: 'Web facts',
     description: 'Cited facts from the web, only when you ask.',
     icon: Globe,
+  },
+  {
+    id: 'dictation',
+    label: 'Dictation',
+    description: 'Speech engine, microphone and voice commands.',
+    icon: Mic,
+  },
+  {
+    id: 'sync',
+    label: 'Sync',
+    description: 'Keep notes in a Git repository.',
+    icon: GitBranch,
   },
   {
     id: 'shortcuts',
@@ -204,6 +220,8 @@ export function Preferences({
             )}
             {active === 'knowledge' && <KnowledgePane {...props} />}
             {active === 'web' && <WebFactsPane {...props} />}
+            {active === 'sync' && <SyncPane {...props} />}
+            {active === 'dictation' && <DictationPane {...props} />}
             {active === 'shortcuts' && <ShortcutsPane {...props} />}
           </div>
         </div>

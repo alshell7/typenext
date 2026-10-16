@@ -45,6 +45,12 @@
     "src/services/media-sources.ts",
     "src/services/web-facts.ts",
     "src/services/link-preview.ts",
+    "src/services/huggingface.ts",
+    "src/services/speech-runtime.ts",
+    "src/services/git-sync.ts",
+    "src/services/dictation-*.ts",
+    "src/services/fluid-speech.ts",
+    "src/services/voice-*.ts",
     "src/services/*.test.ts",
     "src/services/builtin-engine.worker.ts",
     "src/services/whistle.worker.ts"

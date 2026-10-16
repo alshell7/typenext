@@ -21,7 +21,16 @@ export function Modal({
   onCloseAutoFocus?(event: Event): void
   onEscapeKeyDown?(event: KeyboardEvent): void
 }) {
-  const returnFocus = useRef<HTMLElement | null>(null)
+  // A dialog that mounts already open (loaded on first use) still knows
+  // which control opened it.
+  const returnFocus = useRef<HTMLElement | null>(
+    typeof document !== 'undefined' &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement !== document.body &&
+      !document.activeElement.closest('[role="dialog"]')
+      ? document.activeElement
+      : null
+  )
   useEffect(() => {
     if (open) return
     const rememberFocus = () => {

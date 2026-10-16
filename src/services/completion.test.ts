@@ -39,6 +39,9 @@ function settings(): NotebookSettings {
     webFacts: defaultSettings().webFacts,
     zenLevel: 'chrome',
     editor: defaultSettings().editor,
+    git: defaultSettings().git,
+    dictation: defaultSettings().dictation,
+    timing: defaultSettings().timing,
     profiles: {
       local: {
         endpoint: 'http://localhost:1234/v1',
@@ -60,6 +63,7 @@ function settings(): NotebookSettings {
         model: 'writer',
         protocol: 'chat',
       },
+      cloudflare: defaultSettings().profiles.cloudflare,
       anthropic: {
         endpoint: 'https://api.anthropic.com/v1',
         model: 'writer',
@@ -1988,8 +1992,238 @@ describe('echoed word fragments', () => {
     vi.mocked(getSecret).mockResolvedValue('key')
     vi.mocked(requestJson).mockResolvedValueOnce(completion('mill'))
     const text = 'We walk to the old m at nine.'
-    const config = { ...settings(), provider: 'openai' as const, externalAutoEnabled: true }
-    const result = await suggest(note(text), cursor(text, text.indexOf(' at nine')), config)
+    const config = {
+      ...settings(),
+      provider: 'openai' as const,
+      externalAutoEnabled: true,
+    }
+    const result = await suggest(
+      note(text),
+      cursor(text, text.indexOf(' at nine')),
+      config
+    )
     expect(result.text).toBe('ill')
+  })
+})
+
+describe('provider request rules', () => {
+  it('chooses Anthropic thinking, effort and sampling per model', async () => {
+    const { anthropicParameters } = await import('./completion')
+    expect(anthropicParameters('claude-opus-5-5', 40, 0.3)).toEqual({
+      max_tokens: 1576,
+      output_config: { effort: 'low' },
+    })
+    expect(anthropicParameters('claude-fable-5-1', 40, 0.3)).toEqual({
+      max_tokens: 1576,
+      output_config: { effort: 'low' },
+    })
+    expect(anthropicParameters('claude-sonnet-5-5', 40, 0.3)).toEqual({
+      max_tokens: 40,
+      thinking: { type: 'between_tools' },
+      output_config: { effort: 'low' },
+    })
+    expect(anthropicParameters('claude-haiku-5-5', 40, 0.3)).toEqual({
+      max_tokens: 40,
+      thinking: { type: 'disabled' },
+      output_config: { effort: 'low' },
+    })
+    expect(anthropicParameters('claude-opus-5', 40, 0.3)).toMatchObject({
+      thinking: { type: 'disabled' },
+    })
+    expect(anthropicParameters('claude-opus-4-8', 40, 0.3)).toEqual({
+      max_tokens: 40,
+    })
+    expect(anthropicParameters('claude-sonnet-4-6', 40, 0.3)).toEqual({
+      max_tokens: 40,
+      temperature: 0.3,
+    })
+    expect(anthropicParameters('claude-haiku-4-5', 40, 0.3)).toEqual({
+      max_tokens: 40,
+      temperature: 0.3,
+    })
+  })
+
+  it('reads the lowest supported reasoning level from an OpenAI error', async () => {
+    const { lowestReasoningEffort } = await import('./completion')
+    expect(
+      lowestReasoningEffort(
+        new Error(
+          "The server returned HTTP 400. Unsupported value: 'reasoning_effort' does not support 'none' with this model. Supported values are: 'low', 'medium', 'high' and 'xhigh'."
+        )
+      )
+    ).toBe('low')
+    expect(lowestReasoningEffort(new Error('HTTP 401'))).toBeNull()
+  })
+
+  it('retries an OpenAI model that always reasons at its lowest level', async () => {
+    vi.mocked(getSecret).mockResolvedValue('key')
+    vi.mocked(requestJson)
+      .mockRejectedValueOnce(
+        new Error(
+          "The server returned HTTP 400. Unsupported value: 'reasoning_effort' does not support 'none' with this model. Supported values are: 'low', 'medium', 'high'."
+        )
+      )
+      .mockResolvedValueOnce(completion(' softly'))
+    const base = settings()
+    const config: NotebookSettings = {
+      ...base,
+      provider: 'openai',
+      externalAutoEnabled: true,
+      profiles: {
+        ...base.profiles,
+        openai: { ...base.profiles.openai, model: 'gpt-6.1-sol' },
+      },
+    }
+    const text = 'The cat purred retry'
+    const result = await suggest(note(text), cursor(text), config)
+    expect(result.text).toBe(' softly')
+    expect(requestBody().reasoning_effort).toBe('low')
+    expect(Number(requestBody().max_completion_tokens)).toBeGreaterThan(512)
+  })
+
+  it('builds the Workers AI endpoint from the account ID', async () => {
+    const { cloudflareEndpoint } = await import('./completion')
+    const profile = {
+      endpoint: 'https://api.cloudflare.com/client/v4/accounts',
+      model: '@cf/meta/llama-3.1-8b-instruct-fp8',
+      protocol: 'chat' as const,
+    }
+    expect(
+      cloudflareEndpoint({
+        ...profile,
+        accountId: '0123456789abcdef0123456789abcdef',
+      })
+    ).toBe(
+      'https://api.cloudflare.com/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/v1'
+    )
+    expect(() => cloudflareEndpoint({ ...profile, accountId: '' })).toThrow(
+      /account ID/u
+    )
+    expect(
+      cloudflareEndpoint({
+        ...profile,
+        endpoint: 'https://gateway.example.com/v1/acct/ai/v1',
+      })
+    ).toBe('https://gateway.example.com/v1/acct/ai/v1')
+  })
+
+  it('sends Cloudflare chat requests to the account endpoint', async () => {
+    vi.mocked(getSecret).mockResolvedValue('cf-token')
+    vi.mocked(requestJson).mockResolvedValueOnce(completion(' by the river'))
+    const base = settings()
+    const config: NotebookSettings = {
+      ...base,
+      provider: 'cloudflare',
+      externalAutoEnabled: true,
+      profiles: {
+        ...base.profiles,
+        cloudflare: {
+          endpoint: 'https://api.cloudflare.com/client/v4/accounts',
+          model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+          protocol: 'chat',
+          accountId: '0123456789abcdef0123456789abcdef',
+        },
+      },
+    }
+    const text = 'We walked cloudflare'
+    const result = await suggest(note(text), cursor(text), config)
+    expect(result.text).toBe(' by the river')
+    const [url, options] = vi.mocked(requestJson).mock.calls.at(-1)!
+    expect(url).toBe(
+      'https://api.cloudflare.com/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/v1/chat/completions'
+    )
+    expect(options!.headers!.Authorization).toBe('Bearer cf-token')
+  })
+
+  it('lists Cloudflare text-generation models from the catalog search', async () => {
+    const { getProviderModels } = await import('./completion')
+    vi.mocked(getSecret).mockResolvedValue('cf-token')
+    vi.mocked(requestJson).mockResolvedValueOnce({
+      success: true,
+      result: [
+        {
+          name: '@cf/meta/llama-3.1-8b-instruct-fp8',
+          description: 'Small and fast',
+        },
+        { name: 'not a model', description: 'x' },
+      ],
+      result_info: { total_count: 2 },
+    })
+    const models = await getProviderModels('cloudflare', {
+      endpoint: 'https://api.cloudflare.com/client/v4/accounts',
+      model: '',
+      protocol: 'chat',
+      accountId: '0123456789abcdef0123456789abcdef',
+    })
+    expect(models).toEqual([
+      {
+        id: '@cf/meta/llama-3.1-8b-instruct-fp8',
+        name: 'llama-3.1-8b-instruct-fp8 · Small and fast',
+      },
+    ])
+    expect(String(vi.mocked(requestJson).mock.calls.at(-1)![0])).toContain(
+      '/ai/models/search?task=Text+Generation'
+    )
+  })
+})
+
+describe('structure-aware suggestions', () => {
+  it('detects headings, lists, tasks, tables, quotes and the section', async () => {
+    const { writingStructure } = await import('./completion')
+    const doc =
+      '# Plan\n\n## Kitchen\n- eggs\n- [ ] milk\n| a | b |\n> quoted\nplain'
+    const at = (needle: string) => doc.indexOf(needle) + needle.length
+    expect(writingStructure(doc, at('## Kit'))).toEqual({
+      structure: 'heading',
+      section: 'Plan',
+    })
+    expect(writingStructure(doc, at('- eg'))).toEqual({
+      structure: 'list item',
+      section: 'Kitchen',
+    })
+    expect(writingStructure(doc, at('- [ ] mi')).structure).toBe('task')
+    expect(writingStructure(doc, at('| a')).structure).toBe('table cell')
+    expect(writingStructure(doc, at('> quo')).structure).toBe('quote')
+    expect(writingStructure(doc, doc.length)).toEqual({
+      structure: 'paragraph',
+      section: 'Kitchen',
+    })
+  })
+
+  it('keeps a table cell suggestion inside its cell and tells the model where it is', async () => {
+    vi.mocked(getSecret).mockResolvedValue('key')
+    vi.mocked(requestJson).mockResolvedValueOnce(
+      completion(' Ada Lovelace | 36 |\n| Next | row |')
+    )
+    const base = settings()
+    const config: NotebookSettings = {
+      ...base,
+      provider: 'openai',
+      externalAutoEnabled: true,
+    }
+    const text = '## Team\n| Name | Age |\n| --- | --- |\n| Countess'
+    const result = await suggest(note(text), cursor(text), config)
+    expect(result.text).toBe(' Ada Lovelace')
+    const body = requestBody()
+    const user = JSON.parse(
+      (body.messages as { content: string }[])[1]!.content
+    )
+    expect(user).toMatchObject({ section: 'Team', structure: 'table cell' })
+  })
+
+  it('keeps a list item suggestion on one line', async () => {
+    vi.mocked(getSecret).mockResolvedValue('key')
+    vi.mocked(requestJson).mockResolvedValueOnce(
+      completion(' fresh basil\n- tomatoes')
+    )
+    const base = settings()
+    const config: NotebookSettings = {
+      ...base,
+      provider: 'openai',
+      externalAutoEnabled: true,
+    }
+    const text = 'Shopping:\n- olive oil\n- some'
+    const result = await suggest(note(text), cursor(text), config)
+    expect(result.text).toBe(' fresh basil')
   })
 })

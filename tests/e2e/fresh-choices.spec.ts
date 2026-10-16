@@ -94,7 +94,7 @@ async function automatic(page: Page, enabled: boolean) {
   await dialog
     .getByRole('switch', { name: /^Suggest after a pause/ })
     .setChecked(enabled)
-  await dialog.getByLabel('Pause before suggesting').selectOption('1800')
+  await dialog.getByLabel('Pause before suggesting').fill('1800')
   await dialog.getByLabel('Suggestion length').selectOption('short')
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
 }
@@ -329,6 +329,7 @@ test('a late hosted choices response is aborted on note change and cannot enter 
   const gate = new Promise<void>(resolve => {
     release = resolve
   })
+  let abortedAtRoute = false
   page.on('requestfailed', request => {
     if (request.url() === providers.openai.endpoint) aborted += 1
   })
@@ -354,7 +355,11 @@ test('a late hosted choices response is aborted on note change and cannot enter 
       JSON.stringify({
         insertions: ['STALE FIRST', 'STALE SECOND', 'STALE THIRD'],
       })
-    ).catch(() => {})
+    ).catch(() => {
+      // The page aborted the request while the route was paused. Playwright
+      // may report this here instead of as a requestfailed event.
+      abortedAtRoute = true
+    })
   })
   try {
     await page.goto('/')
@@ -367,7 +372,10 @@ test('a late hosted choices response is aborted on note change and cannot enter 
     const next = await note(page, 'A separate next note')
     await next.fill('A new beginning remains mine.')
     release()
-    await expect.poll(() => aborted).toBe(1)
+    await expect
+      .poll(() => aborted + (abortedAtRoute ? 1 : 0))
+      .toBeGreaterThan(0)
+    expect(aborted).toBeLessThanOrEqual(1)
     await expect(
       page.getByRole('listbox', { name: 'Suggestions' })
     ).toHaveCount(0)

@@ -46,6 +46,9 @@ function settings(): NotebookSettings {
     webFacts: defaultSettings().webFacts,
     zenLevel: 'chrome',
     editor: defaultSettings().editor,
+    git: defaultSettings().git,
+    dictation: defaultSettings().dictation,
+    timing: defaultSettings().timing,
     theme: 'light',
     palette: defaultSettings().palette,
     fontFamily: 'Segoe UI',
@@ -65,6 +68,7 @@ function settings(): NotebookSettings {
       custom: profile,
       openai: profile,
       openrouter: profile,
+      cloudflare: { ...profile, endpoint: 'https://api.cloudflare.com/client/v4/accounts' },
       anthropic: profile,
     },
   }

@@ -51,6 +51,15 @@ import {
   type EditorHost,
 } from './editor-completions'
 import { livePreview } from './live-preview'
+import { refreshFlow, writingFlow, type FlowHost } from './writing-flow'
+import { fetchLinkPreview } from '../../services/link-preview'
+import {
+  automaticAllowed,
+  automaticDelay,
+  newRhythm,
+  noteAccepted,
+  noteKeystroke,
+} from './suggestion-timing'
 import { linkTools, refreshLinks, type LinkHost } from './link-tools'
 import {
   deleteMarkupBackward,
@@ -92,12 +101,9 @@ import {
 import {
   dictationAnchorField,
   dictationAnchorDecoration,
-  setDictationAnchor,
-  spaceDictation,
+  startDictationCapture,
   type DictationCapture,
 } from './dictation-anchor'
-
-let nextDictationId = 0
 
 export interface EditorStatus {
   state: 'idle' | 'loading' | 'suggestion' | 'error'
@@ -118,6 +124,8 @@ export interface MarkdownEditorHandle {
   requestExternalSuggestion(provider: ProviderId): void
   /** Research the selection (or the sentence before the cursor) on the web. */
   requestWebFacts(): void
+  /** Move the cursor to a position and show it near the top of the window. */
+  jumpTo(pos: number): void
 }
 
 interface MarkdownEditorProps {
@@ -132,6 +140,8 @@ interface MarkdownEditorProps {
   onOpenNote?(id: string): void
   onCreateNote?(title: string): void
   onAction?(action: EditorAction): void
+  /** Full zen: typewriter scrolling and paragraph focus when allowed. */
+  zenFull?: boolean
 }
 
 interface EditorControls {
@@ -454,82 +464,22 @@ export const MarkdownEditor = forwardRef<
         if (!view.state.selection.main.empty)
           throw new Error('Place the cursor where you want to dictate.')
         controlsRef.current?.invalidate()
-        const id = ++nextDictationId
-        view.focus()
-        view.dispatch({
-          effects: setDictationAnchor.of({
-            id,
-            at: view.state.selection.main.head,
-            phase: 'listening',
-          }),
-        })
-        const anchor = (requirePosition = true) => {
-          const value =
-            viewRef.current === view
-              ? view.state.field(dictationAnchorField)
-              : null
-          if (
-            !value ||
-            value.id !== id ||
-            (requirePosition && value.at === null)
-          )
-            throw new Error(
-              'The dictation position changed. Place the cursor and insert your transcript below.'
-            )
-          return value
-        }
-        return {
-          cancel() {
-            if (
-              viewRef.current === view &&
-              view.state.field(dictationAnchorField)?.id === id
-            )
-              view.dispatch({ effects: setDictationAnchor.of(null) })
-          },
-          transcribing() {
-            // Finish recognition even if typing removed the insertion point.
-            // A later commit failure keeps the transcript available for recovery.
-            const value = anchor(false)
-            view.dispatch({
-              effects: setDictationAnchor.of({
-                ...value,
-                phase: 'transcribing',
-              }),
-            })
-          },
-          commit(text) {
-            const value = anchor()
-            const at = value.at!
-            const inserted = spaceDictation(
-              text,
-              view.state.sliceDoc(Math.max(0, at - 1), at),
-              view.state.sliceDoc(at, at + 1)
-            )
-            if (!inserted)
-              throw new Error('No words were heard. Try recording again.')
-            const transaction = view.state.update({
-              changes: { from: at, insert: inserted },
-              selection: EditorSelection.cursor(at + inserted.length),
-              effects: setDictationAnchor.of(null),
-              annotations: [
-                Transaction.userEvent.of('input.dictation'),
-                isolateHistory.of('full'),
-              ],
-              scrollIntoView: true,
-            })
-            if (!transaction.docChanged)
-              throw new Error(
-                'This note is full. Keep your transcript below and insert it into a shorter note.'
-              )
-            view.focus()
-            view.dispatch(transaction)
-          },
-        }
+        return startDictationCapture(view, () => viewRef.current === view)
       },
       requestSuggestion: () => controlsRef.current?.request(),
       requestExternalSuggestion: provider =>
         controlsRef.current?.request(provider),
       requestWebFacts: () => controlsRef.current?.webFacts(),
+      jumpTo(pos) {
+        const view = viewRef.current
+        if (!view) return
+        const at = Math.max(0, Math.min(pos, view.state.doc.length))
+        view.dispatch({
+          selection: EditorSelection.cursor(at),
+          effects: EditorView.scrollIntoView(at, { y: 'start', yMargin: 96 }),
+        })
+        view.focus()
+      },
     }),
     []
   )
@@ -545,6 +495,7 @@ export const MarkdownEditor = forwardRef<
     let trimmingHistory = false
     let offeredBlankStarter = false
     let lastStatus: EditorStatus = { state: 'idle' }
+    let rhythm = newRhythm()
 
     function emitStatus(status: EditorStatus) {
       if (disposed || propsRef.current.note.id !== noteId) return
@@ -930,13 +881,30 @@ export const MarkdownEditor = forwardRef<
       ) {
         return
       }
+      const head = view.state.selection.main.head
+      const line = view.state.doc.lineAt(head)
+      const lineBefore = view.state.sliceDoc(line.from, head)
+      if (
+        !automaticAllowed({
+          lineBefore,
+          minCharacters: settings.timing?.minCharacters ?? 0,
+          documentEmpty: view.state.doc.length === 0,
+        })
+      )
+        return
       if (timer !== null) clearTimeout(timer)
       timer = setTimeout(
         () => {
           timer = null
           request(undefined, false)
         },
-        Math.max(300, settings.suggestionDelay)
+        automaticDelay({
+          base: settings.suggestionDelay,
+          adaptive: settings.timing?.adaptiveDelay === true,
+          rhythm,
+          now: Date.now(),
+          lineBefore,
+        })
       )
     }
 
@@ -1017,9 +985,31 @@ export const MarkdownEditor = forwardRef<
       notes: () => propsRef.current.notes ?? EMPTY_NOTES,
       noteId: () => noteId,
       previews: () => propsRef.current.settings.editor?.linkPreviews ?? 'notes',
+      hoverDelay: () => propsRef.current.settings.timing?.hoverDelay ?? 320,
       openNote: id => propsRef.current.onOpenNote?.(id),
       createNote: title => propsRef.current.onCreateNote?.(title),
       openUrl: openExternalUrl,
+    }
+
+    const editorSettings = () => propsRef.current.settings.editor
+    const zenFocus = () =>
+      propsRef.current.zenFull === true && editorSettings()?.zenFocus !== false
+    const flowHost: FlowHost = {
+      selectionToolbar: () => editorSettings()?.selectionToolbar !== false,
+      typewriter: () => editorSettings()?.typewriter === true || zenFocus(),
+      focus: () =>
+        editorSettings()?.focus && editorSettings()!.focus !== 'off'
+          ? editorSettings()!.focus
+          : zenFocus()
+            ? 'paragraph'
+            : 'off',
+      smartTypography: () => editorSettings()?.smartTypography === true,
+      webFacts: () => webFactsAvailable(propsRef.current.settings),
+      runWebFacts: () => queueMicrotask(() => webFacts()),
+      linkTitle: url =>
+        editorSettings()?.linkPreviews === 'all'
+          ? fetchLinkPreview(url).then(preview => preview.title ?? null)
+          : Promise.resolve(null),
     }
 
     const extensions: Extension[] = [
@@ -1059,6 +1049,7 @@ export const MarkdownEditor = forwardRef<
       ),
       editorCompletions(editorHost),
       linkTools(linkHost),
+      writingFlow(flowHost),
       writingSurface,
       EditorView.lineWrapping,
       highlightSpecialChars(),
@@ -1171,6 +1162,16 @@ export const MarkdownEditor = forwardRef<
           const accepted = update.transactions.some(transaction =>
             transaction.isUserEvent('input.complete')
           )
+          if (accepted) rhythm = noteAccepted(rhythm, Date.now())
+          else if (
+            update.docChanged &&
+            update.transactions.some(
+              transaction =>
+                transaction.isUserEvent('input.type') ||
+                transaction.isUserEvent('delete')
+            )
+          )
+            rhythm = noteKeystroke(rhythm, Date.now())
           if (
             update.docChanged &&
             !external &&
@@ -1268,6 +1269,11 @@ export const MarkdownEditor = forwardRef<
       ),
     })
   }, [livePreviewEnabled, noteId])
+
+  const flowKey = `${props.zenFull ? 1 : 0}:${props.settings.editor?.focus}:${props.settings.editor?.zenFocus}`
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: refreshFlow.of(null) })
+  }, [flowKey])
 
   // Restyle [[links]] when titles change; note bodies do not affect styles.
   const titles = (props.notes ?? EMPTY_NOTES).map(item => item.title).join('\n')

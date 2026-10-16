@@ -2,13 +2,16 @@ import { invoke } from '@tauri-apps/api/core'
 import type {
   ContextPackage,
   ContextSource,
+  DictationSettings,
   EditorSettings,
+  GitSyncSettings,
   MediaInfo,
   Note,
   NotebookSettings,
   ProviderId,
   ProviderProfile,
   SemanticSettings,
+  TimingSettings,
   WebFactSettings,
   Workspace,
 } from '@/types/notebook'
@@ -38,6 +41,7 @@ const PROVIDERS: ProviderId[] = [
   'openrouter',
   'openai',
   'anthropic',
+  'cloudflare',
   'local',
   'custom',
 ]
@@ -325,6 +329,9 @@ function parseSettings(value: unknown): NotebookSettings {
   const rawProfiles = record(settings.profiles)
   const profiles = Object.fromEntries(
     PROVIDERS.map(provider => {
+      // Providers added later are missing from older notebooks.
+      if (rawProfiles[provider] === undefined)
+        return [provider, defaultSettings().profiles[provider]]
       const profile = record(rawProfiles[provider])
       return [
         provider,
@@ -332,6 +339,9 @@ function parseSettings(value: unknown): NotebookSettings {
           endpoint: string(profile.endpoint, 4096),
           model: string(profile.model, 256),
           protocol: choice(profile.protocol, ['chat', 'fim']),
+          ...(profile.accountId === undefined || profile.accountId === null
+            ? {}
+            : { accountId: accountId(profile.accountId) }),
           ...(profile.savedModels === undefined
             ? {}
             : {
@@ -382,7 +392,7 @@ function parseSettings(value: unknown): NotebookSettings {
     externalProvider: choice(
       settings.externalProvider ??
         (settings.provider === 'local' ? 'openrouter' : settings.provider),
-      ['openrouter', 'openai', 'anthropic', 'custom']
+      ['openrouter', 'openai', 'anthropic', 'cloudflare', 'custom']
     ),
     profiles,
     websiteImporter: choice(settings.websiteImporter, ['direct', 'firecrawl']),
@@ -394,6 +404,61 @@ function parseSettings(value: unknown): NotebookSettings {
       'full',
     ]),
     editor: parseEditor(settings.editor),
+    git: parseGit(settings.git),
+    dictation: parseDictation(settings.dictation),
+    timing: parseTiming(settings.timing),
+  }
+}
+
+function accountId(value: unknown): string {
+  const text = string(value, 64).trim()
+  if (text && !/^[a-f0-9]{32}$/iu.test(text)) return invalid()
+  return text
+}
+
+function parseGit(value: unknown): GitSyncSettings {
+  const defaults = defaultSettings().git
+  if (value === undefined || value === null) return defaults
+  const git = record(value)
+  return {
+    enabled: boolean(git.enabled ?? defaults.enabled),
+    folder: string(git.folder ?? defaults.folder, 4096),
+    autoSync: boolean(git.autoSync ?? defaults.autoSync),
+    delaySeconds: numeric(git.delaySeconds ?? defaults.delaySeconds, 10, 3600),
+    pullMinutes: numeric(git.pullMinutes ?? defaults.pullMinutes, 0, 1440),
+    push: boolean(git.push ?? defaults.push),
+  }
+}
+
+function parseDictation(value: unknown): DictationSettings {
+  const defaults = defaultSettings().dictation
+  if (value === undefined || value === null) return defaults
+  const dictation = record(value)
+  return {
+    engine: choice(dictation.engine ?? defaults.engine, ['whistle', 'fluid']),
+    silenceStopSeconds: numeric(
+      dictation.silenceStopSeconds ?? defaults.silenceStopSeconds,
+      0,
+      60
+    ),
+    livePhrases: boolean(dictation.livePhrases ?? defaults.livePhrases),
+    voiceCommands: boolean(dictation.voiceCommands ?? defaults.voiceCommands),
+  }
+}
+
+function parseTiming(value: unknown): TimingSettings {
+  const defaults = defaultSettings().timing
+  if (value === undefined || value === null) return defaults
+  const timing = record(value)
+  return {
+    adaptiveDelay: boolean(timing.adaptiveDelay ?? defaults.adaptiveDelay),
+    minCharacters: numeric(
+      timing.minCharacters ?? defaults.minCharacters,
+      0,
+      200
+    ),
+    indexDelay: numeric(timing.indexDelay ?? defaults.indexDelay, 200, 30_000),
+    hoverDelay: numeric(timing.hoverDelay ?? defaults.hoverDelay, 0, 3_000),
   }
 }
 
@@ -461,6 +526,12 @@ function parseEditor(value: unknown): EditorSettings {
       'notes',
       'all',
     ]),
+    selectionToolbar: boolean(editor.selectionToolbar ?? defaults.selectionToolbar),
+    typewriter: boolean(editor.typewriter ?? defaults.typewriter),
+    focus: choice(editor.focus ?? defaults.focus, ['off', 'paragraph', 'sentence']),
+    zenFocus: boolean(editor.zenFocus ?? defaults.zenFocus),
+    smartTypography: boolean(editor.smartTypography ?? defaults.smartTypography),
+    dailyGoal: numeric(editor.dailyGoal ?? defaults.dailyGoal, 0, 100_000),
   }
 }
 

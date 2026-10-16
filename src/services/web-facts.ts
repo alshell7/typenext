@@ -205,7 +205,7 @@ export async function searchWebFacts(
     body: {
       model,
       tools: [{ type: 'web_search' }],
-      ...(/^(?:gpt-5|o\d)/u.test(model)
+      ...(/^(?:gpt-[56]|o\d)/u.test(model)
         ? { reasoning: { effort: 'low' } }
         : {}),
       instructions: [

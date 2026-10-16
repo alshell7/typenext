@@ -7,6 +7,8 @@ export type PreferencePane =
   | 'models'
   | 'knowledge'
   | 'web'
+  | 'sync'
+  | 'dictation'
   | 'shortcuts'
   /** Legacy alias: Models, scrolled to On this device. */
   | 'local'
@@ -28,6 +30,7 @@ export const EXTERNAL_PROVIDERS = [
   'openrouter',
   'openai',
   'anthropic',
+  'cloudflare',
   'custom',
 ] as const
 

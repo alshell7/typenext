@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import {
+  cloudflareAccounts,
   getProviderModels,
   testProvider,
   type ProviderModel,
@@ -25,6 +26,7 @@ import { KEY_LINKS } from './engine'
 import { KeyField } from './KeyField'
 import { ModelList } from './ModelList'
 import type { ExternalProvider, PaneProps } from './types'
+import { catalogFor, catalogModel } from '../provider-catalog'
 
 export const SERVER_PRESETS = [
   { name: 'LM Studio', endpoint: 'http://localhost:1234/v1' },
@@ -43,6 +45,7 @@ function hostOf(endpoint: string) {
 
 /** Deliberate catalog requests, cancelled when the target changes. */
 function useModelDiscovery(provider: ProviderId, endpoint: string) {
+  // Cloudflare's endpoint includes the account; callers pass both joined.
   const [models, setModels] = useState<ProviderModel[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<{ tone: Tone; text: string }>({
@@ -319,6 +322,147 @@ export function LocalServerForm({ settings, update, latest }: PaneProps) {
   )
 }
 
+/** A dropdown of models TypeNext ships for this provider. */
+function CatalogSelect({
+  provider,
+  value,
+  onChange,
+}: {
+  provider: ProviderId
+  value: string
+  onChange(value: string): void
+}) {
+  const catalog = catalogFor(provider)
+  const known = catalog.some(model => model.id === value.trim())
+  const chosen = catalogModel(provider, value)
+  const recommended = catalog.filter(model => model.recommended)
+  const others = catalog.filter(model => !model.recommended)
+  return (
+    <div className="pref-catalog">
+      <label className="pref-field-label" htmlFor={`catalog-${provider}`}>
+        Choose a model
+      </label>
+      <select
+        id={`catalog-${provider}`}
+        value={known ? value.trim() : ''}
+        onChange={event => {
+          if (event.target.value) onChange(event.target.value)
+        }}
+      >
+        <option value="">
+          {value.trim() ? `Other: ${value.trim()}` : 'Choose…'}
+        </option>
+        <optgroup label="Recommended">
+          {recommended.map(model => (
+            <option key={model.id} value={model.id}>
+              {model.name} — {model.note}
+            </option>
+          ))}
+        </optgroup>
+        {others.length > 0 && (
+          <optgroup label="More models">
+            {others.map(model => (
+              <option key={model.id} value={model.id}>
+                {model.name} — {model.note}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      {chosen && <p className="pref-help">{chosen.id}</p>}
+    </div>
+  )
+}
+
+/** Cloudflare needs the account that owns Workers AI. */
+function CloudflareAccountField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange(value: string): void
+}) {
+  const [status, setStatus] = useState<{ tone: Tone; text: string }>({
+    tone: 'neutral',
+    text: '',
+  })
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([])
+  const valid = !value || /^[a-f0-9]{32}$/iu.test(value.trim())
+  const detect = async () => {
+    setStatus({ tone: 'busy', text: 'Looking for accounts…' })
+    try {
+      const found = await cloudflareAccounts()
+      setAccounts(found)
+      if (found.length === 1) onChange(found[0]!.id)
+      setStatus(
+        found.length
+          ? {
+              tone: 'ok',
+              text:
+                found.length === 1
+                  ? `Using ${found[0]!.name}.`
+                  : 'Choose an account below.',
+            }
+          : {
+              tone: 'neutral',
+              text: 'This token cannot list accounts. Copy the account ID from the Cloudflare dashboard (Workers AI → Use REST API), or add “Account Settings: Read” to the token.',
+            }
+      )
+    } catch (error) {
+      setStatus({
+        tone: 'error',
+        text: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return (
+    <div className="pref-cloudflare-account">
+      <label className="pref-field-label" htmlFor="cloudflare-account">
+        Account ID
+      </label>
+      <div className="pref-input-action">
+        <input
+          id="cloudflare-account"
+          value={value}
+          spellCheck={false}
+          autoComplete="off"
+          maxLength={64}
+          aria-invalid={!valid}
+          placeholder="32 characters, for example 0123456789abcdef0123456789abcdef"
+          onChange={event => onChange(event.target.value.trim())}
+        />
+        <button
+          type="button"
+          className="button secondary is-compact"
+          onClick={() => void detect()}
+        >
+          <RefreshCw size={14} /> Find
+        </button>
+      </div>
+      {accounts.length > 1 && (
+        <select
+          aria-label="Cloudflare account"
+          value={value}
+          onChange={event => onChange(event.target.value)}
+        >
+          <option value="">Choose an account…</option>
+          {accounts.map(account => (
+            <option key={account.id} value={account.id}>
+              {account.name}
+            </option>
+          ))}
+        </select>
+      )}
+      <StatusLine tone={valid ? status.tone : 'error'}>
+        {valid
+          ? status.text ||
+            'Find it in the Cloudflare dashboard under Workers AI → Use REST API. Save the token first to use Find.'
+          : 'An account ID has 32 letters and numbers.'}
+      </StatusLine>
+    </div>
+  )
+}
+
 /** Key, model and activation for one hosted provider. */
 export function ProviderDetail({
   provider,
@@ -338,10 +482,14 @@ export function ProviderDetail({
 }) {
   const profile = settings.profiles[provider]
   const name = PROVIDERS[provider]
-  const discovery = useModelDiscovery(provider, profile.endpoint)
+  const discovery = useModelDiscovery(
+    provider,
+    `${profile.endpoint}\u0000${profile.accountId ?? ''}`
+  )
   const patch = (next: Partial<ProviderProfile>) =>
     patchProfile({ update, latest }, provider, next)
   const saved = profile.savedModels ?? []
+  const catalog = catalogFor(provider)
   const model = profile.model.trim()
   const ready = Boolean(model && profile.endpoint.trim())
   const endpointField = (
@@ -383,13 +531,36 @@ export function ProviderDetail({
       )}
       <KeyField
         id={`provider:${provider}`}
-        label={provider === 'custom' ? 'API key (if required)' : 'API key'}
+        label={
+          provider === 'custom'
+            ? 'API key (if required)'
+            : provider === 'cloudflare'
+              ? 'API token'
+              : 'API key'
+        }
         onSaved={onKeySaved}
       />
+      {provider === 'cloudflare' && (
+        <CloudflareAccountField
+          value={profile.accountId ?? ''}
+          onChange={accountId => patch({ accountId })}
+        />
+      )}
+      {catalog.length > 0 && (
+        <CatalogSelect
+          provider={provider}
+          value={profile.model}
+          onChange={value => patch({ model: value })}
+        />
+      )}
       <ModelField
         provider={provider}
         value={profile.model}
-        placeholder="Load the list or paste a model identifier"
+        placeholder={
+          catalog.length
+            ? 'Or paste any model identifier'
+            : 'Load the list or paste a model identifier'
+        }
         loading={discovery.loading}
         canLoad={Boolean(profile.endpoint.trim())}
         loadLabel={discovery.models ? 'Reload' : 'Load models'}
@@ -400,7 +571,9 @@ export function ProviderDetail({
       />
       <StatusLine tone={discovery.status.tone}>
         {discovery.status.text ||
-          'Save your key, then load the models your account can use.'}
+          (catalog.length
+            ? 'Choose a model above, or load every model your account can use.'
+            : 'Save your key, then load the models your account can use.')}
       </StatusLine>
       {discovery.models && discovery.models.length > 0 && (
         <ModelList

@@ -8,60 +8,97 @@ import {
   waitFor,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from 'vitest'
 import type { DictationCapture } from '../components/notebook/dictation-anchor'
 import type { WhistleState } from '../services/whistle'
-import type { WhistleRecording } from '../services/whistle-recorder'
+import type { SpeechRuntimeStatus } from '../services/speech-runtime'
+import type {
+  DictationRecording,
+  DictationRecordingOptions,
+} from '../services/whistle-recorder'
+import type { DictationSettings } from '../types/notebook'
+import { plainDictation } from '../services/dictation-text'
+import type { DictationPiece } from '../services/voice-commands'
 
 const mock = vi.hoisted(() => ({
-  state: {
+  whistle: {
     status: 'idle',
     cached: true,
     progress: 100,
     downloadedBytes: 17_000_000,
   } as WhistleState,
-  listeners: new Set<() => void>(),
-  devicesChanged: null as (() => void) | null,
+  speech: {
+    state: 'idle',
+    installed: { runtime: true, model: true },
+    diskBytes: 1,
+  } as SpeechRuntimeStatus,
+  whistleListeners: new Set<() => void>(),
+  speechListeners: new Set<() => void>(),
+  host: null as HTMLElement | null,
   check: vi.fn(),
   download: vi.fn(),
   load: vi.fn(),
-  remove: vi.fn(),
   unload: vi.fn(),
-  transcribe: vi.fn(),
+  transcribeWhistle: vi.fn(),
+  transcribeFluid: vi.fn(),
+  downloadFluid: vi.fn(),
+  refresh: vi.fn(),
+  endpoint: vi.fn(),
+  stop: vi.fn(),
   record: vi.fn(),
-  list: vi.fn(),
-  unsubscribe: vi.fn(),
 }))
 vi.mock('../services/whistle', () => ({
-  getWhistleState: () => mock.state,
+  getWhistleState: () => mock.whistle,
   subscribeWhistleState: (listener: () => void) => {
-    mock.listeners.add(listener)
+    mock.whistleListeners.add(listener)
     return () => {
-      mock.listeners.delete(listener)
+      mock.whistleListeners.delete(listener)
     }
   },
   checkWhistleCache: mock.check,
   downloadWhistleModel: mock.download,
   loadWhistleModel: mock.load,
-  removeWhistleModel: mock.remove,
+  removeWhistleModel: vi.fn(),
   unloadWhistleModel: mock.unload,
-  transcribeWhistle: mock.transcribe,
+  transcribeWhistle: mock.transcribeWhistle,
 }))
 vi.mock('../services/whistle-recorder', () => ({
-  startWhistleRecording: mock.record,
+  startDictationRecording: mock.record,
 }))
-vi.mock('../services/whistle-microphones', () => ({
-  listWhistleMicrophones: mock.list,
-  subscribeWhistleMicrophoneChanges: (listener: () => void) => {
-    mock.devicesChanged = listener
+vi.mock('../services/speech-runtime', async importOriginal => ({
+  ...(await importOriginal<typeof import('../services/speech-runtime')>()),
+  getSpeechRuntimeStatus: () => mock.speech,
+  subscribeSpeechRuntime: (listener: () => void) => {
+    mock.speechListeners.add(listener)
     return () => {
-      mock.devicesChanged = null
-      mock.unsubscribe()
+      mock.speechListeners.delete(listener)
     }
   },
+  refreshSpeechRuntime: mock.refresh,
+  speechEndpoint: mock.endpoint,
+  stopSpeechRuntime: mock.stop,
+}))
+vi.mock('../services/fluid-speech', () => ({
+  transcribeFluid: mock.transcribeFluid,
+  downloadFluidSpeech: mock.downloadFluid,
+}))
+vi.mock('../components/notebook/dictation-anchor', () => ({
+  getDictationChipHost: () => mock.host,
+  subscribeDictationChipHost: () => () => undefined,
 }))
 import { InlineDictation, type InlineDictationHandle } from './InlineDictation'
+import { resetDictationEnginesForTests } from '../services/dictation-engine'
+import { resetDictationInputForTests } from './dictation/input-preference'
 
+const RATE = 16_000
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (failure: unknown) => void
@@ -71,15 +108,56 @@ function deferred<T>() {
   })
   return { promise, resolve, reject }
 }
-function change(patch: Partial<WhistleState>) {
-  mock.state = { ...mock.state, ...patch }
-  mock.listeners.forEach(listener => listener())
+function changeWhistle(patch: Partial<WhistleState>) {
+  mock.whistle = { ...mock.whistle, ...patch }
+  mock.whistleListeners.forEach(listener => listener())
 }
-let finished: ReturnType<typeof deferred<Float32Array>>
-let session: WhistleRecording
-let audio: Float32Array
-let anchor: DictationCapture
-function mount() {
+
+let recorder: DictationRecordingOptions | null
+let finished: ReturnType<typeof deferred<void>>
+let session: DictationRecording & {
+  stop: ReturnType<typeof vi.fn>
+  cancel: ReturnType<typeof vi.fn>
+}
+let doc: string[]
+let anchor: DictationCapture & {
+  insert: Mock<NonNullable<DictationCapture['insert']>>
+  cancel: Mock<() => void>
+  commit: Mock<(text: string) => void>
+}
+const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+async function flush() {
+  await act(async () => {
+    for (let index = 0; index < 6; index++) await settle()
+  })
+}
+function push(samples: Float32Array) {
+  act(() => {
+    for (let at = 0; at < samples.length; at += 1_600)
+      recorder!.onChunk(samples.slice(at, at + 1_600))
+  })
+}
+function speak(seconds: number) {
+  const samples = new Float32Array(Math.round(seconds * RATE))
+  for (let index = 0; index < samples.length; index++)
+    samples[index] = 0.2 * Math.sin((2 * Math.PI * 220 * index) / RATE)
+  push(samples)
+}
+const silence = (seconds: number) =>
+  push(new Float32Array(Math.round(seconds * RATE)))
+
+const WHISTLE: DictationSettings = {
+  engine: 'whistle',
+  silenceStopSeconds: 0,
+  livePhrases: true,
+  voiceCommands: true,
+}
+const FLUID: DictationSettings = { ...WHISTLE, engine: 'fluid' }
+
+function mount(
+  settings: DictationSettings = WHISTLE,
+  onOpenSettings?: () => void
+) {
   const handle = createRef<InlineDictationHandle>()
   const onCapture = vi.fn(() => anchor)
   const onRecoverInsert = vi.fn()
@@ -90,6 +168,8 @@ function mount() {
       <button onClick={() => handle.current?.toggle()}>Dictate note</button>
       <InlineDictation
         ref={handle}
+        settings={settings}
+        onOpenSettings={onOpenSettings}
         onCapture={onCapture}
         onRecoverInsert={onRecoverInsert}
         onActiveChange={onActiveChange}
@@ -113,6 +193,7 @@ function ControlledRecovery({
       <InlineDictation
         key={noteId}
         ref={handle}
+        settings={WHISTLE}
         onCapture={() => anchor}
         onRecoverInsert={onRecoverInsert}
         recoveryText={recoveryText}
@@ -133,296 +214,302 @@ function shortcut(options: { meta?: boolean; repeat?: boolean } = {}) {
   })
 }
 async function start() {
-  await userEvent
-    .setup()
-    .click(screen.getByRole('button', { name: 'Dictate note' }))
-  return screen.findByRole('button', { name: 'Stop' })
+  act(() => {
+    shortcut()
+  })
+  await flush()
+  expect(recorder).not.toBeNull()
 }
+const status = () => screen.getByRole('status').textContent ?? ''
 
 beforeEach(() => {
   localStorage.clear()
-  mock.listeners.clear()
-  mock.devicesChanged = null
-  mock.state = {
+  resetDictationInputForTests()
+  resetDictationEnginesForTests()
+  mock.whistleListeners.clear()
+  mock.speechListeners.clear()
+  mock.host = null
+  mock.whistle = {
     status: 'idle',
     cached: true,
     progress: 100,
     downloadedBytes: 17_000_000,
   }
+  mock.speech = {
+    state: 'idle',
+    installed: { runtime: true, model: true },
+    diskBytes: 1,
+  }
   mock.check.mockReset().mockResolvedValue(true)
   mock.download.mockReset().mockImplementation(async () => {
-    change({ cached: true, status: 'ready' })
+    changeWhistle({ cached: true, status: 'ready' })
   })
-  mock.load.mockReset().mockImplementation(async () => {
-    change({ status: 'ready' })
-  })
-  mock.remove.mockReset().mockResolvedValue(undefined)
-  mock.unload.mockReset().mockImplementation(() => {
-    change({ status: 'idle' })
-  })
-  mock.transcribe.mockReset().mockResolvedValue({
-    text: 'A spoken thought.',
-    language: 'en',
-  })
-  mock.list.mockReset().mockResolvedValue([
-    { deviceId: '', label: 'System default' },
-    { deviceId: 'usb-1', label: 'USB microphone' },
-  ])
-  mock.unsubscribe.mockReset()
-  finished = deferred<Float32Array>()
-  audio = new Float32Array([0.1, -0.1])
+  mock.load.mockReset().mockResolvedValue(undefined)
+  mock.unload.mockReset()
+  mock.transcribeWhistle
+    .mockReset()
+    .mockResolvedValue({ text: 'A spoken thought.', language: 'en' })
+  mock.transcribeFluid
+    .mockReset()
+    .mockResolvedValue({ text: 'A fluid thought.', duration: 1, segments: [] })
+  mock.downloadFluid.mockReset().mockResolvedValue({})
+  mock.refresh.mockReset().mockImplementation(async () => mock.speech)
+  mock.endpoint.mockReset().mockResolvedValue('http://127.0.0.1:1')
+  mock.stop.mockReset()
+  recorder = null
+  finished = deferred<void>()
   session = {
     finished: finished.promise,
-    stop: vi.fn(() => finished.resolve(audio)),
+    stop: vi.fn(() => finished.resolve()),
     cancel: vi.fn(() =>
       finished.reject(new DOMException('Cancelled', 'AbortError'))
     ),
   }
-  mock.record.mockReset().mockResolvedValue(session)
+  mock.record.mockReset().mockImplementation(async options => {
+    recorder = options
+    return session
+  })
+  doc = []
   anchor = {
-    commit: vi.fn(),
-    cancel: vi.fn(),
+    commit: vi.fn((text: string) => {
+      doc.push(text)
+    }),
+    cancel: vi.fn<() => void>(),
     transcribing: vi.fn(),
+    listening: vi.fn(),
+    insert: vi.fn((pieces: readonly DictationPiece[]) => {
+      const text = plainDictation(pieces)
+      doc.push(text)
+      return text.split(/\s+/u).filter(Boolean).length
+    }),
+    undoLast: vi.fn(() => doc.pop() !== undefined),
   }
 })
 afterEach(() => {
   cleanup()
-  mock.listeners.clear()
   vi.restoreAllMocks()
 })
 
-describe('inline offline dictation', () => {
-  it('checks only local model storage until a deliberate record or setup gesture', async () => {
-    mock.state = { ...mock.state, cached: false, progress: 0 }
+describe('inline dictation', () => {
+  it('stays out of the way until the writer dictates', () => {
     const { onCapture } = mount()
     expect(mock.check).toHaveBeenCalledTimes(1)
-    expect(mock.list).not.toHaveBeenCalled()
     expect(mock.record).not.toHaveBeenCalled()
-    expect(mock.download).not.toHaveBeenCalled()
+    expect(onCapture).not.toHaveBeenCalled()
     expect(
       screen.queryByRole('region', { name: 'Inline dictation' })
     ).toBeNull()
-    act(() => {
-      shortcut()
-    })
-    expect(
-      await screen.findByRole('button', { name: 'Download Whistle · 17 MB' })
-    ).toBeEnabled()
-    expect(mock.list).toHaveBeenCalledWith(
-      expect.objectContaining({ requestPermission: false })
-    )
-    expect(mock.download).not.toHaveBeenCalled()
-    expect(mock.record).not.toHaveBeenCalled()
-    expect(onCapture).not.toHaveBeenCalled()
-    await userEvent
-      .setup()
-      .click(screen.getByRole('button', { name: 'Download Whistle · 17 MB' }))
-    expect(mock.download).toHaveBeenCalledTimes(1)
-    expect(mock.record).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Dictate' })).toBeEnabled()
   })
 
-  it('starts and stops with Ctrl/Command Shift D, commits directly, and wipes recorded audio', async () => {
+  it('starts with the shortcut, shows a passive chip, and finishes with the shortcut', async () => {
+    mock.transcribeWhistle.mockResolvedValue({
+      text: 'Guests arrive on Friday.',
+      language: 'en',
+    })
     const { onCapture, onActiveChange } = mount()
     act(() => {
       expect(shortcut()).toBe(false)
     })
-    await screen.findByRole('button', { name: 'Stop' })
+    await flush()
     expect(onCapture).toHaveBeenCalledTimes(1)
-    expect(mock.record).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ deviceId: '' })
+    expect(onActiveChange).toHaveBeenLastCalledWith(true)
+    expect(mock.record).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: '', maxSeconds: 30 })
     )
     expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('Waiting for speech…')).toBeVisible()
+    expect(screen.getByText('0:00 / 0:30')).toBeVisible()
+    expect(status()).toBe('Listening')
+    // The chip never takes focus from the writing.
+    screen.getByRole('textbox', { name: 'Writing' }).focus()
+    speak(1.2)
+    expect(
+      screen.getByText('Listening', { selector: '.dictation-chip-label' })
+    ).toBeVisible()
+    expect(document.activeElement).toBe(
+      screen.getByRole('textbox', { name: 'Writing' })
+    )
     act(() => {
       shortcut({ meta: true })
     })
-    await waitFor(() =>
-      expect(anchor.commit).toHaveBeenCalledExactlyOnceWith('A spoken thought.')
-    )
+    await flush()
     expect(session.stop).toHaveBeenCalledTimes(1)
-    expect(anchor.transcribing).toHaveBeenCalledTimes(1)
-    expect(mock.transcribe).toHaveBeenCalledTimes(1)
-    expect(audio.every(value => value === 0)).toBe(true)
-    expect(
-      screen.queryByRole('textbox', { name: 'Your transcript' })
-    ).toBeNull()
-    expect(
-      screen.getByText('Added to your note. Undo with Ctrl / ⌘ Z.')
-    ).toBeVisible()
+    expect(mock.transcribeWhistle).toHaveBeenCalledTimes(1)
+    expect(doc).toEqual(['Guests arrive on Friday.'])
+    expect(status()).toBe(
+      'Dictation finished. Inserted 4 words. Undo with Ctrl / ⌘ Z.'
+    )
     expect(onActiveChange).toHaveBeenLastCalledWith(false)
+    expect(
+      screen.queryByRole('region', { name: 'Inline dictation' })
+    ).toBeNull()
   })
 
-  it('ignores repeated shortcuts and shortcuts while another dialog is open', async () => {
+  it('ignores repeated shortcuts and shortcuts while a dialog is open', async () => {
     mount()
     act(() => {
       shortcut({ repeat: true })
     })
-    expect(mock.record).not.toHaveBeenCalled()
     const dialog = document.createElement('div')
     dialog.setAttribute('role', 'dialog')
     document.body.append(dialog)
-    try {
-      act(() => {
-        shortcut()
-      })
-      expect(mock.record).not.toHaveBeenCalled()
-    } finally {
-      dialog.remove()
-    }
+    act(() => {
+      shortcut()
+    })
+    dialog.remove()
+    await flush()
+    expect(mock.record).not.toHaveBeenCalled()
     await start()
     act(() => {
       shortcut({ repeat: true })
     })
     expect(session.stop).not.toHaveBeenCalled()
-    expect(mock.record).toHaveBeenCalledTimes(1)
   })
 
-  it('uses recorder duration and level feedback without starting a UI interval', async () => {
-    const intervals = vi.spyOn(globalThis, 'setInterval')
-    mount()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Dictate note' }))
-    })
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled()
-    const options = mock.record.mock.calls[0]![0]
-    act(() => {
-      options.onDuration(12.8)
-      options.onLevel(0.35)
-    })
-    expect(screen.getByText('12 / 30 s')).toBeVisible()
-    expect(document.querySelector('.dictation-meter')).toHaveStyle(
-      '--voice-level: 0.35'
+  it('inserts Fluid phrases at natural pauses and stops after the chosen silence', async () => {
+    mock.transcribeFluid.mockImplementation(async () => ({
+      text: 'Unused.',
+      duration: 1,
+      segments: [],
+    }))
+    const answers = ['Guests arrive on Friday.', 'They leave on Sunday.']
+    mock.transcribeFluid.mockImplementation(async (_pcm, options) => ({
+      text: options?.timeoutMs ? 'Guests arrive' : (answers.shift() ?? ''),
+      duration: 1,
+      segments: [],
+    }))
+    mount({ ...FLUID, silenceStopSeconds: 2 })
+    await start()
+    expect(recorder!.maxSeconds).toBeGreaterThan(600)
+    expect(screen.getByText(/^0:00$/)).toBeVisible()
+    speak(1.5)
+    await flush()
+    // A faint preview of the phrase in progress.
+    expect(screen.getByText('Guests arrive')).toHaveClass('dictation-preview')
+    silence(1)
+    await flush()
+    expect(anchor.insert).toHaveBeenCalledTimes(1)
+    expect(doc).toEqual(['Guests arrive on Friday.'])
+    expect(status()).toBe('Inserted 4 words')
+    expect(session.stop).not.toHaveBeenCalled()
+    speak(0.8)
+    silence(1)
+    await flush()
+    expect(doc).toEqual(['Guests arrive on Friday.', 'They leave on Sunday.'])
+    silence(1.2)
+    await flush()
+    expect(session.stop).toHaveBeenCalledTimes(1)
+    expect(status()).toBe(
+      'Dictation finished. Inserted 8 words. Undo with Ctrl / ⌘ Z.'
     )
-    expect(intervals).not.toHaveBeenCalled()
+  })
+
+  it('renders the chip at the writing position when the editor offers a host', async () => {
+    const host = document.createElement('span')
+    const marker = document.createElement('span')
+    marker.append(host)
+    document.body.append(marker)
+    mock.host = host
+    mount()
+    await start()
+    expect(host).toHaveTextContent('Waiting for speech…')
+    expect(marker.dataset.live).toBe('true')
+    expect(
+      screen.queryByRole('region', { name: 'Inline dictation' })
+    ).toBeNull()
     act(() => {
       fireEvent.keyDown(window, { key: 'Escape' })
     })
-    act(() => {
-      options.onLevel(0.9)
-    })
-    expect(document.querySelector('.dictation-meter')).toBeNull()
+    expect(host).toBeEmptyDOMElement()
+    expect(marker.dataset.live).toBeUndefined()
+    marker.remove()
   })
 
-  it('transcribes and commits automatically when the bounded recorder finishes at its duration cap', async () => {
+  it('cancels with Escape without changing the note', async () => {
     mount()
     await start()
-    await act(async () => {
-      finished.resolve(audio)
-    })
-    expect(session.stop).not.toHaveBeenCalled()
-    expect(anchor.commit).toHaveBeenCalledExactlyOnceWith('A spoken thought.')
-    expect(screen.getByRole('button', { name: 'Dictate' })).toBeEnabled()
-  })
-
-  it('cancels microphone, anchor, and decoding with Escape without changing the note', async () => {
-    mount()
-    await start()
-    const signal = mock.record.mock.calls[0]![0].signal as AbortSignal
+    const signal = recorder!.signal!
+    speak(1)
     act(() => {
       fireEvent.keyDown(window, { key: 'Escape', cancelable: true })
     })
+    await flush()
     expect(signal.aborted).toBe(true)
     expect(session.cancel).toHaveBeenCalledTimes(1)
-    expect(anchor.cancel).toHaveBeenCalledTimes(1)
+    expect(anchor.cancel).toHaveBeenCalled()
     expect(mock.unload).toHaveBeenCalledTimes(1)
-    expect(anchor.commit).not.toHaveBeenCalled()
-    expect(mock.transcribe).not.toHaveBeenCalled()
-    expect(
-      screen.getByText('Dictation cancelled. Your writing is unchanged.')
-    ).toBeVisible()
+    expect(mock.transcribeWhistle).not.toHaveBeenCalled()
+    expect(doc).toEqual([])
+    expect(status()).toBe('Dictation cancelled. Your writing is unchanged.')
   })
 
-  it('discards late transcription after cancellation and clears its captured PCM', async () => {
+  it('discards a transcription that arrives after cancelling', async () => {
     const result = deferred<{ text: string; language: string }>()
-    mock.transcribe.mockReturnValue(result.promise)
+    mock.transcribeWhistle.mockReturnValue(result.promise)
     mount()
-    const stop = await start()
-    fireEvent.click(stop)
-    await screen.findByText('Transcribing on this device…')
-    const signal = mock.transcribe.mock.calls[0]![1].signal as AbortSignal
+    await start()
+    speak(1)
+    act(() => {
+      shortcut()
+    })
+    await flush()
+    expect(screen.getByText('Writing it down…')).toBeVisible()
     act(() => {
       fireEvent.keyDown(window, { key: 'Escape' })
     })
     await act(async () => {
       result.resolve({ text: 'Late speech.', language: 'en' })
     })
-    expect(signal.aborted).toBe(true)
-    expect(anchor.commit).not.toHaveBeenCalled()
+    await flush()
+    expect(doc).toEqual([])
     expect(
       screen.queryByRole('textbox', { name: 'Your transcript' })
     ).toBeNull()
-    expect(audio.every(value => value === 0)).toBe(true)
   })
 
-  it('cancels on note unmount and rejects late transcription from that note', async () => {
-    const result = deferred<{ text: string; language: string }>()
-    mock.transcribe.mockReturnValue(result.promise)
-    const { unmount, onActiveChange } = mount()
-    fireEvent.click(await start())
-    await screen.findByText('Transcribing on this device…')
-    unmount()
-    const signal = mock.transcribe.mock.calls[0]![1].signal as AbortSignal
-    expect(signal.aborted).toBe(true)
-    expect(anchor.cancel).toHaveBeenCalledTimes(1)
-    await act(async () => {
-      result.resolve({ text: 'Old note speech.', language: 'en' })
+  it('cancels when the note unmounts or the window hides', async () => {
+    const first = mount()
+    await start()
+    first.unmount()
+    expect(session.cancel).toHaveBeenCalledTimes(1)
+    expect(first.onActiveChange).toHaveBeenLastCalledWith(false)
+    finished = deferred<void>()
+    session = {
+      finished: finished.promise,
+      stop: vi.fn(() => finished.resolve()),
+      cancel: vi.fn(() => finished.reject(new DOMException('x', 'AbortError'))),
+    }
+    mount()
+    await start()
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
     })
-    expect(anchor.commit).not.toHaveBeenCalled()
-    expect(audio.every(value => value === 0)).toBe(true)
-    expect(onActiveChange).toHaveBeenLastCalledWith(false)
+    expect(session.cancel).toHaveBeenCalledTimes(1)
+    expect(doc).toEqual([])
   })
 
-  it('cleans up a recording that arrives after startup was cancelled', async () => {
-    const startup = deferred<WhistleRecording>()
-    mock.record.mockReturnValue(startup.promise)
+  it('cleans up a microphone that opens after cancelling', async () => {
+    const opening = deferred<DictationRecording>()
+    mock.record.mockReturnValueOnce(opening.promise)
     mount()
     act(() => {
       shortcut()
     })
+    await flush()
     expect(screen.getByText('Opening microphone…')).toBeVisible()
     act(() => {
       fireEvent.keyDown(window, { key: 'Escape' })
     })
     await act(async () => {
-      startup.resolve(session)
+      opening.resolve(session)
     })
+    await flush()
     expect(session.cancel).toHaveBeenCalledTimes(1)
-    expect(mock.transcribe).not.toHaveBeenCalled()
-    expect(anchor.commit).not.toHaveBeenCalled()
+    expect(mock.transcribeWhistle).not.toHaveBeenCalled()
   })
 
-  it('keeps a rapid replacement recording handle when the cancelled earlier session finishes late', async () => {
-    session.cancel = vi.fn()
-    const old = session
-    const oldFinished = finished
-    const nextFinished = deferred<Float32Array>()
-    const nextAudio = new Float32Array([0.2])
-    const next: WhistleRecording = {
-      finished: nextFinished.promise,
-      stop: vi.fn(() => nextFinished.resolve(nextAudio)),
-      cancel: vi.fn(() =>
-        nextFinished.reject(new DOMException('Cancelled', 'AbortError'))
-      ),
-    }
-    mock.record.mockResolvedValueOnce(old).mockResolvedValueOnce(next)
-    const { handle } = mount()
-    await start()
-    act(() => {
-      handle.current!.cancel()
-      handle.current!.toggle()
-    })
-    await waitFor(() => expect(mock.record).toHaveBeenCalledTimes(2))
-    await act(async () => {
-      oldFinished.resolve(audio)
-    })
-    expect(audio.every(value => value === 0)).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
-    await waitFor(() => expect(next.stop).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(anchor.commit).toHaveBeenCalledTimes(1))
-    expect(mock.transcribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows denied microphone access, cancels its anchor, and allows a retry', async () => {
+  it('shows denied microphone access and allows a retry', async () => {
     mock.record.mockRejectedValueOnce(
       new Error(
         'Microphone access was denied. Allow it in system privacy settings.'
@@ -432,292 +519,236 @@ describe('inline offline dictation', () => {
     act(() => {
       shortcut()
     })
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    await flush()
+    expect(screen.getByRole('alert')).toHaveTextContent(
       'Microphone access was denied'
     )
-    expect(anchor.cancel).toHaveBeenCalledTimes(1)
-    expect(mock.transcribe).not.toHaveBeenCalled()
-    await userEvent
-      .setup()
-      .click(screen.getByRole('button', { name: 'Dictate' }))
-    await screen.findByRole('button', { name: 'Stop' })
+    expect(anchor.cancel).toHaveBeenCalled()
+    await start()
     expect(mock.record).toHaveBeenCalledTimes(2)
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('keeps failed insertion text editable and preserves it through a failed recovery retry', async () => {
-    anchor.commit = vi.fn(() => {
-      throw new Error('The note is too large to insert more text.')
+  it('keeps the transcript for recovery when insertion fails', async () => {
+    anchor.insert.mockImplementation(() => {
+      throw new Error('This note is full.')
     })
     const { onRecoverInsert } = mount()
-    fireEvent.click(await start())
-    const text = await screen.findByRole('textbox', { name: 'Your transcript' })
+    await start()
+    speak(1)
+    act(() => {
+      shortcut()
+    })
+    await flush()
+    const text = screen.getByRole('textbox', { name: 'Your transcript' })
     expect(text).toHaveValue('A spoken thought.')
-    expect(anchor.cancel).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('alert')).toHaveTextContent('This note is full.')
     const user = userEvent.setup()
     await user.clear(text)
-    expect(text).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Insert at cursor' })
     ).toBeDisabled()
-    await user.type(text, 'Retain this edited thought.')
+    await user.type(text, 'Edited thought.')
     onRecoverInsert.mockImplementationOnce(() => {
       throw new Error('Place the cursor in a writable note.')
     })
     await user.click(screen.getByRole('button', { name: 'Insert at cursor' }))
-    expect(text).toHaveValue('Retain this edited thought.')
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Place the cursor in a writable note.'
-    )
+    expect(text).toHaveValue('Edited thought.')
+    expect(screen.getByRole('alert')).toHaveTextContent('Place the cursor')
     await user.click(screen.getByRole('button', { name: 'Insert at cursor' }))
-    expect(onRecoverInsert).toHaveBeenLastCalledWith(
-      'Retain this edited thought.'
-    )
+    expect(onRecoverInsert).toHaveBeenLastCalledWith('Edited thought.')
     expect(
       screen.queryByRole('textbox', { name: 'Your transcript' })
     ).toBeNull()
-    expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('allows explicitly discarding a retained transcript before recording another thought', async () => {
-    anchor.commit = vi.fn(() => {
-      throw new Error('Choose a place to insert the transcript.')
+  it('keeps live phrases that could not be inserted and lets the writer discard them', async () => {
+    let calls = 0
+    anchor.insert.mockImplementation((pieces: readonly DictationPiece[]) => {
+      if (++calls > 1) throw new Error('The dictation position changed.')
+      doc.push(plainDictation(pieces))
+      return 2
     })
-    mount()
-    fireEvent.click(await start())
-    await screen.findByRole('textbox', { name: 'Your transcript' })
+    const answers = ['First part.', 'Second part.', 'Third part.']
+    mock.transcribeFluid.mockImplementation(async (_pcm, options) => ({
+      text: options?.timeoutMs ? '' : (answers.shift() ?? ''),
+      duration: 1,
+      segments: [],
+    }))
+    mount(FLUID)
+    await start()
+    for (let index = 0; index < 3; index++) {
+      speak(0.6)
+      silence(1)
+      await flush()
+    }
+    act(() => {
+      shortcut()
+    })
+    await flush()
+    expect(doc).toEqual(['First part.'])
+    expect(
+      screen.getByRole('textbox', { name: 'Your transcript' })
+    ).toHaveValue('Second part. Third part.')
     await userEvent
       .setup()
       .click(screen.getByRole('button', { name: 'Discard transcript' }))
     expect(
       screen.queryByRole('textbox', { name: 'Your transcript' })
     ).toBeNull()
-    expect(screen.getByRole('button', { name: 'Dictate' })).toBeEnabled()
-    expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('keeps controlled edited recovery through rerenders and note remounts, then inserts only into the chosen note', async () => {
-    anchor.commit = vi.fn(() => {
-      throw new Error(
-        'This note is full. Insert the transcript into a shorter note.'
-      )
+  it('keeps controlled recovery through note remounts and inserts into the chosen note', async () => {
+    anchor.insert.mockImplementation(() => {
+      throw new Error('This note is full.')
     })
     const firstInsert = vi.fn()
     const secondInsert = vi.fn()
     const { rerender } = render(
       <ControlledRecovery noteId="first" onRecoverInsert={firstInsert} />
     )
-    fireEvent.click(await start())
+    await start()
+    speak(1)
+    act(() => {
+      shortcut()
+    })
+    await flush()
     const user = userEvent.setup()
-    const text = await screen.findByRole('textbox', { name: 'Your transcript' })
+    const text = screen.getByRole('textbox', { name: 'Your transcript' })
     await user.clear(text)
-    await user.type(text, 'Keep these edited spoken words.')
-    rerender(
-      <ControlledRecovery noteId="first" onRecoverInsert={firstInsert} />
-    )
-    expect(
-      screen.getByRole('textbox', { name: 'Your transcript' })
-    ).toHaveValue('Keep these edited spoken words.')
+    await user.type(text, 'Keep these words.')
     rerender(
       <ControlledRecovery noteId="second" onRecoverInsert={secondInsert} />
     )
     expect(
-      screen.getByRole('region', { name: 'Inline dictation' })
-    ).toBeVisible()
-    expect(
       screen.getByRole('textbox', { name: 'Your transcript' })
-    ).toHaveValue('Keep these edited spoken words.')
-    expect(mock.record).toHaveBeenCalledTimes(1)
-    expect(anchor.commit).toHaveBeenCalledTimes(1)
-    expect(firstInsert).not.toHaveBeenCalled()
+    ).toHaveValue('Keep these words.')
     await user.click(screen.getByRole('button', { name: 'Insert at cursor' }))
-    expect(secondInsert).toHaveBeenCalledExactlyOnceWith(
-      'Keep these edited spoken words.'
-    )
-    expect(
-      screen.queryByRole('textbox', { name: 'Your transcript' })
-    ).toBeNull()
-    rerender(<ControlledRecovery noteId="third" onRecoverInsert={vi.fn()} />)
-    expect(
-      screen.queryByRole('region', { name: 'Inline dictation' })
-    ).toBeNull()
-    expect(mock.record).toHaveBeenCalledTimes(1)
+    expect(secondInsert).toHaveBeenCalledExactlyOnceWith('Keep these words.')
+    expect(firstInsert).not.toHaveBeenCalled()
   })
 
-  it('cancels an active recording when the document becomes hidden', async () => {
-    mount()
-    await start()
-    const signal = mock.record.mock.calls[0]![0].signal as AbortSignal
-    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
-    act(() => {
-      document.dispatchEvent(new Event('visibilitychange'))
-    })
-    expect(signal.aborted).toBe(true)
-    expect(session.cancel).toHaveBeenCalledTimes(1)
-    expect(anchor.cancel).toHaveBeenCalledTimes(1)
-    expect(anchor.commit).not.toHaveBeenCalled()
-    expect(mock.transcribe).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
-  })
-
-  it('selects an explicit input and language without requesting permission while listing', async () => {
-    mock.state = { ...mock.state, cached: false, progress: 0 }
-    mount()
-    act(() => {
-      shortcut()
-    })
-    await screen.findByRole('option', { name: 'USB microphone' })
-    expect(mock.list).toHaveBeenCalledTimes(1)
-    expect(mock.list.mock.calls[0]![0].requestPermission).toBe(false)
-    const user = userEvent.setup()
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Microphone' }),
-      'usb-1'
-    )
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Dictation language' }),
-      'fr'
-    )
-    await act(async () => {
-      change({ cached: true })
-    })
-    await user.click(screen.getByRole('button', { name: 'Dictate' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }))
-    await waitFor(() => expect(anchor.commit).toHaveBeenCalledTimes(1))
-    expect(mock.record).toHaveBeenCalledWith(
-      expect.objectContaining({ deviceId: 'usb-1' })
-    )
-    expect(mock.transcribe).toHaveBeenCalledWith(
-      audio,
-      expect.objectContaining({ language: 'fr' })
-    )
-    expect(
-      JSON.parse(localStorage.getItem('typenext:dictation-input:v1')!)
-    ).toEqual({ deviceId: 'usb-1', language: 'fr' })
-  })
-
-  it('retains a disconnected selected input as unavailable rather than silently changing to default', async () => {
-    localStorage.setItem(
-      'typenext:dictation-input:v1',
-      JSON.stringify({ deviceId: 'gone-input', language: '' })
-    )
-    mock.state = { ...mock.state, cached: false, progress: 0 }
-    mount()
-    act(() => {
-      shortcut()
-    })
-    await screen.findByRole('option', { name: 'USB microphone' })
-    expect(screen.getByRole('combobox', { name: 'Microphone' })).toHaveValue(
-      'gone-input'
-    )
-    expect(
-      screen.getByRole('option', {
-        name: 'Previously selected microphone · unavailable',
-      })
-    ).toBeVisible()
-    await act(async () => {
-      change({ cached: true })
-    })
-    await userEvent
-      .setup()
-      .click(screen.getByRole('button', { name: 'Dictate' }))
-    await screen.findByRole('button', { name: 'Stop' })
-    expect(mock.record).toHaveBeenCalledWith(
-      expect.objectContaining({ deviceId: 'gone-input' })
-    )
-  })
-
-  it('requests microphone permission only from setup refresh and aborts it when the setup closes', async () => {
-    mock.state = { ...mock.state, cached: false, progress: 0 }
-    const permission = deferred<Array<{ deviceId: string; label: string }>>()
-    mock.list
-      .mockResolvedValueOnce([{ deviceId: '', label: 'System default' }])
-      .mockReturnValueOnce(permission.promise)
-    mount()
-    act(() => {
-      shortcut()
-    })
-    const refresh = await screen.findByRole('button', {
-      name: 'Allow and refresh microphones',
-    })
-    await waitFor(() => expect(refresh).toBeEnabled())
-    await userEvent.setup().click(refresh)
-    const options = mock.list.mock.calls[1]![0]
-    expect(options.requestPermission).toBe(true)
-    await userEvent
-      .setup()
-      .click(screen.getByRole('button', { name: 'Choose microphone' }))
-    expect(options.signal.aborted).toBe(true)
-    expect(mock.unsubscribe).toHaveBeenCalledTimes(1)
-    await act(async () => {
-      permission.resolve([{ deviceId: 'late', label: 'Late device' }])
-    })
-    expect(screen.queryByRole('option', { name: 'Late device' })).toBeNull()
-  })
-
-  it('aborts an input setup permission prompt before starting a recording', async () => {
-    mock.state = { ...mock.state, cached: false, progress: 0 }
-    const permission = deferred<Array<{ deviceId: string; label: string }>>()
-    mock.list
-      .mockResolvedValueOnce([{ deviceId: '', label: 'System default' }])
-      .mockReturnValueOnce(permission.promise)
-    mount()
-    act(() => {
-      shortcut()
-    })
-    const refresh = await screen.findByRole('button', {
-      name: 'Allow and refresh microphones',
-    })
-    await waitFor(() => expect(refresh).toBeEnabled())
-    await userEvent.setup().click(refresh)
-    const signal = mock.list.mock.calls[1]![0].signal as AbortSignal
-    await act(async () => {
-      change({ cached: true })
-    })
-    await userEvent
-      .setup()
-      .click(screen.getByRole('button', { name: 'Dictate' }))
-    await screen.findByRole('button', { name: 'Stop' })
-    expect(signal.aborted).toBe(true)
-    expect(mock.record).toHaveBeenCalledTimes(1)
-    await act(async () => {
-      permission.resolve([])
-    })
-  })
-
-  it('keeps active model setup mounted when a shortcut is pressed before loading finishes', async () => {
-    mock.state = { ...mock.state, cached: false, progress: 0 }
-    const download = deferred<void>()
-    let signal!: AbortSignal
-    mock.download.mockImplementation(
-      ({ signal: value }: { signal: AbortSignal }) => {
-        signal = value
-        return download.promise
-      }
-    )
+  it('offers the Whistle download when it is not on this device yet', async () => {
+    mock.whistle = { ...mock.whistle, cached: false, progress: 0 }
     const { onCapture } = mount()
     act(() => {
       shortcut()
     })
+    await flush()
+    const download = screen.getByRole('button', {
+      name: 'Download Whistle · 17 MB',
+    })
+    expect(onCapture).not.toHaveBeenCalled()
+    expect(mock.download).not.toHaveBeenCalled()
+    expect(status()).toContain('Dictation needs Whistle')
+    await userEvent.setup().click(download)
+    expect(mock.download).toHaveBeenCalledTimes(1)
     await userEvent
       .setup()
-      .click(screen.getByRole('button', { name: 'Download Whistle · 17 MB' }))
-    await act(async () => {
-      change({ cached: true, status: 'loading' })
-    })
+      .click(screen.getByRole('button', { name: 'Start dictating' }))
+    await flush()
+    expect(onCapture).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Fluid Speech Mini setup and Whistle as a quick fallback', async () => {
+    mock.speech = {
+      ...mock.speech,
+      installed: { runtime: false, model: false },
+    }
+    const openSettings = vi.fn()
+    const { onCapture } = mount(FLUID, openSettings)
     act(() => {
       shortcut()
     })
-    expect(signal.aborted).toBe(false)
-    expect(
-      screen.getByRole('region', { name: 'Offline dictation model' })
-    ).toBeVisible()
-    expect(mock.record).not.toHaveBeenCalled()
+    await flush()
+    expect(mock.refresh).toHaveBeenCalled()
     expect(onCapture).not.toHaveBeenCalled()
-    await act(async () => {
-      change({ status: 'ready' })
-      download.resolve()
+    const user = userEvent.setup()
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Download Fluid Speech Mini (347 MB)',
+      })
+    )
+    expect(openSettings).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: 'Dictation settings' }))
+    expect(openSettings).toHaveBeenCalledTimes(2)
+    await user.click(screen.getByRole('button', { name: 'Use Whistle now' }))
+    await flush()
+    expect(onCapture).toHaveBeenCalledTimes(1)
+    expect(recorder!.maxSeconds).toBe(30)
+    expect(screen.getByText('Whistle')).toHaveClass('dictation-chip-engine')
+    act(() => {
+      fireEvent.keyDown(window, { key: 'Escape' })
     })
-    expect(signal.aborted).toBe(false)
+    // The fallback holds for the rest of this note's session.
+    await start()
+    expect(onCapture).toHaveBeenCalledTimes(2)
+  })
+
+  it('downloads Fluid Speech Mini inline without a settings callback', async () => {
+    mock.speech = {
+      ...mock.speech,
+      installed: { runtime: false, model: false },
+    }
+    mock.downloadFluid.mockResolvedValue({
+      error: 'Hugging Face asked for a token. Follow the guide to continue.',
+    })
+    mount(FLUID)
+    act(() => {
+      shortcut()
+    })
+    await flush()
+    await userEvent.setup().click(
+      screen.getByRole('button', {
+        name: 'Download Fluid Speech Mini (347 MB)',
+      })
+    )
+    await flush()
+    expect(mock.downloadFluid).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Hugging Face asked for a token'
+    )
+  })
+
+  it('uses the chosen microphone and Whistle language', async () => {
+    localStorage.setItem(
+      'typenext:dictation-input:v1',
+      JSON.stringify({ deviceId: 'usb-1', language: 'fr' })
+    )
+    resetDictationInputForTests()
+    mount()
+    await start()
+    expect(mock.record).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'usb-1' })
+    )
+    speak(1)
+    act(() => {
+      shortcut()
+    })
+    await flush()
+    expect(mock.transcribeWhistle).toHaveBeenCalledWith(
+      expect.any(Float32Array),
+      expect.objectContaining({ language: 'fr' })
+    )
+  })
+
+  it('warns when the microphone stays very quiet', async () => {
+    mount()
+    await start()
+    silence(3.2)
+    expect(screen.getByText('Microphone is very quiet')).toBeVisible()
+    expect(status()).toBe('The microphone is very quiet.')
+  })
+
+  it('finishes and cancels from the chip buttons', async () => {
+    mount()
+    await start()
+    speak(1)
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Finish dictation' }))
+    await flush()
+    expect(doc).toEqual(['A spoken thought.'])
+    await waitFor(() => expect(mock.record).toHaveBeenCalledTimes(1))
   })
 })

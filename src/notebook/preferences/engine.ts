@@ -18,6 +18,7 @@ export const KEY_LINKS: Partial<Record<ExternalProvider, string>> = {
   openrouter: 'https://openrouter.ai/keys',
   openai: 'https://platform.openai.com/api-keys',
   anthropic: 'https://console.anthropic.com/settings/keys',
+  cloudflare: 'https://dash.cloudflare.com/profile/api-tokens',
 }
 
 export function usingExternal(settings: NotebookSettings): boolean {

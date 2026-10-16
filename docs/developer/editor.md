@@ -102,6 +102,32 @@ For `all`, `fetchLinkPreview` requests the page with `publicOnly: true`. It read
 
 The e2e test `typing stays responsive in a long note with lists and tables` pastes 400 blocks of headings, nested lists, tables and links. It then types 60 characters. The median frame time must be below 40 ms and the 95th percentile below 120 ms. Run this test after a change to live preview, link styles or completion sources. Keep decorations limited to the visible ranges where possible.
 
+A keystroke has two costs: the CodeMirror update and the React update of the app shell after `onChange`. Measured in development mode with 400 notes and a 13,500-line note, the CodeMirror update takes about 0.2 ms. Keep the React part small:
+
+- The sidebar note list is `NoteList` → `NoteListBody` → `NoteListItem`, all memoized. Rows are rebuilt only when a visible row value changes (title, date text, source count). Text edits change no row.
+- The word count follows a 400 ms pause, not each key.
+- Rarely used dialogs (`Preferences`, `NoteGraph`) load with `React.lazy` on first use and stay mounted after that.
+- The table preview field maps rendered tables through edits. It scans the document again only when an edit touches a line with a pipe, the edit is next to a table, a rendered table changes, or background parsing finishes more of the document.
+- Background services read their state from memory, not from storage, on each edit (for example the Git sync versions).
+
+With these rules, the 95th percentile frame stays at about one frame (13–15 ms at 60 Hz) in development mode. Measure with a CPU profile before you add work to the `onChange` path.
+
+## Writing flow
+
+`writing-flow.ts` holds the small aids around the text. Each aid reads its setting through the `FlowHost` callbacks, so a settings change needs no new editor. Call `refreshFlow(view)` after a change.
+
+- **Format bar.** A tooltip on a non-empty selection outside code. It wraps the selection (bold, italic, strike, code, link, note link, quote) and can start web facts.
+- **Focus.** Lines outside the current paragraph or sentence get `cm-flow-dim`. Only visible lines get decorations.
+- **Typewriter.** When the cursor changes line, the view scrolls the line to the middle.
+- **Smart typography.** `smartReplacement(before, typed)` returns the change for `--`, `...`, `->` and `<-`. It does nothing at the start of a line, in a table row, in code or after an open backtick.
+- **Smart paste.** A pasted web address becomes `[host/path](url)`. When link previews may contact websites, the label changes to the page title when the preview arrives.
+
+The outline, the "Linked from" list and the word goal are React components in `src/notebook/WritingAids.tsx`. They read the note text, not the editor state. `MarkdownEditor` has `jumpTo(pos)` for the outline and the command palette.
+
+## Command palette
+
+`CommandPalette.tsx` shows notes, headings and actions. `command-palette.ts` does the ranking with no React. The app passes `workspace.notes`, the headings and a memoized action list. The chosen command runs after the dialog closes and gives focus back, so a command can move focus itself. The query resets each time the palette opens, during render, not in an effect: a fast first key must not see the last query.
+
 ## Rules
 
 - Do not store state outside the CodeMirror state. Use `StateField` and `StateEffect`.

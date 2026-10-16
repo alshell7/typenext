@@ -1,3 +1,4 @@
+import { huggingFaceHeaders, huggingFaceIssue } from './huggingface'
 import {
   WHISTLE_MODEL,
   parseWhistleTranscript,
@@ -231,7 +232,15 @@ export async function downloadWhistleModel(
       signal: controller.signal,
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
+      headers: await huggingFaceHeaders(whistleModelUrl()),
     })
+    const refused = huggingFaceIssue(response.status)
+    if (refused)
+      throw new Error(
+        refused === 'auth'
+          ? 'huggingface-auth: Hugging Face asks for a sign-in token for this model.'
+          : 'huggingface-rate-limit: Hugging Face is limiting anonymous downloads. Add a token to continue.'
+      )
     const bytes = await readModel(
       response,
       controller.signal,

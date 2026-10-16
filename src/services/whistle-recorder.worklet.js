@@ -1,16 +1,27 @@
 /* global AudioWorkletProcessor, registerProcessor, sampleRate */
-// Keep audio on the rendering thread until Stop; only the final bounded PCM
-// buffer and a few duration messages cross to the page.
+// Clip mode keeps audio on the rendering thread until Stop; only the final
+// bounded PCM buffer and a few duration messages cross to the page.
+// Stream mode (long dictation) sends 100 ms chunks of 16 kHz PCM instead,
+// and stops by itself at `maxSamples`.
+const CHUNK = 1600
+
 class WhistleRecorder extends AudioWorkletProcessor {
   constructor(options) {
     super()
-    this.samples = new Float32Array(480000)
+    const settings = options?.processorOptions ?? {}
+    this.stream = !!settings.stream
+    this.max =
+      Number.isFinite(settings.maxSamples) && settings.maxSamples > 0
+        ? Math.floor(settings.maxSamples)
+        : 480000
+    this.samples = new Float32Array(this.stream ? CHUNK : this.max)
     this.count = 0
+    this.fill = 0
     this.ratio = sampleRate / 16000
     this.remaining = this.ratio
     this.area = 0
     this.lastProgress = 0
-    this.emitLevel = !!options?.processorOptions?.emitLevel
+    this.emitLevel = !!settings.emitLevel
     this.levelEnergy = 0
     this.levelSamples = 0
     this.finished = false
@@ -19,13 +30,31 @@ class WhistleRecorder extends AudioWorkletProcessor {
     }
   }
 
+  level() {
+    const value = this.levelSamples
+      ? Math.min(1, Math.sqrt(this.levelEnergy / this.levelSamples))
+      : 0
+    this.levelEnergy = 0
+    this.levelSamples = 0
+    return value
+  }
+
   complete() {
     if (this.finished) return
     this.finished = true
-    const samples = this.samples.slice(0, this.count)
+    const samples = this.samples.slice(0, this.stream ? this.fill : this.count)
     this.samples.fill(0)
     this.samples = null
     this.port.postMessage({ type: 'complete', samples }, [samples.buffer])
+  }
+
+  flushChunk() {
+    const samples = this.samples
+    const message = { type: 'chunk', samples, seconds: this.count / 16000 }
+    if (this.emitLevel) message.level = this.level()
+    this.port.postMessage(message, [samples.buffer])
+    this.samples = new Float32Array(CHUNK)
+    this.fill = 0
   }
 
   process(inputs) {
@@ -46,31 +75,27 @@ class WhistleRecorder extends AudioWorkletProcessor {
         available -= weight
         if (this.remaining <= 0.00000001) {
           const sample = this.area / this.ratio
-          this.samples[this.count++] = sample
+          if (this.stream) this.samples[this.fill++] = sample
+          else this.samples[this.count] = sample
+          this.count++
           if (this.emitLevel) {
             this.levelEnergy += sample * sample
             this.levelSamples++
           }
           this.area = 0
           this.remaining = this.ratio
-          if (this.count >= 480000) {
+          if (this.stream && this.fill >= CHUNK) this.flushChunk()
+          if (this.count >= this.max) {
             this.complete()
             return false
           }
         }
       }
     }
-    if (this.count - this.lastProgress >= 3200) {
+    if (!this.stream && this.count - this.lastProgress >= 3200) {
       this.lastProgress = this.count
       const progress = { type: 'progress', seconds: this.count / 16000 }
-      if (this.emitLevel) {
-        progress.level = Math.min(
-          1,
-          Math.sqrt(this.levelEnergy / this.levelSamples)
-        )
-        this.levelEnergy = 0
-        this.levelSamples = 0
-      }
+      if (this.emitLevel) progress.level = this.level()
       this.port.postMessage(progress)
     }
     return true

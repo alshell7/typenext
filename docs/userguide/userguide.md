@@ -26,10 +26,12 @@ This guide tells you how to use each feature. It applies to the desktop app on m
 9. [Web facts](#web-facts)
 10. [Dictation](#dictation)
 11. [Zen mode](#zen-mode)
-12. [Preferences](#preferences)
-13. [Keyboard shortcuts](#keyboard-shortcuts)
-14. [Privacy summary](#privacy-summary)
-15. [Troubleshooting](#troubleshooting)
+12. [Model downloads and Hugging Face](#model-downloads-and-hugging-face)
+13. [Git sync](#git-sync)
+14. [Preferences](#preferences)
+15. [Keyboard shortcuts](#keyboard-shortcuts)
+16. [Privacy summary](#privacy-summary)
+17. [Troubleshooting](#troubleshooting)
 
 ## Get started
 
@@ -85,7 +87,7 @@ To set an objective or background for the note, use the **Intent** section of th
 
 ### Find and open notes
 
-- Press Ctrl/⌘ P to show the sidebar and go to **Find a note**. Type part of a title.
+- Press Ctrl/⌘ P to open the command palette, then type part of a title. Or type in **Find a note** in the sidebar.
 - Select a note in **Your notes** to open it in a tab.
 - Press Ctrl/⌘ B to show or hide the notes sidebar.
 
@@ -159,6 +161,28 @@ TypeNext aligns the columns each time you move between cells.
 | Link: make the selection a link      | Ctrl/⌘ K |
 
 With Ctrl/⌘ K and selected text, TypeNext writes `[text](https://)` and selects the address. When the selection is an address, it writes `[](address)` and puts the cursor in the brackets.
+
+### Writing flow
+
+Go to **Preferences → Editor → Writing flow**:
+
+- **Format bar on selection**: select text to see Bold, Italic, Strikethrough, Code, Link, Link to a note, Quote and (when on) web facts.
+- **Typewriter scrolling**: the line that you write stays near the middle of the window.
+- **Focus**: **Paragraph** or **Sentence** dims the other text. **Focus in full zen** turns on typewriter scrolling and paragraph focus in the full zen level.
+- **Smart typography**: type `--` for an em dash (—), `...` for an ellipsis (…), `->` and `<-` for arrows. Code, list markers and table rows do not change.
+- **Daily word goal**: a small ring in the status bar fills as you write. The status bar also shows the reading time and the words that you wrote today.
+
+Paste a web address to make a Markdown link. When **Link previews** is **Notes & web**, TypeNext replaces the link text with the page title.
+
+### Outline and linked notes
+
+When a note has two or more headings, short marks in the right margin show its outline. Point at the marks to see the headings. Select a heading to go to it. The current section is marked.
+
+Below the note, **Linked from** lists the notes that link to this note. Select one to open it.
+
+### Command palette
+
+Press Ctrl/⌘ P to open the command palette. Type to find a note, a heading in this note, or an action. Type `>` to show only actions, or `#` to show only headings. Press Enter to open the result. If no note has the name, select **Create note** to make one.
 
 ## The insert menu
 
@@ -422,7 +446,7 @@ A preview does not change the note. A hosted chat model returns up to three new 
 | **Built-in SmolLM2**          | A small English model in TypeNext. A one-time download of about 139 MB. Works offline.           |
 | **Local server**              | A model in LM Studio, Jan, Lemonade or llama.cpp on your computer.                               |
 
-External providers are OpenRouter, OpenAI, Anthropic and a custom endpoint. Set them up in **Preferences → Models**.
+External providers are OpenRouter, OpenAI, Anthropic, Cloudflare and a custom endpoint. Set them up in **Preferences → Models**.
 
 ### Set up a local server
 
@@ -437,13 +461,27 @@ External providers are OpenRouter, OpenAI, Anthropic and a custom endpoint. Set 
 CAUTION: While an external provider is active, TypeNext sends nearby writing, the objective, your instructions and relevant attached context to that provider. The privacy and billing terms of the provider apply.
 
 1. Go to **Preferences → Models → External providers**.
-2. Select **OpenRouter**, **OpenAI**, **Anthropic** or **Custom**.
-3. Paste your key in **API key**.
+2. Select **OpenRouter**, **OpenAI**, **Anthropic**, **Cloudflare** or **Custom**.
+3. Paste your key in **API key**. For Cloudflare, paste an API token in **API token**.
 4. Optional, on the desktop: select **Remember in the device credential vault** to keep the key after a restart.
 5. Select **Save key**.
-6. Select **Load models**, then choose a model. For OpenRouter, **Free only** shows free models.
+6. Choose a model in **Choose a model**. The list shows current models that TypeNext recommends. To use another model, select **Load models** and choose from all models of your account, or paste a model identifier. For OpenRouter, **Free only** shows free models.
 7. Optional: select **Save this model** to add it to the engine chooser.
 8. Select **Use {provider} continuously**, for example **Use OpenRouter continuously**.
+
+#### Cloudflare Workers AI
+
+Cloudflare needs the ID of the account that owns Workers AI.
+
+1. Save the API token first (steps 3 to 5).
+2. Select **Find** next to **Account ID**. If the token can read accounts, TypeNext fills in the ID.
+3. If TypeNext cannot find the account, open the Cloudflare dashboard. Go to **Workers AI → Use REST API** and copy the account ID. Paste it in **Account ID**.
+
+An account ID has 32 letters and numbers. A token with the **Workers AI** permission can write suggestions. A token also needs **Account Settings: Read** to use **Find**.
+
+#### Models that always think
+
+Some new models always reason before they answer, for example Claude Opus 5.5, Claude Fable 5.1 and GPT-6.1 Sol. TypeNext uses their lowest reasoning level, so their suggestions are slower and cost more. For everyday suggestions, use a fast model such as Claude Haiku 5.5, GPT-5.4 mini or Llama 3.3 70B.
 
 To return to local suggestions, select **Switch to this device**. A local error never sends a request to an external provider.
 
@@ -454,9 +492,20 @@ Go to **Preferences → Suggestions**:
 - **Inline suggestions**: turn suggestions on or off.
 - **Suggest after a pause**: when off, suggestions come only from Ctrl/⌘ Space.
 - **Suggestion length**: **Adapt to the sentence**, **Just a few words** or **Up to one sentence**.
-- **Pause before suggesting**: **Quick (0.65s)**, **Natural (1.1s)** or **Unhurried (1.8s)**.
 - **Creativity**: from **Stay close** to **Explore a little**.
 - **Suggestion instructions**: your own instructions for all models, up to 2,000 characters.
+
+**Timing**:
+
+- **Pause before suggesting**: the time after you stop typing, from 200 ms to 3 s.
+- **Adapt to my rhythm**: when on, TypeNext waits longer while you type quickly. It offers a suggestion sooner at the end of a sentence, at the start of a line, or after you accept a suggestion.
+- **Characters before suggesting**: the number of characters in the current line before an automatic suggestion. 0 allows a suggestion at the start of a line.
+- **Link preview delay**: the time a pointer rests on a link before its card opens. The new value applies to notes that you open next.
+- **Meaning index delay**: the time after edits before semantic search updates its index.
+
+TypeNext does not offer automatic suggestions inside a web address, a link destination, a note link that you type, or an inline code span.
+
+Suggestions follow the structure at the cursor. In a heading, a suggestion completes the heading on the same line. In a list item or a task, it completes only that item. In a table cell, it adds a few words and never adds a pipe or a row. The model also receives the name of the section that the cursor is in.
 
 To pause suggestions for a short time, select the suggestion status in the status bar.
 
@@ -573,15 +622,55 @@ Turn on **Also ground Ctrl / ⌘ Space choices with web facts** to add cited fac
 
 ## Dictation
 
-TypeNext can transcribe speech on your device with the optional Whistle model, a one-time download of about 17 MB.
+TypeNext transcribes speech on your device. No audio goes to a service. There are two speech engines:
+
+| Engine | Download | Use |
+| --- | --- | --- |
+| **Whistle** | About 17 MB | In the app and the browser preview. 7 languages. Clips of up to 30 seconds. |
+| **Fluid Speech Mini** | 347 MB | Desktop app. English. The best accuracy, also with other voices in the room. Long dictation with live phrases. Fluid Speech Mini by FluidVoice, CC BY 4.0. |
+
+### Set up dictation
+
+1. Go to **Preferences → Dictation**.
+2. In **Speech engine**, select **Whistle** or **Fluid Speech Mini**.
+3. Download the model. For Fluid Speech Mini, TypeNext downloads a pinned parakeet.cpp runtime and the model, and checks each file.
+4. In **Microphone**, choose the **Input** and, for Whistle, the **Language**. Use the level meter to check the microphone.
+
+### Dictate
 
 1. Put the cursor where the text must go.
 2. Press Ctrl/⌘ Shift D, or select the dictation button in the toolbar.
-3. At the first use, download the model and choose a microphone.
-4. Speak. You can continue to type.
-5. Press Ctrl/⌘ Shift D again to stop. Press Escape to cancel.
+3. Speak. A small chip at the cursor shows the level, the time and the state: **Waiting for speech…**, **Listening**, **Transcribing…**. You can continue to type.
+4. Press Ctrl/⌘ Shift D again to finish. Press Escape to cancel.
 
-A recording stops after 30 seconds. The transcript enters the note at the recording position. TypeNext sends no audio to a service.
+The chip never covers your text and never takes the keyboard focus. If the microphone is too quiet, the chip shows **Microphone is very quiet**.
+
+### While you speak
+
+- **Insert phrases while speaking** (Fluid Speech Mini): at each pause of about 0.7 seconds, the finished phrase enters the note. The phrase that you still speak shows as faint text at the cursor. It is not part of the note until it is finished. Each phrase is one undo step.
+- **Stop after silence**: dictation ends by itself after this pause, once you have spoken. 0 turns this off.
+- TypeNext adds the correct space and capital letter for the text before the cursor. It removes a phrase that has only filler words, for example "um".
+
+When Escape cancels live dictation, only the unfinished phrase is removed. Phrases that are already in the note stay. Use Ctrl/⌘ Z to remove them.
+
+### Voice commands
+
+Say a command on its own, or at the end of a phrase:
+
+| Say | Result |
+| --- | --- |
+| "new line" | A line break |
+| "new paragraph" | A blank line |
+| "period" or "full stop", "comma", "colon", "question mark", "exclamation mark" | The punctuation mark |
+| "open quote", "close quote" | Quotation marks |
+| "bullet point" or "new bullet" | A new list item |
+| "scratch that" | Remove the last phrase of this dictation |
+
+Words that only look like commands stay as text, for example "the trial period".
+
+### If something goes wrong
+
+If an insertion fails, the transcript stays in a box below the page. Edit it, then insert it or copy it. If Fluid Speech Mini fails on a short phrase and Whistle is downloaded, Whistle transcribes that phrase.
 
 ## Zen mode
 
@@ -608,6 +697,57 @@ You can also set the level in **Preferences → Writing → Zen mode → Hide**.
 
 The toolbars hide again 0.7 seconds after the pointer leaves the edge. TypeNext always starts with zen mode off.
 
+## Model downloads and Hugging Face
+
+The built-in model, Whistle, Fluid Speech Mini and EmbeddingGemma 2 download from Hugging Face. These models need no account. Hugging Face can still refuse a download:
+
+- A model that needs an account returns "sign in". You must accept the terms of the model on its page.
+- Many downloads from one network can be limited.
+
+When this occurs, TypeNext opens **Hugging Face asks you to sign in** or **Hugging Face is limiting downloads**. Do the steps in the dialog:
+
+1. Select **Create a read token**. Sign in to Hugging Face, or create a free account.
+2. Give the token a name, for example "TypeNext". Keep the type **Read**. Select **Create token**, then copy it.
+3. If the dialog shows **Model page**, open it. If the page shows terms, read them and select **Agree**.
+4. Paste the token in **Hugging Face token**. Select **Check and save token**.
+5. Select **Try the download again**.
+
+TypeNext checks the token with Hugging Face before it saves it. You can also add or remove the token in **Preferences → Models → Model downloads**. TypeNext sends the token only to huggingface.co, and only for model downloads.
+
+## Git sync
+
+Git sync keeps every note as a Markdown file in a Git repository. Use it to keep a history of your notes, and to use the same notes on more than one computer. Git sync needs the desktop app and Git.
+
+### Set up Git sync
+
+1. Go to **Preferences → Sync**.
+2. If TypeNext shows **Git is not installed**, install Git with the command or the link in the pane. Then restart TypeNext.
+3. Select **Choose** and select a folder for your notes.
+4. If the folder is not a Git repository, type a **Remote address** (optional), then select **Set up repository**. Use an empty private repository.
+5. Turn on **Sync notes with Git**.
+
+TypeNext uses your existing Git sign-in, for example an SSH key or a credential helper. TypeNext does not store Git passwords.
+
+### How Git sync works
+
+- Each note is a file in the `notes` folder, with its title and identifier at the top.
+- After you stop writing, TypeNext waits for the time in **Wait after writing**. Then it commits the notes that changed.
+- TypeNext looks for changes from the remote on start and at **Look for remote changes**. It brings in new and changed notes.
+- When **Send commits to the remote** is on, TypeNext pushes its commits.
+- To sync at once, select **Sync now** in the pane or the sync line in the sidebar.
+
+All Git work runs in the background, at a low priority, one sync at a time.
+
+### When the same note changed in two places
+
+TypeNext does not lose writing. The note on this computer keeps your text. The other version arrives as a separate note, for example "Plan (from Git)" or "Plan (other version)". Compare the two notes and keep the text that you want.
+
+A note that another computer deleted stays on this computer if you changed it after the last sync.
+
+### Offline
+
+When the remote is not available, TypeNext commits in the local repository and shows **Git offline · saved locally**. It sends the commits at the next sync.
+
 ## Preferences
 
 Press Ctrl/⌘ , or select **Preferences** in the sidebar.
@@ -616,10 +756,11 @@ Press Ctrl/⌘ , or select **Preferences** in the sidebar.
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Writing**     | **Typeface**, **Size (px)**, **Theme** (System, Light, Dark), colour palettes, **Zen mode**, **Autosave**.                                          |
 | **Editor**      | **Insert menu**, **Trigger character**, **Custom commands**, **Live preview**, **Link previews**.                                                   |
-| **Suggestions** | **Inline suggestions**, **Suggest after a pause**, **Suggestion length**, **Pause before suggesting**, **Creativity**, **Suggestion instructions**. |
-| **Models**      | The active engine, **On this device**, **External providers**, keys and saved models.                                                               |
+| **Suggestions** | **Inline suggestions**, **Suggest after a pause**, **Suggestion length**, **Creativity**, **Timing**, **Suggestion instructions**.                   |
+| **Models**      | The active engine, **On this device**, **External providers**, keys, saved models, **Model downloads**.                                             |
 | **Knowledge**   | **Semantic search**, **Run with**, **Vector size**, **Images, audio and video**, **Website importer**.                                              |
 | **Web facts**   | **Web facts**, **Also ground Ctrl / ⌘ Space choices with web facts**, **Search model**.                                                             |
+| **Sync**        | **Folder**, **Sync notes with Git**, **Sync after writing pauses**, **Wait after writing**, **Look for remote changes**, **Send commits to the remote**. |
 | **Shortcuts**   | A list of keyboard shortcuts.                                                                                                                       |
 
 **Models** starts with the active engine card. It shows **Suggestions come from**, the engine and **On this device** or **External**.
@@ -638,7 +779,7 @@ Global shortcuts do nothing while a dialog is open.
 | Open a Markdown file        | ⌘ O       | Ctrl+O            |
 | Save                        | ⌘ S       | Ctrl+S            |
 | Save as                     | ⌘ Shift S | Ctrl+Shift+S      |
-| Search notes                | ⌘ P       | Ctrl+P            |
+| Command palette: find notes, headings and actions | ⌘ P | Ctrl+P |
 | Show or hide notes          | ⌘ B       | Ctrl+B            |
 | Show or hide notes (menu)   | ⌘ 1       | Ctrl+1            |
 | Show or hide context (menu) | ⌘ 2       | Ctrl+2            |
@@ -685,6 +826,8 @@ Global shortcuts do nothing while a dialog is open.
 | External provider (active)                                  | Nearby writing, objective, instructions and relevant attached context.         |
 | Web facts (on request)                                      | Selected text, nearby writing, note title and objective, to OpenAI.            |
 | Link previews (**Notes & web**)                             | A request to the linked website. No note text.                                 |
+| Git sync                                                    | Notes as Markdown files, to the Git remote that you choose.                    |
+| Hugging Face token                                          | The token, to huggingface.co, only for model downloads.                        |
 | Website import                                              | A request to the website. With Firecrawl, the address goes to Firecrawl.       |
 
 On the desktop, keys stay in memory unless you select **Remember in the device credential vault**. In the browser preview, keys last for the session only.
@@ -695,6 +838,9 @@ On the desktop, keys stay in memory unless you select **Remember in the device c
 | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | No suggestions appear.                                               | Make sure that **Inline suggestions** is on and the status bar does not show **Suggestions paused**. Press Ctrl/⌘ Space.                                   |
 | ⌘ Space opens Spotlight on macOS.                                    | macOS uses ⌘ Space for Spotlight by default. Change the Spotlight shortcut in macOS System Settings, or use **Suggest a continuation** in the insert menu. |
+| Hugging Face refuses a model download.                               | Add a read token. See [Model downloads and Hugging Face](#model-downloads-and-hugging-face).                                                                |
+| Git sync shows **Git sync needs attention**.                         | Select the sync line in the sidebar to open **Preferences → Sync**. Make sure that Git is installed, the folder exists, and your Git sign-in works.          |
+| Cloudflare returns no models.                                        | Make sure that **Account ID** is correct and that the token has the **Workers AI** permission.                                                              |
 | The insert menu does not open.                                       | Type the trigger at the start of a word, not in code. Make sure that **Insert menu** is on in **Preferences → Editor**.                                    |
 | The insert menu opens when I want a slash.                           | Press Escape after the slash. Or change the **Trigger character**.                                                                                         |
 | A suggestion uses wrong facts.                                       | Check the **Intent** and the attached references. Turn off references that are not related. A model can be wrong also with the correct passage.            |

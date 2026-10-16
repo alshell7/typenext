@@ -236,8 +236,13 @@
   min-width: 260px;
   max-width: min(360px, calc(100vw - 24px));
   padding: 4px;
-  font-family: inherit;
+  /* CodeMirror's base theme sets a monospace list font at runtime. */
+  font-family: 'Source Sans Pro', 'Segoe UI', sans-serif !important;
   scrollbar-width: thin;
+}
+.cm-tooltip.cm-insert-menu > ul > li,
+.cm-tooltip.cm-insert-menu completion-section {
+  font-family: 'Source Sans Pro', 'Segoe UI', sans-serif !important;
 }
 .cm-tooltip.cm-insert-menu > ul > li {
   display: flex;
@@ -422,5 +427,70 @@ li[aria-selected] .cm-insert-icon {
 @media (max-width: 520px) {
   .toolbar-button > span:not(.source-count) {
     display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Git sync */
+.git-sync-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 9px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  color: var(--secondary);
+  font-size: 11px;
+  text-align: left;
+}
+.git-sync-status:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.git-sync-status.is-error {
+  color: var(--error);
+}
+
+/* ---------------------------------------------------------------- Format bar */
+.cm-format-bar {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 12%);
+  animation: suggestion-menu-appear 120ms ease-out both;
+  font:
+    600 12px/1 'Source Sans Pro',
+    'Segoe UI',
+    sans-serif;
+}
+.cm-format-bar button {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 6px;
+  color: var(--secondary);
+}
+.cm-format-bar button:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.cm-format-bar button[title='Italic'] {
+  font-style: italic;
+}
+.cm-format-bar button[title='Strikethrough'] {
+  text-decoration: line-through;
+}
+.markdown-editor .cm-tooltip:has(> .cm-format-bar) {
+  background: transparent;
+  border: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm-format-bar {
+    animation: none;
   }
 }

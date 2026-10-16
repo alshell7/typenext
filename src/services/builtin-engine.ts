@@ -6,6 +6,7 @@ import {
   validBuiltinCacheFile,
   type BuiltinPrompt,
 } from './builtin-model'
+import { huggingFaceHeaders, huggingFaceIssue } from './huggingface'
 
 export type { BuiltinPrompt } from './builtin-model'
 export type BuiltinBackend = 'auto' | 'wasm' | 'webgpu'
@@ -200,7 +201,15 @@ export async function downloadBuiltinModel(
         signal: controller.signal,
         credentials: 'omit',
         referrerPolicy: 'no-referrer',
+        headers: await huggingFaceHeaders(builtinFileUrl(file.name)),
       })
+      const refused = huggingFaceIssue(response.status)
+      if (refused)
+        throw new Error(
+          refused === 'auth'
+            ? 'huggingface-auth: Hugging Face asks for a sign-in token for this model.'
+            : 'huggingface-rate-limit: Hugging Face is limiting anonymous downloads. Add a token to continue.'
+        )
       if (!response.ok || !response.body)
         throw new Error(
           `The public model download failed (${response.status}). Try again later.`

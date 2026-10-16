@@ -111,6 +111,39 @@ Routers can also reach a safety classifier that answers with a verdict, for exam
 
 OpenAI chat requests use `max_completion_tokens`, not `max_tokens`. GPT-5.x and GPT-6 models (except `chat` variants) send `reasoning_effort: 'none'` and the temperature. Early GPT-5 models (`gpt-5`, `-mini`, `-nano`, `-pro`, `-codex`) and o-series models reason by default and accept no temperature. They receive 384 more completion tokens, with `reasoning_effort: 'minimal'` (GPT-5) or `'low'` (o-series). Other OpenAI models send `max_completion_tokens` and the temperature.
 
+Some OpenAI models always reason, for example `gpt-6.1-sol` and `gpt-6-astra`, and some reject a temperature. When OpenAI answers "unsupported value" for `reasoning_effort` or `temperature`, TypeNext corrects the same request from the error: it uses the lowest supported reasoning level with 512 more completion tokens, or removes the temperature. It does this at most twice. A live test sends one suggestion to each shipped OpenAI model.
+
+Current Claude models think adaptively and reject sampling parameters. TypeNext sends, per model:
+
+| Model | Request |
+| --- | --- |
+| Claude Fable 5.1, Mythos, Opus 5.5 | Thinking cannot be disabled. `output_config.effort: 'low'` and 1,536 more output tokens for the thinking. No temperature. |
+| Claude Sonnet 5.5 | `thinking: { type: 'between_tools' }` (thinking off) and `effort: 'low'`. No temperature. |
+| Claude Haiku 5.5, Opus 5, Sonnet 5 | `thinking: { type: 'disabled' }` and `effort: 'low'`. No temperature. |
+| Claude Opus 4.7 and 4.8 | No thinking by default. No temperature. |
+| Older models | `max_tokens` and the temperature. |
+
+Cloudflare Workers AI uses its OpenAI-compatible endpoint `https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1` with a Bearer API token. The account ID is part of the address. **Find** lists accounts when the token can read them. **Load models** uses the Workers AI catalog search for the task "Text Generation". Reasoning models such as `@cf/openai/gpt-oss-120b` can write thinking first; the sanitizer removes `<think>` blocks.
+
+TypeNext ships a model catalog for OpenAI, Anthropic, Cloudflare and OpenRouter (`src/notebook/provider-catalog.ts`). It was checked against the provider model lists on 2026-10-16. **Choose a model** shows it without a network request; **Load models** still shows every model of the account.
+
+## Structure at the cursor
+
+A suggestion must keep the Markdown shape. Before a request, TypeNext finds the structure of the current line and the nearest heading above the cursor. The request data carries `section` (the heading) and `structure` (heading, list item, task, table cell or quote).
+
+| Structure | Budget |
+| --- | --- |
+| Table cell | At most 6 words and 60 characters. The insertion ends at a pipe or a line break. |
+| Heading | At most 8 words. One line, no closing punctuation. |
+| List item or task | At most 16 words. One line; no new item. |
+| Paragraph and quote | The adaptive budget above. |
+
+## When automatic suggestions start
+
+Automatic suggestions wait for **Pause before suggesting** (200 ms to 3 s). With **Adapt to my rhythm**, the delay changes: 1.5 times longer while the writer types quickly (an average gap below 160 ms), 0.85 times for slow typing, 0.6 times within 4 seconds after an accepted suggestion, 0.8 times at a sentence end or an empty line, and 1.2 times in a word fragment. The result stays between 200 ms and 5 s.
+
+No automatic suggestion starts inside a web address, a link destination, a note link that the writer types, an inline code span, or right after a bare list marker. **Characters before suggesting** sets a minimum line length. Ctrl/⌘ Space always requests at once.
+
 | Runtime or protocol | Current integration                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | LM Studio           | OpenAI-compatible chat/models API; typical base URL `http://localhost:1234/v1`. [Official endpoints](https://lmstudio.ai/docs/developer/openai-compat).                                                                                                                                                                                                                                                                                                |
