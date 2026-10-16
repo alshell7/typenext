@@ -218,7 +218,13 @@ fn validate_remote(raw: &str) -> Result<String, String> {
         }
     }
     if let Some(rest) = remote.strip_prefix("file://") {
-        return if Path::new(rest).is_absolute() {
+        // The path of a file URL is always absolute (/srv/notes.git, or
+        // /C:/notes.git on Windows), so check the URL form, not the OS path.
+        return if no_spaces
+            && rest.len() > 1
+            && rest.starts_with('/')
+            && !rest[1..].starts_with('-')
+        {
             Ok(remote.into())
         } else {
             Err(invalid())
@@ -2344,8 +2350,17 @@ mod tests {
             "ssh://git@github.com/writer/notes.git",
             "git@github.com:writer/notes.git",
             "file:///srv/notes.git",
+            "file:///C:/Users/writer/notes.git",
         ] {
             assert!(validate_remote(remote).is_ok(), "{remote}");
+        }
+        for remote in [
+            "file://",
+            "file://notes.git",
+            "file:///-upload",
+            "file:///my notes",
+        ] {
+            assert!(validate_remote(remote).is_err(), "{remote}");
         }
         #[cfg(unix)]
         assert!(validate_remote("/Volumes/Backup/notes.git").is_ok());
