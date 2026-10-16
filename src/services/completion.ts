@@ -11,6 +11,7 @@ import type {
 } from '../types/notebook'
 import { getSecret, requestJson } from './native'
 import { retrieveContext } from './retrieval'
+import { retrieveHybrid, semanticNextLines } from './semantic-retrieval'
 import { offlineStarters } from './offline-starters'
 import {
   generateBuiltinInsertion,
@@ -374,6 +375,14 @@ function sanitizeModelText(
   if (/<think>/iu.test(text)) return ''
   const fence = text.match(/^\s*```[\w-]*\n([\s\S]*?)\n?```\s*$/u)
   if (fence?.[1] !== undefined) text = fence[1]
+  // Safety classifiers reached through model routers reply with a verdict.
+  if (
+    /^\s*(?:(?:user|agent|assistant|response)\s+)?safety\s*:\s*(?:safe|unsafe)\b/iu.test(
+      text
+    ) ||
+    /^\s*(?:safe|unsafe)\s*(?:\n\s*S\d+)?\s*$/iu.test(text)
+  )
+    return ''
   text = text.replace(/^\s*(?:suggestion|completion|insertion)\s*:[\t ]*/iu, '')
   if (
     /^\s*(?:certainly\b|sure[,!:]|here(?:’s|'s| is) (?:a |the )?(?:suggestion|completion|continuation))/iu.test(
@@ -383,6 +392,20 @@ function sanitizeModelText(
     return ''
   if (prefix.length >= 3 && text.startsWith(prefix))
     text = text.slice(prefix.length)
+  // Models sometimes repeat the partial word at the cursor: "old m" → "mill".
+  const fragment = /[\p{L}\p{M}][\p{L}\p{M}'’-]*$/u.exec(prefix)?.[0]
+  let completedFragment = false
+  if (
+    fragment &&
+    fragment.length <= 24 &&
+    text.length > fragment.length &&
+    text.slice(0, fragment.length).toLocaleLowerCase() ===
+      fragment.toLocaleLowerCase() &&
+    /^[\p{L}\p{M}]/u.test(text.slice(fragment.length))
+  ) {
+    text = text.slice(fragment.length)
+    completedFragment = true
+  }
   text = text
     .replace(/<\|(?:im_end|endoftext|fim_[\w]+)\|>/gu, '')
     .replaceAll('\0', '')
@@ -395,6 +418,7 @@ function sanitizeModelText(
     /^\p{Lu}[\p{L}\p{M}'’-]*[^\S\r\n]+\p{L}/u.test(text)
   if (
     repairWordBoundary &&
+    !completedFragment &&
     /[\p{Script_Extensions=Latin}\p{Script_Extensions=Cyrillic}\p{Script_Extensions=Greek}][\p{M}\p{N}]*$/u.test(
       prefix
     ) &&
@@ -656,6 +680,36 @@ function offlineResult(
     : remember(key, result)
 }
 
+/** Next-line recall from passages related by meaning (semantic search). */
+async function semanticLineCandidates(
+  note: Note,
+  context: CursorContext,
+  settings: NotebookSettings,
+  budget: OutputBudget,
+  signal?: AbortSignal
+): Promise<SuggestionCandidate[]> {
+  if (!settings.semantic?.enabled || budget.words < 12) return []
+  const lines = await semanticNextLines(note, context, settings, signal)
+  checkAbort(signal)
+  const before = context.text.slice(
+    Math.max(0, context.cursor - 2),
+    context.cursor
+  )
+  const suffix = boundedSlice(
+    context.text,
+    context.cursor,
+    context.cursor + MAX_SUFFIX_CHARACTERS
+  )
+  return lines.flatMap(line => {
+    // Separate the recalled sentence from the writer's last sentence.
+    const lead = !before || /\s$/u.test(before) ? '' : ' '
+    const text = clipInsertion(lead + line.text, suffix, budget)
+    return text
+      ? [{ text, sources: [line.source], mode: 'recall' as const }]
+      : []
+  })
+}
+
 function boundedReferences(
   chunks: RetrievedChunk[]
 ): { name: string; text: string }[] {
@@ -754,6 +808,35 @@ function modelChoices(
 }
 
 /**
+ * OpenAI chat models accept `max_completion_tokens`, not `max_tokens`. Early
+ * GPT-5 and o-series models reason by default, accept no temperature and need
+ * room for their reasoning; later models can switch reasoning off.
+ */
+export function openAiParameters(
+  model: string,
+  tokens: number,
+  temperature: number
+): Record<string, unknown> {
+  const id = model.replace(/^openai\//u, '')
+  if (
+    /^(?:gpt-5(?:-(?:mini|nano|pro|codex))?|o\d(?:-mini|-pro)?)(?:-\d{4}-\d{2}-\d{2})?$/u.test(
+      id
+    )
+  )
+    return {
+      max_completion_tokens: tokens + 384,
+      reasoning_effort: id.startsWith('o') ? 'low' : 'minimal',
+    }
+  if (/^gpt-(?:5\.\d|6)/u.test(id) && !/chat/u.test(id))
+    return {
+      max_completion_tokens: tokens,
+      temperature,
+      reasoning_effort: 'none',
+    }
+  return { max_completion_tokens: tokens, temperature }
+}
+
+/**
  * The editor supplies the deliberately activated provider, or a one-off
  * provider requested by the writer. This service never switches providers or
  * retries against a different endpoint when generation fails.
@@ -793,9 +876,22 @@ export async function suggest(
     (localEngine === 'recall' ||
       (localEngine === 'server' && !profile.model.trim()))
   ) {
-    const result = offlineResult(note, context, budgetFor(context, settings))
+    const budget = budgetFor(context, settings)
+    const result = offlineResult(note, context, budget)
     checkAbort(signal)
-    return result
+    const lines = await semanticLineCandidates(
+      note,
+      context,
+      settings,
+      budget,
+      signal
+    )
+    if (!lines.length) return result
+    // Exact recall stays first; meaning-based lines come before starters.
+    const candidates = [result, ...(result.alternatives ?? [])]
+    const recalled = candidates.filter(candidate => candidate.mode === 'recall')
+    const others = candidates.filter(candidate => candidate.mode !== 'recall')
+    return candidatesResult([...recalled, ...lines, ...others])
   }
   if (!embedded && profile.model.length > 512)
     throw new Error(
@@ -853,9 +949,18 @@ export async function suggest(
   )
   const nearbyAfter = boundedSlice(afterCursor, 0, 100).split('\n', 1)[0] ?? ''
   const cursorQuery = `${nearbyBefore} ${nearbyAfter}`
+  const paragraph = beforeCursor.split(/\n[\t ]*\n/u).at(-1) ?? beforeCursor
   const references = boundedReferences(
-    retrieveContext(note, query, 4, cursorQuery)
+    await retrieveHybrid(note, query, settings, {
+      limit: 4,
+      focusedQuery: cursorQuery,
+      semanticQuery: `${objective.slice(0, 300)}\n${paragraph.slice(-600)}`,
+      signal,
+      // Manual choices may wait a little longer for the meaning index.
+      budgetMs: options.purpose === 'alternatives' ? 1_800 : 700,
+    })
   )
+  checkAbort(signal)
   const data = {
     noteTitle,
     objective,
@@ -1020,8 +1125,9 @@ export async function suggest(
           { role: 'system', content: system },
           { role: 'user', content: JSON.stringify(data) },
         ],
-        max_tokens: outputTokens,
-        temperature,
+        ...(settings.provider === 'openai'
+          ? openAiParameters(profile.model.trim(), outputTokens, temperature)
+          : { max_tokens: outputTokens, temperature }),
         stream: false,
         // A short insertion must use its tiny budget for visible text. OpenRouter
         // normalizes this across providers; mandatory-reasoning models may reject it.
@@ -1030,12 +1136,35 @@ export async function suggest(
           : {}),
       }
     }
-    const response = await requestJson(requestUrl(base, action), {
-      method: 'POST',
-      headers: requestHeaders,
-      body,
-      signal,
-    })
+    let response: unknown
+    try {
+      response = await requestJson(requestUrl(base, action), {
+        method: 'POST',
+        headers: requestHeaders,
+        body,
+        signal,
+      })
+    } catch (error) {
+      // OpenRouter's free router may pick a model that must reason. Retry the
+      // same request once with hidden reasoning and room for it.
+      if (
+        settings.provider !== 'openrouter' ||
+        !/reasoning is mandatory|cannot be disabled/iu.test(String(error))
+      )
+        throw error
+      checkAbort(signal)
+      const retry = body as Record<string, unknown>
+      response = await requestJson(requestUrl(base, action), {
+        method: 'POST',
+        headers: requestHeaders,
+        body: {
+          ...retry,
+          max_tokens: Number(retry.max_tokens ?? outputTokens) + 512,
+          reasoning: { effort: 'low', exclude: true },
+        },
+        signal,
+      })
+    }
     checkAbort(signal)
     if (freshChoices) {
       const result = modelChoices(

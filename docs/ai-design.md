@@ -18,11 +18,84 @@ Context retrieval uses a self-contained BM25 index over the current note's resol
 
 The same retrieval path is used for automatic inline suggestions and the manual menu, before dispatch to embedded SmolLM, local chat, native FIM, OpenAI, OpenRouter, Anthropic or a custom endpoint. Only sources resolved from the current note are eligible; the rest of the context library stays out of the request. The current line near the cursor and nearby suffix are scored separately from the broader objective/brief. Cursor matches take precedence; when none match, ordinary background ranking supplies context. This prevents a long writing brief from crowding out the particular fact being completed. Interactive context search keeps its ordinary query ranking.
 
-The built-in model receives at most two 320-character excerpts, with a separate 768-token input ceiling. A literal match for the current prose fragment selects its containing reference line within the retrieved chunk instead of blindly sending the first 320 characters. Other excerpts retain the bounded prefix; intentional code context is unchanged. The token ceiling can drop references to preserve the actual cursor. Server models receive up to four retrieved passages, capped at 3,600 reference characters in total. BM25 is lexical retrieval, not semantic embeddings, and supplying relevant text is not a guarantee that a model will obey or reproduce it correctly.
+The built-in model receives at most two 320-character excerpts, with a separate 768-token input ceiling. A literal match for the current prose fragment selects its containing reference line within the retrieved chunk instead of blindly sending the first 320 characters. Other excerpts retain the bounded prefix; intentional code context is unchanged. The token ceiling can drop references to preserve the actual cursor. Server models receive up to four retrieved passages, capped at 3,600 reference characters in total. Supplying relevant text is not a guarantee that a model will obey or reproduce it correctly.
 
 **Try a sample** installs an optional fictional Bramble House note, a details package with three Markdown/text sources, and a separate voice package. It uses normal notes, package attachments, retrieval and persistence; it has no special suggestion engine or predetermined model responses. Installation does not change model selection, permissions, autosave or existing writing. Reopening preserves edits and detachment. The shipped [source files](../examples/bramble-house) are also available as a ZIP; rebuild it after changing the files with `node scripts/build-demo.mjs`. Unit tests compare the archive's bytes with the app's source material.
 
-[Orama JS](https://github.com/oramasearch/orama) is a compatible future retrieval option under Apache-2.0. Its [default scoring algorithm is already BM25](https://docs.orama.com/docs/orama-js/search/changing-default-search-algorithm), so Orama and BM25 are not competing architectures. It also supports vector and hybrid search. [bm25s](https://github.com/xhluca/bm25s) is MIT and uses Python/NumPy; embedding that runtime adds packaging work to a small desktop app. The initial local index avoids both a Python runtime and an embedding model. A semantic index can be added later if measured recall warrants it.
+## Hybrid retrieval
+
+Retrieval is hybrid when the writer turns on **Semantic search** in **Preferences → Knowledge**. BM25 always runs. EmbeddingGemma 2 adds passages that match by meaning, also when the words differ. When semantic search is off, retrieval is BM25 alone, as described above.
+
+1. BM25 returns its top eight passages.
+2. Semantic search embeds the query and ranks the indexed chunks by cosine similarity. A hit must reach the similarity floor: 0.58, or 0.12 below the best hit if that value is higher.
+3. Maximal marginal relevance (λ = 0.75) removes near-duplicate hits. At most six semantic hits continue.
+4. Reciprocal rank fusion (k = 60) merges the two lists. Semantic hits have the weight 1.1, BM25 hits the weight 1. A passage that both indexes find counts once.
+5. The result has at most two passages for each source and at most 6,000 characters. The prompt budgets above do not change.
+
+Semantic search has a latency budget: 700 ms for automatic suggestions, 1,800 ms for manual choices and 900 ms for **Find in attached context**. When the budget ends, the server fails, or semantic search returns nothing, BM25 results are used alone. A slow or stopped embedding server never blocks a suggestion and never starts an external request.
+
+**Find in attached context** marks each result with a badge: **words** (BM25), **meaning** (semantic search) or **both**. In the local recall mode, semantic search also offers up to two next lines from related passages. This occurs only at the start of a sentence or a line. Exact recall stays first, and meaning-based lines come before writing starters. The architecture is in [semantic search](developer/semantic-search.md).
+
+## EmbeddingGemma 2 design
+
+| Decision    | Value                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------- |
+| Model       | Google EmbeddingGemma 2, GGUF files from `unsloth/embeddinggemma-2-GGUF` at a pinned revision.           |
+| Files       | **Balanced (Q4)** 175.7 MB, **Precise (Q8)** 309.9 MB, media encoder (`mmproj` Q8) 554.8 MB.             |
+| Runtime     | llama.cpp `llama-server` release `b11696`, archive about 12–20 MB for each platform.                     |
+| Pooling     | Mean pooling. The server must return 768 values.                                                         |
+| Vector size | Matryoshka truncation to 128, 256, 512 (default) or 768 values, then normalisation to unit length.       |
+| Prompts     | Query: `task: search result \| query: …`. Document: `title: … \| text: …`.                               |
+| Chunks      | 900 characters with 140 overlap, at most 3,000 chunks for each note index.                               |
+| Cache       | Vectors in IndexedDB, keyed by model, vector size and a hash of the text. Query vectors in a memory LRU. |
+| Indexing    | In the background, 1.2 seconds after typing stops, in batches of 16 behind interactive queries.          |
+
+The model runs on the device in one of two modes:
+
+- **Inside TypeNext** (desktop only). TypeNext downloads the pinned llama.cpp build and the model, and verifies the SHA-256 of each file. It starts `llama-server` on `127.0.0.1` with a random free port and a random key for each start. The key goes into the environment, not onto the command line. TypeNext stops the server on exit. After a crash, it ends an orphaned server at the next start, but only when the executable path matches the managed runtime.
+- **My own server**. The writer starts `llama-server` with the command that **Preferences → Knowledge** shows. The address must be `localhost`, `127.0.0.1` or `[::1]`. TypeNext sends no key to this server.
+
+The 128 size suits text only. 256 is close to 512 in quality for text, at half the index size. 768 is best for images and audio. A change of vector size re-indexes the references.
+
+## Media references
+
+With **Images, audio and video** on, the media encoder embeds image, audio and video references into the same vector space as text. TypeNext sends the file to the local embedding server. It keeps only the vector, a small JPEG thumbnail (320 px, images and videos) and the caption. It does not keep the file.
+
+| Kind  | Limit                |
+| ----- | -------------------- |
+| Image | 20 MB                |
+| Audio | 30 MB and 3 minutes  |
+| Video | 50 MB and 45 seconds |
+
+The limits follow the 8,192-token context of the managed server with media. A media hit reaches the prompt as its kind, name and caption, for example `Image “garden”: …`. The model does not see the picture or hear the audio.
+
+## Verification
+
+Opt-in live tests use a real `llama-server` with EmbeddingGemma 2. They check text paraphrases, an image, speech audio and a video, and the managed server with its key. The commands are in [testing](testing.md). Unit tests mock the server and pin the file names, sizes and server arguments.
+
+## Privacy boundary
+
+- Notes, references and queries go only to the embedding server on the loopback interface. Nothing goes to a hosted service for semantic search.
+- The managed server listens on `127.0.0.1` only, and it needs a key that changes at each start.
+- Downloads come from GitHub (llama.cpp) and Hugging Face (model files) after an explicit **Download** action. The requests carry no credentials and no note data.
+- Vectors stay in IndexedDB on the device. A media file is not stored after its vector is made.
+- Retrieved passages enter a prompt only for the active suggestion engine. An external provider receives them only when the writer activates it with **Use continuously**.
+
+## Web facts
+
+Web facts are optional cited facts from the web. They are off by default and run only on request.
+
+1. The writer selects text and presses Ctrl/⌘ Shift K, or chooses **Search the web for facts** in the insert menu. Without a selection, the sentence before the cursor is the focus.
+2. TypeNext calls the OpenAI Responses API with the `web_search` tool and a strict JSON schema. The default model is `gpt-5.4-mini`. GPT-5 and o-series models use low reasoning effort.
+3. The request contains the focus text (up to 1,200 characters), up to 1,500 characters before the cursor, up to 400 after it, the note title and the objective. The instructions treat all writing as data.
+4. The reply can contain up to three facts. Each fact is one short insertion of at most 360 characters, with its source pages. A fact without a valid `http` or `https` source keeps no citation.
+5. The facts appear in the choice menu. The accepted fact inserts the text and Markdown links to its first two sources.
+
+Results are cached for 10 minutes (32 entries). Web facts use the OpenAI key from **Preferences → Models**. OpenAI charges for each web search in addition to tokens. With **Also ground Ctrl / ⌘ Space choices with web facts** on, each manual choice request also runs a web search, and cited facts can join the choices. A failed web search leaves the ordinary choices usable.
+
+## Retrieval alternatives
+
+[Orama JS](https://github.com/oramasearch/orama) (Apache-2.0) uses BM25 as its [default scoring](https://docs.orama.com/docs/orama-js/search/changing-default-search-algorithm) and also supports vector search. [bm25s](https://github.com/xhluca/bm25s) is MIT but needs Python and NumPy. TypeNext keeps its own BM25 index and adds llama.cpp embeddings, which need no Python runtime.
 
 Text and Markdown import use UTF-8 locally. [PDF.js](https://github.com/mozilla/pdf.js) (Apache-2.0) streams PDF text with page markers; its worker is packaged with the app and loaded only when a PDF is imported. Page resources are released on success, failure and cancellation, and the loading task is destroyed afterward. [Mammoth](https://github.com/mwilliamson/mammoth.js) (BSD-2-Clause) extracts DOCX as plain text, avoiding rendered HTML from a document. Before Mammoth runs, lazy [fflate](https://github.com/101arrowz/fflate) (MIT, pinned 0.8.3) streaming inflation verifies actual ZIP output rather than trusting declared sizes: at most 2,048 entries, 32 MiB total expansion and 4 MiB XML/relationship data. Small compressed pushes bound temporary inflation work and periodically yield for cancellation. Context files are limited to 12 MiB, 300,000 extracted characters, and 150 PDF pages; oversized plaintext is rejected before reading. Only one source import can run at a time. File and website import accept AbortSignal; no cancelled result is attached. Password-protected PDFs, scanned PDFs without selectable text, legacy `.doc`, unsupported files and invalid UTF-8 have explicit messages. The app does not silently upload those files. [Unstructured](https://docs.unstructured.io/open-source/core-functionality/partitioning) can support a future opt-in OCR/legacy-document path, but is not wired into this importer. Its local `.doc` path requires LibreOffice conversion.
 
@@ -32,7 +105,11 @@ Website import is a deliberate attachment action. Direct import fetches the sele
 
 Chat requests carry context as JSON. The system instruction describes reference text, filenames and URLs as untrusted data, instructs the model to ignore embedded instructions, and requests only the insertion or manual list of alternative insertions. References cannot trigger tool calls or execute actions. The note objective and brief describe the writer’s intent. If there is no meaningful continuation, the model may return an empty response or empty choice list. Temperature is a user-controlled sampling parameter; it does not guarantee factual accuracy or preserve intent by itself.
 
-OpenRouter short insertions request `reasoning: { enabled: false, exclude: true }`. Its [reasoning documentation](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens) explains that hidden thinking usually shares the output-token budget; a tiny budget can otherwise produce no visible completion. Prefer instruction models that permit reasoning to be disabled. Models with mandatory reasoning may reject this setting and are poor choices for short, fast suggestions. This adjustment applies only to OpenRouter and does not add cloud traffic to ordinary suggestions.
+OpenRouter short insertions request `reasoning: { enabled: false, exclude: true }`. Its [reasoning documentation](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens) explains that hidden thinking usually shares the output-token budget. A tiny budget can otherwise produce no visible completion. The free router (`openrouter/free`) can route to a model that must reason. When the error says that reasoning is mandatory or cannot be disabled, TypeNext sends the same request once more with `reasoning: { effort: 'low', exclude: true }` and 512 more output tokens. There is no other retry and no change of provider.
+
+Routers can also reach a safety classifier that answers with a verdict, for example `Safety: safe` or a bare `unsafe`. The output sanitizer drops such verdicts for every provider, so they never appear as a suggestion.
+
+OpenAI chat requests use `max_completion_tokens`, not `max_tokens`. GPT-5.x and GPT-6 models (except `chat` variants) send `reasoning_effort: 'none'` and the temperature. Early GPT-5 models (`gpt-5`, `-mini`, `-nano`, `-pro`, `-codex`) and o-series models reason by default and accept no temperature. They receive 384 more completion tokens, with `reasoning_effort: 'minimal'` (GPT-5) or `'low'` (o-series). Other OpenAI models send `max_completion_tokens` and the temperature.
 
 | Runtime or protocol | Current integration                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -65,7 +142,7 @@ Canonical reference snapshots live in `workspace.contextLibrary`. Named packages
 
 Linked notes resolve their current title and own writing only, so cycles never recurse and a note cannot use itself as context. File, website and folder imports are snapshots rather than filesystem watchers or automatic web refreshes. A folder import accepts up to 256 supported files per batch. The library retains at most 2,048 entries; the workspace supports up to 256 packages, 256 sources per package, and 64 attached packages per note. New attachments and package changes are preflighted against 256 distinct resolved sources, two million enabled context characters per note, and the 64 MiB workspace limit. The BM25 and prompt budgets above remain smaller than these storage limits. Existing legacy sources that cannot be promoted at the library limit remain intact.
 
-The actual BM25 index remains bounded to enabled resolved context. The note context panel has an explicit search that shows matching passages and invalidates displayed results when source text or inclusion changes. Retrieval plus bounded passages in a model prompt is the implemented RAG path; it does not use a vector database or embeddings.
+The actual BM25 index remains bounded to enabled resolved context. The note context panel has an explicit search that shows matching passages and invalidates displayed results when source text or inclusion changes. Retrieval plus bounded passages in a model prompt is the implemented RAG path. With semantic search on, the vector cache in IndexedDB adds embedding retrieval to the same path.
 
 External activation uses the persisted `externalAutoEnabled` flag. Merely configuring a key/model does not activate it. The chosen provider and model are visible near the editor, with a direct route back to local. Preferences preserve other provider profiles. System instructions are bounded to 8,000 UTF-8 bytes and participate in completion cache invalidation; the tiny built-in model uses a shorter prompt budget. Model catalogs use authenticated GET requests, including Anthropic pagination; OpenRouter's free filter uses declared prompt, completion and request prices.
 

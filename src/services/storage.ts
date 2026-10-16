@@ -2,10 +2,14 @@ import { invoke } from '@tauri-apps/api/core'
 import type {
   ContextPackage,
   ContextSource,
+  EditorSettings,
+  MediaInfo,
   Note,
   NotebookSettings,
   ProviderId,
   ProviderProfile,
+  SemanticSettings,
+  WebFactSettings,
   Workspace,
 } from '@/types/notebook'
 import { asError, isDesktop } from './native'
@@ -157,6 +161,30 @@ function optionalString(value: unknown, limit: number): string | undefined {
     : string(value, limit)
 }
 
+function parseMedia(value: unknown): MediaInfo | undefined {
+  if (value === undefined || value === null) return undefined
+  const media = record(value)
+  const optionalNumber = (input: unknown, maximum: number) =>
+    input === undefined || input === null
+      ? undefined
+      : numeric(input, 0, maximum)
+  const thumbnail = optionalString(media.thumbnail, 96_000)
+  if (thumbnail && !/^data:image\/(?:jpeg|png|webp);base64,/u.test(thumbnail))
+    return invalid()
+  const vector = optionalString(media.vector, 8_192)
+  if (vector && !/^[A-Za-z0-9+/]+={0,2}$/u.test(vector)) return invalid()
+  return {
+    mime: string(media.mime, 128),
+    bytes: numeric(media.bytes, 0, 1024 * 1024 * 1024),
+    durationSeconds: optionalNumber(media.durationSeconds, 86_400),
+    width: optionalNumber(media.width, 65_536),
+    height: optionalNumber(media.height, 65_536),
+    thumbnail,
+    vector,
+    vectorModel: optionalString(media.vectorModel, 512),
+  }
+}
+
 function parseSource(value: unknown): ContextSource {
   const source = record(value)
   const kind = choice(source.kind, [
@@ -166,6 +194,9 @@ function parseSource(value: unknown): ContextSource {
     'docx',
     'website',
     'note',
+    'image',
+    'audio',
+    'video',
   ])
   const linkedNoteId = kind === 'note' ? id(source.linkedNoteId) : undefined
   if (
@@ -185,6 +216,9 @@ function parseSource(value: unknown): ContextSource {
     addedAt: numeric(source.addedAt),
     libraryId: source.libraryId == null ? undefined : id(source.libraryId),
     folder: optionalString(source.folder, 4096),
+    ...(source.media === undefined || source.media === null
+      ? {}
+      : { media: parseMedia(source.media) }),
   }
 }
 
@@ -223,6 +257,7 @@ function parseNote(value: unknown): Note {
       note.exportedAt === undefined || note.exportedAt === null
         ? undefined
         : numeric(note.exportedAt),
+    ...(note.autoTitle === true ? { autoTitle: true } : {}),
   }
 }
 
@@ -351,6 +386,81 @@ function parseSettings(value: unknown): NotebookSettings {
     ),
     profiles,
     websiteImporter: choice(settings.websiteImporter, ['direct', 'firecrawl']),
+    semantic: parseSemantic(settings.semantic),
+    webFacts: parseWebFacts(settings.webFacts),
+    zenLevel: choice(settings.zenLevel ?? 'chrome', [
+      'sidebars',
+      'chrome',
+      'full',
+    ]),
+    editor: parseEditor(settings.editor),
+  }
+}
+
+function parseSemantic(value: unknown): SemanticSettings {
+  const defaults = defaultSettings().semantic
+  if (value === undefined || value === null) return defaults
+  const semantic = record(value)
+  return {
+    enabled: boolean(semantic.enabled ?? defaults.enabled),
+    runtime: choice(semantic.runtime ?? defaults.runtime, [
+      'managed',
+      'server',
+    ]),
+    endpoint: string(semantic.endpoint ?? defaults.endpoint, 4096),
+    quantization: choice(semantic.quantization ?? defaults.quantization, [
+      'UD-Q4_K_XL',
+      'Q8_0',
+    ]),
+    dimensions: embeddingDimensions(semantic.dimensions ?? defaults.dimensions),
+    media: boolean(semantic.media ?? defaults.media),
+  }
+}
+
+function embeddingDimensions(value: unknown): SemanticSettings['dimensions'] {
+  const dimensions = numeric(value, 128, 768)
+  if (![128, 256, 512, 768].includes(dimensions)) return invalid()
+  return dimensions as SemanticSettings['dimensions']
+}
+
+function parseWebFacts(value: unknown): WebFactSettings {
+  const defaults = defaultSettings().webFacts
+  if (value === undefined || value === null) return defaults
+  const facts = record(value)
+  return {
+    enabled: boolean(facts.enabled ?? defaults.enabled),
+    model: string(facts.model ?? defaults.model, 256),
+    withSuggestions: boolean(facts.withSuggestions ?? defaults.withSuggestions),
+  }
+}
+
+function parseEditor(value: unknown): EditorSettings {
+  const defaults = defaultSettings().editor
+  if (value === undefined || value === null) return defaults
+  const editor = record(value)
+  const trigger = string(editor.slashTrigger ?? defaults.slashTrigger, 8)
+  if ([...trigger].length !== 1 || /[\s\p{L}\p{N}]/u.test(trigger))
+    return invalid()
+  const commands = array(editor.customCommands ?? [], 64).map(item => {
+    const command = record(item)
+    const name = string(command.name, 120)
+    if (!name.trim()) return invalid()
+    return {
+      id: id(command.id),
+      name,
+      template: string(command.template, 16_384),
+    }
+  })
+  return {
+    slashMenu: boolean(editor.slashMenu ?? defaults.slashMenu),
+    slashTrigger: trigger,
+    customCommands: commands,
+    livePreview: boolean(editor.livePreview ?? defaults.livePreview),
+    linkPreviews: choice(editor.linkPreviews ?? defaults.linkPreviews, [
+      'off',
+      'notes',
+      'all',
+    ]),
   }
 }
 

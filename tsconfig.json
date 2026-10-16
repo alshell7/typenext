@@ -38,6 +38,13 @@
     "src/services/completion.ts",
     "src/services/retrieval.ts",
     "src/services/sources.ts",
+    "src/services/embedding-client.ts",
+    "src/services/embedding-runtime.ts",
+    "src/services/vector-store.ts",
+    "src/services/semantic-retrieval.ts",
+    "src/services/media-sources.ts",
+    "src/services/web-facts.ts",
+    "src/services/link-preview.ts",
     "src/services/*.test.ts",
     "src/services/builtin-engine.worker.ts",
     "src/services/whistle.worker.ts"

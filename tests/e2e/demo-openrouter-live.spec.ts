@@ -66,10 +66,7 @@ async function setSessionKey(input: Locator, secret: string): Promise<void> {
   }, secret)
 }
 
-async function preferences(
-  page: Page,
-  pane: 'Local suggestions' | 'External models'
-) {
+async function preferences(page: Page, pane: 'Suggestions' | 'Models') {
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Make yourself at home' })
   await dialog.getByRole('tab', { name: pane, exact: true }).click()
@@ -244,7 +241,7 @@ test('the shipped demo grounds one real free automatic OpenRouter suggestion aft
     const original = await writingText(editor)
     expect(original.endsWith(fragment)).toBe(true)
 
-    let dialog = await preferences(page, 'Local suggestions')
+    let dialog = await preferences(page, 'Suggestions')
     await dialog
       .getByRole('switch', { name: /^Suggest after a pause/ })
       .uncheck()
@@ -254,18 +251,26 @@ test('the shipped demo grounds one real free automatic OpenRouter suggestion aft
     // Re-type only the unfinished sample line; retain its public introduction.
     await editor.fill(original.slice(0, -fragment.length))
 
-    dialog = await preferences(page, 'External models')
-    await dialog.getByLabel('Configure provider').selectOption('openrouter')
-    await dialog.getByLabel('Model', { exact: true }).fill(model)
-    await setSessionKey(dialog.getByLabel('API key', { exact: true }), secret)
-    await dialog.getByRole('button', { name: 'Save key', exact: true }).click()
+    dialog = await preferences(page, 'Models')
+    const external = dialog.getByRole('region', {
+      name: 'External providers',
+      exact: true,
+    })
+    await external
+      .getByRole('radio', { name: 'OpenRouter', exact: true })
+      .click()
+    await external.getByLabel('Model', { exact: true }).fill(model)
+    await setSessionKey(external.getByLabel('API key', { exact: true }), secret)
+    await external
+      .getByRole('button', { name: 'Save key', exact: true })
+      .click()
     await expect(
-      dialog.getByText('Ready for this session.', { exact: true })
+      external.getByText('Ready for this session.', { exact: true })
     ).toBeVisible()
     await dialog.getByRole('button', { name: 'Done', exact: true }).click()
     expect(hostedAttempts, 'Configuration must not send writing.').toBe(0)
 
-    dialog = await preferences(page, 'Local suggestions')
+    dialog = await preferences(page, 'Suggestions')
     await dialog.getByRole('switch', { name: /^Suggest after a pause/ }).check()
     await dialog.getByRole('button', { name: 'Done', exact: true }).click()
     await page
@@ -275,11 +280,8 @@ test('the shipped demo grounds one real free automatic OpenRouter suggestion aft
       name: 'Choose your suggestion engine',
     })
     await chooser
-      .getByRole('group', { name: 'External providers' })
-      .getByRole('button', { name: 'OpenRouter', exact: true })
-      .click()
-    await chooser
-      .getByRole('button', { name: 'Use OpenRouter continuously', exact: true })
+      .getByRole('group', { name: 'OpenRouter', exact: true })
+      .getByRole('option', { name: model, exact: true })
       .click()
     expect(
       hostedAttempts,
@@ -287,7 +289,7 @@ test('the shipped demo grounds one real free automatic OpenRouter suggestion aft
     ).toBe(0)
 
     await editor.focus()
-    await editor.press('Control+End')
+    await editor.press('ControlOrMeta+End')
     const responsePromise = page.waitForResponse(
       response =>
         response.url() === endpoint && response.request().method() === 'POST',
@@ -354,7 +356,10 @@ test('the shipped demo grounds one real free automatic OpenRouter suggestion aft
     await page
       .getByRole('button', { name: 'Choose suggestion engine', exact: true })
       .click()
-    await page.getByRole('button', { name: /On this device/ }).click()
+    await page
+      .getByRole('dialog', { name: 'Choose your suggestion engine' })
+      .getByRole('option', { name: 'Writing starters & recall', exact: true })
+      .click()
     // Opening the chooser correctly dismisses the ghost; verify the generated
     // text and preserved writing without asking for a second insertion.
     expect(await writingText(editor)).toBe(original)

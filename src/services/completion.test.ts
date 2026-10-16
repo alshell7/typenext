@@ -35,6 +35,10 @@ function settings(): NotebookSettings {
     provider: 'local',
     externalProvider: 'openrouter',
     websiteImporter: 'direct',
+    semantic: defaultSettings().semantic,
+    webFacts: defaultSettings().webFacts,
+    zenLevel: 'chrome',
+    editor: defaultSettings().editor,
     profiles: {
       local: {
         endpoint: 'http://localhost:1234/v1',
@@ -1656,8 +1660,10 @@ describe('fresh manual hosted choices', () => {
       expect(requestJson).toHaveBeenCalledTimes(1)
       expect(getSecret).toHaveBeenCalledExactlyOnceWith(`provider:${provider}`)
       const body = requestBody()
-      expect(body.max_tokens).toBe(3 * 40 + 24)
-      expect(body.max_tokens).toBeLessThanOrEqual(384)
+      const limit =
+        provider === 'openai' ? body.max_completion_tokens : body.max_tokens
+      expect(limit).toBe(3 * 40 + 24)
+      expect(limit).toBeLessThanOrEqual(384)
       expect(body).not.toHaveProperty('response_format')
       expect(body).not.toHaveProperty('n')
       const messages = body.messages as { role: string; content: string }[]
@@ -1896,5 +1902,94 @@ describe('fresh manual hosted choices', () => {
     expect(getSecret).not.toHaveBeenCalled()
     expect(requestJson).not.toHaveBeenCalled()
     expect(generateBuiltinInsertion).not.toHaveBeenCalled()
+  })
+})
+
+describe('OpenAI request parameters', () => {
+  it('uses max_completion_tokens and turns reasoning off where possible', async () => {
+    const { openAiParameters } = await import('./completion')
+    expect(openAiParameters('gpt-4.1-mini', 40, 0.3)).toEqual({
+      max_completion_tokens: 40,
+      temperature: 0.3,
+    })
+    expect(openAiParameters('gpt-5.4-mini', 40, 0.3)).toEqual({
+      max_completion_tokens: 40,
+      temperature: 0.3,
+      reasoning_effort: 'none',
+    })
+    expect(openAiParameters('gpt-6-luna', 40, 0.3)).toMatchObject({
+      reasoning_effort: 'none',
+    })
+    expect(openAiParameters('gpt-5.2-chat-latest', 40, 0.3)).toEqual({
+      max_completion_tokens: 40,
+      temperature: 0.3,
+    })
+    // Early reasoning models reject temperature and need room to think.
+    expect(openAiParameters('gpt-5-mini', 40, 0.3)).toEqual({
+      max_completion_tokens: 424,
+      reasoning_effort: 'minimal',
+    })
+    expect(openAiParameters('gpt-5-2025-08-07', 40, 0.3)).toMatchObject({
+      reasoning_effort: 'minimal',
+    })
+    expect(openAiParameters('o4-mini', 40, 0.3)).toEqual({
+      max_completion_tokens: 424,
+      reasoning_effort: 'low',
+    })
+  })
+})
+
+describe('model router robustness', () => {
+  function routed(): NotebookSettings {
+    const config = settings()
+    return { ...config, provider: 'openrouter', externalAutoEnabled: true }
+  }
+
+  it('ignores verdicts from safety classifier models', async () => {
+    vi.mocked(getSecret).mockResolvedValue('key')
+    for (const verdict of ['User Safety: safe', 'safe', 'unsafe\nS2']) {
+      vi.mocked(requestJson).mockResolvedValueOnce(completion(verdict))
+      const text = `The river waits ${verdict.length}`
+      const result = await suggest(note(text), cursor(text), routed())
+      expect(result.text).toBe('')
+    }
+  })
+
+  it('retries once with hidden reasoning when a routed model must reason', async () => {
+    vi.mocked(getSecret).mockResolvedValue('key')
+    vi.mocked(requestJson)
+      .mockRejectedValueOnce(
+        new Error(
+          'The server returned HTTP 400. Reasoning is mandatory for this endpoint and cannot be disabled.'
+        )
+      )
+      .mockResolvedValueOnce(completion(' beside the mill'))
+    const text = 'The river waits retry'
+    const result = await suggest(note(text), cursor(text), routed())
+    expect(result.text).toBe(' beside the mill')
+    expect(requestJson).toHaveBeenCalledTimes(2)
+    expect(requestBody().reasoning).toEqual({ effort: 'low', exclude: true })
+    expect(Number(requestBody().max_tokens)).toBeGreaterThan(512)
+  })
+
+  it('does not retry other errors or other providers', async () => {
+    vi.mocked(getSecret).mockResolvedValue('key')
+    vi.mocked(requestJson).mockRejectedValueOnce(new Error('HTTP 401'))
+    const text = 'The river waits again'
+    await expect(suggest(note(text), cursor(text), routed())).rejects.toThrow(
+      'HTTP 401'
+    )
+    expect(requestJson).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('echoed word fragments', () => {
+  it('removes a partial word the model repeats', async () => {
+    vi.mocked(getSecret).mockResolvedValue('key')
+    vi.mocked(requestJson).mockResolvedValueOnce(completion('mill'))
+    const text = 'We walk to the old m at nine.'
+    const config = { ...settings(), provider: 'openai' as const, externalAutoEnabled: true }
+    const result = await suggest(note(text), cursor(text, text.indexOf(' at nine')), config)
+    expect(result.text).toBe('ill')
   })
 })

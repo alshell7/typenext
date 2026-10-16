@@ -417,4 +417,56 @@ describe('named context packages', () => {
     await user.click(screen.getByRole('button', { name: 'Done' }))
     expect(props.onOpenChange).toHaveBeenCalledWith(false)
   })
+
+  it('shows media sources as cards with thumbnails and durations, and previews their caption', async () => {
+    const thumbnail = 'data:image/jpeg;base64,AAAA'
+    const clip: ContextSource = {
+      id: 'clip',
+      name: 'Waves.mp4',
+      kind: 'video',
+      text: 'Waves rolling over pebbles.',
+      enabled: true,
+      addedAt: 1,
+      media: { mime: 'video/mp4', bytes: 1, durationSeconds: 42, thumbnail },
+    }
+    const { user } = mount({
+      library: [clip, source('one', 'First.txt')],
+      packages: [context('media', 'Media', ['clip', 'one'])],
+    })
+    const grid = screen.getByRole('list', { name: 'Sources in this context' })
+    expect(within(grid).getByText('Video · 0:42')).toBeVisible()
+    expect(grid.querySelector(`img[src="${thumbnail}"]`)).not.toBeNull()
+    expect(screen.getByRole('img', { name: '1 file, 1 video' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Preview Waves.mp4' }))
+    expect(
+      screen.getByRole('img', { name: 'Preview of Waves.mp4' })
+    ).toHaveAttribute('src', thumbnail)
+    expect(
+      document.querySelector('.context-library-preview-text')
+    ).toHaveTextContent('Waves rolling over pebbles.')
+    expect(screen.getByText('Embedded on this device')).toBeVisible()
+  })
+
+  it('accepts media in file pickers, offers a drop tile and explains media setup', async () => {
+    const onOpenKnowledgeSettings = vi.fn()
+    const { props, user } = mount({
+      settings: { semantic: { enabled: false, media: false } } as never,
+      onOpenKnowledgeSettings,
+    })
+    const files = screen.getByLabelText(
+      'Add files to this context'
+    ) as HTMLInputElement
+    expect(files.accept).toContain('.docx')
+    expect(files.accept).toContain('.mov')
+    await user.click(
+      screen.getByRole('button', { name: 'Drop files here, or browse' })
+    )
+    await user.upload(files, new File(['x'], 'clip.mp4', { type: 'video/mp4' }))
+    expect(vi.mocked(props.onFiles).mock.calls[0]?.[1]).toBe('research')
+    await user.click(
+      screen.getByRole('button', { name: 'Open Knowledge settings' })
+    )
+    expect(props.onOpenChange).toHaveBeenCalledWith(false)
+    expect(onOpenKnowledgeSettings).toHaveBeenCalledTimes(1)
+  })
 })

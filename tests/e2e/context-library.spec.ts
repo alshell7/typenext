@@ -1,3 +1,4 @@
+import { startNote } from './support/notes'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 import type { Workspace } from '../../src/types/notebook'
@@ -28,14 +29,7 @@ const editor = (page: Page) =>
   page.getByRole('textbox', { name: 'Note content', exact: true })
 
 async function createNote(page: Page, title: string) {
-  const first = page.getByRole('button', { name: 'Start a note', exact: true })
-  if (await first.isVisible()) await first.click()
-  else await page.getByRole('button', { name: /^New note/ }).click()
-  const dialog = page.getByRole('dialog', {
-    name: 'Where would you like to begin?',
-  })
-  await dialog.getByLabel('Title', { exact: true }).fill(title)
-  await dialog.getByRole('button', { name: 'Create note', exact: true }).click()
+  await startNote(page, title)
   await expect(
     page.getByRole('textbox', { name: 'Note title', exact: true })
   ).toHaveValue(title)
@@ -372,8 +366,8 @@ test('uses live note sources in a package, follows new words and titles, and exc
   )
   await contexts.getByRole('button', { name: 'Done', exact: true }).click()
   await editor(page).focus()
-  await editor(page).press('Control+End')
-  await editor(page).press('Control+Space')
+  await editor(page).press('ControlOrMeta+End')
+  await editor(page).press('ControlOrMeta+Space')
   await expect(page.locator('.cm-ghost-text')).toHaveText(
     ' held the smell of cedar.'
   )

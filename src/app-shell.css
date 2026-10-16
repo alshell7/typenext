@@ -1,0 +1,426 @@
+/* App shell additions: macOS title bar, zen levels, insert menu, link cards. */
+
+/* ---------------------------------------------------------------- macOS */
+/* Native traffic lights sit in an overlay title bar at the top left. */
+.platform-mac .sidebar-brand {
+  padding-top: 44px;
+  min-height: 108px;
+}
+.platform-mac.sidebar-hidden .toolbar-leading {
+  padding-left: 72px;
+}
+.platform-mac .app-toolbar {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.platform-mac.zen-full .toolbar-leading {
+  padding-left: 0;
+}
+
+/* ---------------------------------------------------------------- Zen */
+.zen .writing-space {
+  position: relative;
+}
+.zen-chrome .app-toolbar,
+.zen-full .app-toolbar,
+.zen-chrome .note-tabs,
+.zen-full .note-tabs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 180ms ease-out;
+}
+.zen-chrome .app-toolbar,
+.zen-full .app-toolbar {
+  top: 0;
+}
+.zen-chrome .note-tabs,
+.zen-full .note-tabs {
+  display: flex;
+  top: 54px;
+}
+.zen-chrome .suggestion-bar,
+.zen-full .suggestion-bar,
+.zen-chrome .editor-footer,
+.zen-full .editor-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 180ms ease-out;
+}
+.zen-chrome .suggestion-bar,
+.zen-full .suggestion-bar {
+  bottom: 30px;
+}
+.zen-chrome .editor-footer,
+.zen-full .editor-footer {
+  bottom: 0;
+}
+.zen-reveal.zen-chrome .app-toolbar,
+.zen-reveal.zen-chrome .note-tabs,
+.zen-reveal.zen-chrome .suggestion-bar,
+.zen-reveal.zen-chrome .editor-footer,
+.zen-reveal.zen-full .app-toolbar,
+.zen-reveal.zen-full .note-tabs,
+.zen-reveal.zen-full .suggestion-bar,
+.zen-reveal.zen-full .editor-footer {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Full zen keeps a quiet status line so suggestions stay discoverable. */
+.zen-full .document-page,
+.zen-chrome .document-page {
+  padding-top: 96px;
+}
+.zen-full .document-page {
+  max-width: 700px;
+}
+.zen-full .document-meta {
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+.zen-full .document-page:hover .document-meta {
+  opacity: 1;
+}
+.zen-exit {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  color: var(--secondary);
+  font-size: 11px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 180ms ease-out,
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.zen-exit kbd {
+  font-size: 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.zen-reveal .zen-exit,
+.zen-exit:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+.zen-exit:hover {
+  color: var(--ink);
+}
+.zen-chrome .zen-exit {
+  top: 66px;
+}
+
+.zen-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.zen-menu .zen-toggle.selected {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.zen-menu .zen-choose {
+  width: 18px;
+  min-width: 18px;
+  padding: 0;
+  margin-left: -3px;
+  color: var(--muted);
+}
+.zen-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 45;
+  width: 270px;
+  padding: 5px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: suggestion-menu-appear 150ms ease-out both;
+}
+.zen-menu-item {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 8px 9px;
+  border-radius: 6px;
+  color: var(--ink);
+}
+.zen-menu-item:hover,
+.zen-menu-item:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+.zen-menu-item strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.zen-menu-item small {
+  display: block;
+  color: var(--secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.zen-menu-check {
+  width: 14px;
+  padding-top: 2px;
+  color: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .zen-chrome .app-toolbar,
+  .zen-full .app-toolbar,
+  .zen-chrome .note-tabs,
+  .zen-full .note-tabs,
+  .zen-chrome .suggestion-bar,
+  .zen-full .suggestion-bar,
+  .zen-chrome .editor-footer,
+  .zen-full .editor-footer,
+  .zen-exit,
+  .zen-menu-list {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Insert menu */
+.cm-tooltip.cm-tooltip-autocomplete.cm-insert-menu {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  font:
+    13px/1.45 'Source Sans Pro',
+    'Segoe UI',
+    sans-serif;
+  animation: suggestion-menu-appear 140ms ease-out both;
+}
+.cm-tooltip.cm-insert-menu > ul {
+  max-height: min(340px, 50vh);
+  min-width: 260px;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 4px;
+  font-family: inherit;
+  scrollbar-width: thin;
+}
+.cm-tooltip.cm-insert-menu > ul > li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  line-height: 1.35;
+}
+.cm-tooltip.cm-insert-menu > ul > li[aria-selected] {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.cm-tooltip.cm-insert-menu completion-section {
+  display: block;
+  padding: 8px 9px 3px;
+  border: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 1;
+}
+.cm-insert-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  flex: 0 0 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+li[aria-selected] .cm-insert-icon {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.cm-insert-menu .cm-completionLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-insert-menu .cm-completionDetail {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+.cm-insert-menu .cm-completionMatchedText {
+  text-decoration: none;
+  color: var(--accent);
+}
+.cm-tooltip.cm-completionInfo {
+  max-width: 280px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--secondary);
+  box-shadow: var(--shadow);
+  font:
+    12px/1.5 'Source Sans Pro',
+    'Segoe UI',
+    sans-serif;
+}
+
+/* ---------------------------------------------------------------- Link cards */
+.markdown-editor .cm-tooltip.cm-tooltip-hover {
+  background: transparent;
+  border: 0;
+}
+.cm-link-card {
+  width: min(320px, calc(100vw - 24px));
+  padding: 11px 13px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font:
+    13px/1.5 'Source Sans Pro',
+    'Segoe UI',
+    sans-serif;
+  animation: suggestion-menu-appear 140ms ease-out both;
+}
+.cm-link-card-kind {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cm-link-card-title {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.cm-link-card-meta {
+  margin-top: 2px;
+  color: var(--secondary);
+  font-size: 11px;
+}
+.cm-link-card-body {
+  margin: 6px 0 0;
+  color: var(--secondary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+.cm-link-card-url {
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+}
+.cm-link-card.loading .cm-link-card-title {
+  opacity: 0.7;
+}
+.cm-link-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 9px;
+}
+.cm-link-card-button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 12px;
+}
+.cm-link-card-button.primary {
+  border-color: transparent;
+  background: var(--accent-fill, var(--accent));
+  color: var(--on-accent);
+}
+.cm-link-card-button:hover {
+  filter: brightness(1.05);
+}
+.cm-link-card-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm-link-card,
+  .cm-tooltip.cm-tooltip-autocomplete.cm-insert-menu {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Narrow */
+/* Keep the leading controls reachable. The graph and zen levels stay
+   available through Ctrl/⌘ Shift G, Ctrl/⌘ Shift F and the / menu. */
+@media (max-width: 760px) {
+  .toolbar-actions {
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .toolbar-actions .graph-button,
+  .zen-menu .zen-choose {
+    display: none;
+  }
+}
+@media (max-width: 520px) {
+  .toolbar-button > span:not(.source-count) {
+    display: none;
+  }
+}

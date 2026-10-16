@@ -23,8 +23,9 @@ import {
   X,
   Paperclip,
   Link as LinkIcon,
-  Focus,
   Save,
+  Waypoints,
+  X as Close,
 } from 'lucide-react'
 import {
   MarkdownEditor,
@@ -39,8 +40,18 @@ import {
   openNote,
   PROVIDERS,
   relativeDate,
+  titleFromContent,
+  UNTITLED,
   wordCount,
 } from './notebook/model'
+import { ZenMenu } from './notebook/ZenMenu'
+import { NoteGraph } from './notebook/NoteGraph'
+import { mediaKind, importMediaFile } from './services/media-sources'
+import {
+  focusSemanticStatus,
+  prepareSemanticIndex,
+} from './services/semantic-retrieval'
+import type { ZenLevel } from './types/notebook'
 import { Modal } from './notebook/Modal'
 import { ContextPanel } from './notebook/ContextPanel'
 import { ModelChooser } from './notebook/ModelChooser'
@@ -81,9 +92,38 @@ import {
 import { importContextFile, importWebsite } from './services/sources'
 import type { ContextSource, Note, Workspace } from './types/notebook'
 import './App.css'
+import './app-shell.css'
 
 const MAX_STORED_CONTEXT_CHARACTERS = 2_000_000
 const BRAND_ICON_URL = `${import.meta.env.BASE_URL}Icon.png`
+// macOS shows native traffic lights at the top left of a transparent title bar.
+const MAC_DESKTOP =
+  isDesktop() &&
+  /Mac/iu.test(
+    typeof navigator === 'undefined'
+      ? ''
+      : navigator.platform || navigator.userAgent
+  )
+const SUPPORTED_SOURCE =
+  /\.(txt|text|md|markdown|mdown|pdf|docx|png|jpe?g|webp|gif|bmp|wav|mp3|m4a|aac|ogg|flac|mp4|m4v|webm|mov)$/i
+
+export function displayTitle(note: Pick<Note, 'title'>) {
+  return note.title.trim() || UNTITLED
+}
+
+/**
+ * An untitled note takes its title from its first line. A title the writer
+ * types ends this; clearing the title starts it again.
+ */
+function autoTitlePatch(note: Note, patch: Partial<Note>): Partial<Note> {
+  if (patch.title !== undefined)
+    return patch.title.trim()
+      ? { autoTitle: undefined }
+      : { autoTitle: true, title: titleFromContent(note.content) }
+  if (note.autoTitle && patch.content !== undefined)
+    return { title: titleFromContent(patch.content) || UNTITLED }
+  return {}
+}
 
 function App() {
   const {
@@ -98,9 +138,6 @@ function App() {
     getWorkspace,
     waitForPendingSave,
   } = useNotebook()
-  const [newNoteOpen, setNewNoteOpen] = useState(false)
-  const [draftTitle, setDraftTitle] = useState('')
-  const [draftContext, setDraftContext] = useState('')
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [preferencePane, setPreferencePane] =
     useState<PreferencePane>('writing')
@@ -118,6 +155,12 @@ function App() {
     null
   )
   const [focusMode, setFocusMode] = useState(false)
+  const [revealChrome, setRevealChrome] = useState(false)
+  const [graphOpen, setGraphOpen] = useState(false)
+  const focusModeRef = useRef(focusMode)
+  focusModeRef.current = focusMode
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingEditorFocus = useRef(false)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<EditorStatus>({ state: 'idle' })
   const [darkAppearance, setDarkAppearance] = useState(false)
@@ -248,6 +291,7 @@ function App() {
             ? {
                 ...item,
                 ...patch,
+                ...autoTitlePatch(item, patch),
                 ...(patch.sources
                   ? { sources: stripLinkedText(patch.sources) }
                   : {}),
@@ -271,6 +315,126 @@ function App() {
     },
     [setWorkspace]
   )
+
+  /** Create a note at once. Title and intent can be set later. */
+  const createNote = useCallback(
+    (title = '') => {
+      try {
+        const created = newNote(title)
+        setWorkspace(value => {
+          const next = openNote(value, created)
+          assertWorkspaceFits(next)
+          return next
+        })
+        setStatus({ state: 'idle' })
+        pendingEditorFocus.current = true
+        if (window.innerWidth < 760) setSidebarVisible(false)
+        return created.id
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error))
+        return null
+      }
+    },
+    [notify, setWorkspace]
+  )
+  const openNoteById = useCallback(
+    (id: string) => {
+      const target = getWorkspace().notes.find(item => item.id === id)
+      if (target) selectNote(target)
+    },
+    [getWorkspace, selectNote]
+  )
+  useEffect(() => {
+    if (!pendingEditorFocus.current || !note) return
+    pendingEditorFocus.current = false
+    requestAnimationFrame(() => editorRef.current?.focus())
+  }, [note?.id, note])
+
+  const zenLevel: ZenLevel = settings.zenLevel ?? 'chrome'
+  const enterZen = useCallback(
+    (level?: ZenLevel) => {
+      if (level && level !== getWorkspace().settings.zenLevel)
+        setWorkspace(value => ({
+          ...value,
+          settings: { ...value.settings, zenLevel: level },
+        }))
+      setFocusMode(true)
+      setRevealChrome(false)
+    },
+    [getWorkspace, setWorkspace]
+  )
+  // Full screen follows the full zen level on desktop and in browsers.
+  useEffect(() => {
+    const full = focusMode && zenLevel === 'full'
+    if (isDesktop()) {
+      void import('@tauri-apps/api/window')
+        .then(({ getCurrentWindow }) => getCurrentWindow().setFullscreen(full))
+        .catch(() => undefined)
+    } else if (full && !document.fullscreenElement) {
+      void document.documentElement.requestFullscreen?.().catch(() => undefined)
+    } else if (!full && document.fullscreenElement) {
+      void document.exitFullscreen?.().catch(() => undefined)
+    }
+  }, [focusMode, zenLevel])
+  useEffect(() => {
+    if (!focusMode || isDesktop()) return
+    // Leaving browser full screen with the browser's own key leaves zen too.
+    const left = () => {
+      if (!document.fullscreenElement && zenLevel === 'full')
+        setFocusMode(false)
+    }
+    document.addEventListener('fullscreenchange', left)
+    return () => document.removeEventListener('fullscreenchange', left)
+  }, [focusMode, zenLevel])
+  useEffect(() => {
+    if (!focusMode) return
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        event.key === 'Escape' &&
+        !event.defaultPrevented &&
+        !document.querySelector('[role="dialog"], [role="menu"]')
+      )
+        setFocusMode(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focusMode])
+  const trackEdges = (event: React.MouseEvent) => {
+    if (!focusMode || zenLevel === 'sidebars') return
+    const nearEdge =
+      event.clientY < 18 || event.clientY > window.innerHeight - 18
+    const inChrome = (event.target as HTMLElement).closest(
+      '.app-toolbar, .note-tabs, .suggestion-bar, .editor-footer, .zen-exit'
+    )
+    if (nearEdge || inChrome) {
+      if (revealTimer.current) clearTimeout(revealTimer.current)
+      revealTimer.current = null
+      if (!revealChrome) setRevealChrome(true)
+    } else if (revealChrome && !revealTimer.current) {
+      revealTimer.current = setTimeout(() => {
+        revealTimer.current = null
+        setRevealChrome(false)
+      }, 700)
+    }
+  }
+  useEffect(
+    () => () => {
+      if (revealTimer.current) clearTimeout(revealTimer.current)
+    },
+    []
+  )
+
+  useEffect(() => {
+    focusSemanticStatus(note?.id ?? null)
+  }, [note?.id])
+  useEffect(() => {
+    if (!note || !settings.semantic.enabled) return
+    // Index after typing pauses; unchanged passages are never embedded again.
+    const timer = setTimeout(() => {
+      void prepareSemanticIndex(note, getWorkspace().settings)
+    }, 1_200)
+    return () => clearTimeout(timer)
+  }, [note, settings.semantic, getWorkspace])
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -300,7 +464,7 @@ function App() {
     const timer = setTimeout(() => setNotice(''), 6500)
     return () => clearTimeout(timer)
   }, [notice])
-  const activeTitle = note?.title
+  const activeTitle = note ? displayTitle(note) : undefined
   useEffect(() => {
     document.title = activeTitle ? `${activeTitle} · TypeNext` : 'TypeNext'
   }, [activeTitle])
@@ -529,14 +693,14 @@ function App() {
       if (document.querySelector('[role="dialog"]')) {
         if (
           ['n', 'o', 's', ',', 'b', 'p'].includes(key) ||
-          (key === 'f' && event.shiftKey)
+          (['f', 'g'].includes(key) && event.shiftKey)
         )
           event.preventDefault()
         return
       }
       if (key === 'n') {
         event.preventDefault()
-        setNewNoteOpen(true)
+        createNote()
       } else if (key === 'o') {
         event.preventDefault()
         void openFile()
@@ -551,7 +715,11 @@ function App() {
         toggleNotes()
       } else if (key === 'f' && event.shiftKey) {
         event.preventDefault()
-        setFocusMode(value => !value)
+        if (focusModeRef.current) setFocusMode(false)
+        else enterZen()
+      } else if (key === 'g' && event.shiftKey) {
+        event.preventDefault()
+        setGraphOpen(true)
       } else if (key === 'p') {
         event.preventDefault()
         setSidebarVisible(true)
@@ -561,10 +729,12 @@ function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openFile, exportNote, showPreferences, toggleNotes])
+  }, [openFile, exportNote, showPreferences, toggleNotes, createNote, enterZen])
 
   nativeHandlers.current = {
-    'menu-new-note': () => setNewNoteOpen(true),
+    'menu-new-note': () => {
+      createNote()
+    },
     'menu-open': () => {
       void openFile()
     },
@@ -911,12 +1081,12 @@ function App() {
     const activeId = getWorkspace().activeNoteId
     if (!files?.length) return
     const selectedFiles = Array.from(files).filter(
-      file =>
-        !file.webkitRelativePath ||
-        /\.(txt|text|md|markdown|mdown|pdf|docx)$/i.test(file.name)
+      file => !file.webkitRelativePath || SUPPORTED_SOURCE.test(file.name)
     )
     if (!selectedFiles.length) {
-      notify('This folder has no supported text, Markdown, PDF or Word files.')
+      notify(
+        'This folder has no supported text, Markdown, PDF, Word, image, audio or video files.'
+      )
       return
     }
     if (selectedFiles.length > 256) {
@@ -936,10 +1106,12 @@ function App() {
       for (const file of selectedFiles) {
         if (controller.signal.aborted) break
         try {
-          const source = {
-            ...(await importContextFile(file, controller.signal)),
-            folder: contextFolder(file),
-          }
+          const imported = mediaKind(file)
+            ? await importMediaFile(file, getWorkspace().settings.semantic, {
+                signal: controller.signal,
+              })
+            : await importContextFile(file, controller.signal)
+          const source = { ...imported, folder: contextFolder(file) }
           if (
             !controller.signal.aborted &&
             !appendContext(activeId, source, packageId)
@@ -1052,7 +1224,8 @@ function App() {
 
   return (
     <div
-      className={`app-shell ${!sidebarVisible || focusMode ? 'sidebar-hidden' : ''} ${focusMode ? 'focus-mode' : ''}`}
+      className={`app-shell ${!sidebarVisible || focusMode ? 'sidebar-hidden' : ''} ${focusMode ? `focus-mode zen zen-${zenLevel}` : ''} ${revealChrome ? 'zen-reveal' : ''} ${MAC_DESKTOP ? 'platform-mac' : ''}`}
+      onMouseMove={focusMode ? trackEdges : undefined}
     >
       <aside className="note-sidebar" aria-label="Notebook">
         <div className="sidebar-brand" data-tauri-drag-region>
@@ -1071,7 +1244,9 @@ function App() {
         <div className="sidebar-actions">
           <button
             className="button new-note-button"
-            onClick={() => setNewNoteOpen(true)}
+            onClick={() => {
+              createNote()
+            }}
           >
             <Plus size={17} /> New note <kbd>⌘ / Ctrl N</kbd>
           </button>
@@ -1118,7 +1293,7 @@ function App() {
               >
                 <FileText size={16} />
                 <span>
-                  <strong>{item.title}</strong>
+                  <strong>{displayTitle(item)}</strong>
                   <small>
                     {relativeDate(item.updatedAt)}
                     {item.sources.length > 0
@@ -1129,7 +1304,7 @@ function App() {
               </button>
               <button
                 className="icon-button note-delete"
-                aria-label={`Delete ${item.title}`}
+                aria-label={`Delete ${displayTitle(item)}`}
                 onClick={() => setDeleteId(item.id)}
               >
                 <Trash2 size={13} />
@@ -1210,7 +1385,7 @@ function App() {
               />
               <span className="breadcrumb-section">Notebook</span>
               <ChevronRight size={13} />
-              <span>{note?.title ?? 'A fresh start'}</span>
+              <span>{note ? displayTitle(note) : 'A fresh start'}</span>
             </div>
           </div>
           <div className="toolbar-actions">
@@ -1243,6 +1418,14 @@ function App() {
                   <Mic size={17} />
                 </button>
                 <button
+                  className="icon-button graph-button"
+                  aria-label="Open note graph"
+                  title="Note graph (Ctrl / ⌘ Shift G)"
+                  onClick={() => setGraphOpen(true)}
+                >
+                  <Waypoints size={17} />
+                </button>
+                <button
                   className="icon-button"
                   aria-label="Save Markdown"
                   title="Save Markdown (Ctrl / ⌘ S)"
@@ -1252,19 +1435,17 @@ function App() {
                 >
                   <Save size={17} />
                 </button>
-                <button
-                  className="icon-button"
-                  aria-label={
-                    focusMode ? 'Leave focus mode' : 'Enter focus mode'
+                <ZenMenu
+                  active={focusMode}
+                  level={zenLevel}
+                  onToggle={() =>
+                    focusMode ? setFocusMode(false) : enterZen()
                   }
-                  title="Focus mode (Ctrl / ⌘ Shift F)"
-                  onClick={() => setFocusMode(value => !value)}
-                >
-                  <Focus size={17} />
-                </button>
+                  onChoose={enterZen}
+                />
               </>
             )}
-            {isDesktop() && (
+            {isDesktop() && !MAC_DESKTOP && (
               <div className="window-controls">
                 <button
                   aria-label="Minimize window"
@@ -1311,11 +1492,11 @@ function App() {
                     aria-current={note?.id === id ? 'page' : undefined}
                   >
                     <FileText size={13} />
-                    <span>{item.title}</span>
+                    <span>{displayTitle(item)}</span>
                   </button>
                   <button
                     className="tab-close"
-                    aria-label={`Close ${item.title} tab`}
+                    aria-label={`Close ${displayTitle(item)} tab`}
                     onClick={() => {
                       setWorkspace(value => closeNote(value, id))
                       setStatus({ state: 'idle' })
@@ -1329,7 +1510,9 @@ function App() {
             <button
               className="icon-button add-tab"
               aria-label="Create another note"
-              onClick={() => setNewNoteOpen(true)}
+              onClick={() => {
+                createNote()
+              }}
             >
               <Plus size={16} />
             </button>
@@ -1380,10 +1563,19 @@ function App() {
                       key={note.id}
                       ref={editorRef}
                       note={note}
+                      notes={workspace.notes}
                       settings={settings}
                       onChange={content => updateNote(note.id, { content })}
                       onStatus={setStatus}
                       requestToken={requestToken}
+                      onOpenNote={openNoteById}
+                      onCreateNote={title => {
+                        createNote(title)
+                      }}
+                      onAction={action => {
+                        if (action === 'dictate') dictationRef.current?.toggle()
+                        else if (action === 'graph') setGraphOpen(true)
+                      }}
                     />
                     {!note.content && (
                       <div className="blank-page-hint">
@@ -1480,7 +1672,9 @@ function App() {
                     {status.state === 'loading' ? (
                       <>
                         <LoaderCircle size={13} className="spin" />
-                        <span>Finding a continuation…</span>
+                        <span>
+                          {status.message ?? 'Finding a continuation…'}
+                        </span>
                       </>
                     ) : status.state === 'suggestion' ? (
                       <span
@@ -1580,6 +1774,10 @@ function App() {
                   notes={workspace.notes}
                   packages={workspace.contextPackages ?? []}
                   onDetachPackage={detachPackage}
+                  onAttachPackage={attachPackage}
+                  onCreatePackage={createPackage}
+                  settings={settings}
+                  onOpenKnowledgeSettings={() => showPreferences('knowledge')}
                   library={workspace.contextLibrary}
                   onLibrary={packageId => {
                     setLibraryPackageId(packageId)
@@ -1617,7 +1815,9 @@ function App() {
               <div className="welcome-actions">
                 <button
                   className="button primary"
-                  onClick={() => setNewNoteOpen(true)}
+                  onClick={() => {
+                    createNote()
+                  }}
                 >
                   <Plus size={16} />
                   Start a note
@@ -1655,77 +1855,6 @@ function App() {
           )}
         </div>
       </main>
-      <Modal
-        open={newNoteOpen}
-        onOpenChange={setNewNoteOpen}
-        title="Where would you like to begin?"
-        description="Give this note a name and a little direction. You can change both anytime."
-      >
-        <form
-          onSubmit={event => {
-            event.preventDefault()
-            if (!draftTitle.trim()) return
-            try {
-              const created = newNote(draftTitle, draftContext)
-              setWorkspace(value => {
-                const next = openNote(value, created)
-                assertWorkspaceFits(next)
-                return next
-              })
-              setNewNoteOpen(false)
-              setDraftTitle('')
-              setDraftContext('')
-              setStatus({ state: 'idle' })
-            } catch (error) {
-              notify(error instanceof Error ? error.message : String(error))
-            }
-          }}
-        >
-          <label className="field-label" htmlFor="new-note-title">
-            Title
-          </label>
-          <input
-            id="new-note-title"
-            value={draftTitle}
-            onChange={event => setDraftTitle(event.target.value)}
-            placeholder="A thought worth following"
-            required
-            maxLength={160}
-          />
-          <label className="field-label" htmlFor="new-note-context">
-            Context for suggestions{' '}
-            <span className="optional-label">optional</span>
-          </label>
-          <textarea
-            id="new-note-context"
-            rows={4}
-            value={draftContext}
-            onChange={event => setDraftContext(event.target.value)}
-            placeholder="What are you writing? Who is it for? A tone, a point of view, or a few details…"
-          />
-          <p className="field-help">
-            Keep the first line for your objective if that helps. Context stays
-            local unless you enable an external model.
-          </p>
-          <div className="dialog-footer">
-            <button
-              type="button"
-              className="button subtle"
-              onClick={() => setNewNoteOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="button primary"
-              disabled={!draftTitle.trim()}
-            >
-              Create note
-              <ChevronRight size={15} />
-            </button>
-          </div>
-        </form>
-      </Modal>
       <ContextLibrary
         open={libraryOpen}
         onOpenChange={setLibraryOpen}
@@ -1761,6 +1890,20 @@ function App() {
           setWebsiteOpen(true)
         }}
         onUseNote={useNoteAsContext}
+        settings={settings}
+        onOpenKnowledgeSettings={() => showPreferences('knowledge')}
+      />
+      <NoteGraph
+        open={graphOpen}
+        onOpenChange={setGraphOpen}
+        notes={workspace.notes}
+        library={workspace.contextLibrary}
+        packages={workspace.contextPackages}
+        activeNoteId={workspace.activeNoteId}
+        onOpenNote={openNoteById}
+        onCreateNote={title => {
+          createNote(title)
+        }}
       />
       <Preferences
         open={preferencesOpen}
@@ -1921,6 +2064,15 @@ function App() {
           </button>
         </div>
       </Modal>
+      {focusMode && zenLevel !== 'sidebars' && (
+        <button
+          className="zen-exit"
+          onClick={() => setFocusMode(false)}
+          aria-label="Leave zen mode"
+        >
+          <Close size={12} /> Leave zen <kbd>Esc</kbd>
+        </button>
+      )}
       {(notice || storageError) && (
         <div className="notice" role="status">
           <span>{notice || storageError}</span>

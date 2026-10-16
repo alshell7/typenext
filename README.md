@@ -1,28 +1,27 @@
 # TypeNext
 
-A local-first Markdown notepad. Your thoughts lead; suggestions help you keep going.
-
-[Download for Windows and macOS](https://github.com/alshell7/typenext/releases/latest).
+A local-first Markdown notepad. You write. A suggestion at the cursor can help you continue, and you decide if it stays.
 
 ![The TypeNext writing space with local inline recall and an open context panel](docs/screenshots/writing-light.png)
 
-TypeNext gives you a quiet page, a small notebook of tabs, and context close to your writing. A suggestion appears at the cursor. You decide whether it belongs.
+## Download
+
+[Download for Windows and macOS](https://github.com/alshell7/typenext/releases/latest). Windows has a setup EXE, an MSI and a portable ZIP. Each Mac type (Apple Silicon and Intel) has a DMG and a ZIP. Linux builds from source. The [user guide](docs/userguide/userguide.md) tells you how to use each feature.
 
 ## Writing
 
-- Create a note with a title and a little background. Set an objective, or let the first line of the note provide it.
-- Create named, reusable contexts in **Contexts**, then attach several to a note. Each context can hold folder snapshots, text, Markdown, searchable PDFs, DOCX files, websites and live note links. Shared text is stored once; a linked note's own writing stays current without copying it. Preview sources and choose which contexts each note uses.
-- Accept a continuation with **Tab**, accept a word with **Ctrl/Command + Right**, or dismiss it with **Escape**. Accepted text can be undone normally.
-- Press **Ctrl/Command + Space** for a small menu at the cursor. Use the arrow keys to preview a choice, then Enter or Tab to accept. Suggestions also work without attached references.
-- Dictate inline with optional **Whistle**, a one-time 17 MB download. **Ctrl/Command + Shift + D** starts and stops; **Escape** cancels. Choose your microphone and language, speak while typing, and let the transcript enter the note when you stop. Automatic suggestions resume after insertion when enabled.
-- Keep recent notes, switch tabs, use focus mode, and autosave locally. Open and save ordinary Markdown files.
-- Choose light, dark, or system appearance. Start with paper or neutral graphite, choose Pure black, Dark contrast, Light contrast or another curated palette, or set your own page, sidebar, and accent colours. Change the writing typeface and size.
+- **Notes start at once.** Press Ctrl/⌘ N and type. An untitled note takes its title from its first line until you type a title. Set the objective and background later in the **Intent** section of the Context panel.
+- **Markdown editor.** GitHub Flavored Markdown with live preview of bullets, task boxes, rules, quotes, code blocks and tables. Tab and Shift+Tab move between table cells and indent list items. Enter continues lists and adds table rows. Ctrl/⌘ Enter toggles a task.
+- **Insert menu.** Type `/` at the start of a word for headings, lists, tables, code, links, the date and actions. Add your own commands in **Preferences → Editor**, with `{cursor}`, `{date}` and `{time}` tokens. You can change the trigger character.
+- **Note links and the graph.** Type `[[` to link another note. Hover a link to see the note or the website title. Ctrl/⌘-click or Alt+Enter opens it, and a link to a missing note can create it. Ctrl/⌘ Shift G opens a graph of links, notes used as context and notes not written yet.
+- **Contexts.** A context is a named group of references: files, folder snapshots, PDFs with text, DOCX files, websites, live notes, and (with semantic search) images, audio and video. Drag a context onto the note in the Context panel to attach it. Drag it back to detach it. Drop files on the panel or on a context card.
+- **Zen mode.** Three levels: hide side panels, hide toolbars (they show at the top or bottom edge), or full screen. Ctrl/⌘ Shift F uses the saved level. Escape leaves zen.
+- **Files and appearance.** Tabs, recent notes, local autosave, and ordinary Markdown files. Light, dark or system appearance, curated and custom palettes, and a choice of typeface and size. On macOS, the native window buttons are at the top left.
+- **Dictation.** The optional Whistle model (a 17 MB download) transcribes speech on your device. Ctrl/⌘ Shift D starts and stops. Escape cancels.
 
-New notebooks start empty. Choose **Try a sample** on the welcome screen or in **Contexts** to open a fictional Bramble House retreat note with two attached context packages. Put the cursor after “Guests arrive at Bramble House”, press **Ctrl/Command + Space**, then **Tab**. The default local recall mode completes the arrival detail directly from the sample files, with no setup. You can edit the sample, switch models, or detach a context to compare.
+New notebooks start empty. Select **Try a sample** on the welcome screen or in **Contexts** to open a fictional Bramble House note with two attached contexts. Put the cursor after "Guests arrive at Bramble House", press Ctrl/⌘ Space, then Tab. The default local recall mode completes the detail from the sample files, with no setup. The [sample files](examples/bramble-house) and a [ZIP](public/demo/typenext-sample.zip) are included. The sample does not change your notes or model settings.
 
-The [sample files](examples/bramble-house) and [downloadable ZIP](public/demo/typenext-sample.zip) are included. Opening the sample preserves your existing notes and model settings. The screenshots use example writing.
-
-Autosave keeps a recoverable previous version and saves during continuous typing. Desktop saves replace complete files atomically; interrupted or unreadable data is preserved for recovery. See [save and recovery behaviour](docs/reliability.md) for the tested guarantees and limits, and the [service](docs/services-resource-audit.md) and [editor](docs/editor-resource-audit.md) resource measurements.
+Autosave keeps a recoverable previous version. Desktop saves replace complete files atomically. See [save and recovery behaviour](docs/reliability.md) and the [service](docs/services-resource-audit.md) and [editor](docs/editor-resource-audit.md) resource measurements.
 
 <details>
 <summary>Dark appearance and reference previews</summary>
@@ -39,28 +38,40 @@ Autosave keeps a recoverable previous version and saves during continuous typing
 
 </details>
 
-![The sample's two reusable contexts, with its house details and weekend plan attached to the note](docs/screenshots/demo-contexts.png)
-
 ## Suggestions and privacy
 
-Suggestions start on your device. With no model connected, **local recall** can complete a matching phrase from enabled references or earlier writing. When there is no matching phrase, **writing starters** offer short, optional English prompts using the note's own context. These lightweight starters are labelled separately from model-generated continuations; they do not invent facts. Attached references are optional.
+Suggestions start on your device. Tab accepts a suggestion, Ctrl/⌘ → accepts one word, and Escape dismisses it. Ctrl/⌘ Space opens a menu of choices at the cursor. Use the arrow keys to preview a choice, and Enter or Tab to accept it. A preview does not change the note.
 
-For new wording without another app, download the optional **SmolLM2-135M** model in **Preferences → Local suggestions**. The pinned, verified download is about 139 MB; later generation and cached loading work offline. It is a small experimental English writing model, so judge its suggestions before accepting them. You can also connect a local instruction model through LM Studio, Jan, Lemonade, or llama.cpp. The same local BM25 retrieval feeds the built-in model, local servers and deliberately enabled external models. Each request combines relevant attached passages with a bounded objective, background and cursor prefix/suffix. Native llama.cpp FIM is available for models trained for infill.
+| Engine                        | Where it runs                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| **Writing starters & recall** | On your device. The default. No setup. Recalls phrases from your references and writing. |
+| **Built-in SmolLM2**          | On your device, after a verified download of about 139 MB.                               |
+| **Local server**              | LM Studio, Jan, Lemonade or llama.cpp on your computer.                                  |
+| External providers            | OpenRouter, OpenAI, Anthropic or a custom endpoint, only after **Use continuously**.     |
 
-OpenRouter, OpenAI, Anthropic, and custom endpoints are optional. Configure their keys and saved models independently, then use **Choose model** beside the editor. **Use continuously** explicitly activates external suggestions until you switch back to **On this device**. The chooser explains what is shared; the active provider remains visible. No local error triggers an external fallback. OpenRouter defaults to its free-model router, and its available-model list can filter for free models. Availability and account limits still apply.
+Switch the engine with the searchable chooser in the status bar. Set up keys and saved models in **Preferences → Models**. While an external provider is active, it receives nearby writing, the objective, your instructions and relevant attached context. A local error never starts an external request.
 
-With an active hosted chat model, **Ctrl/Command + Space** asks for up to three fresh, distinct choices in one request. It refreshes the choices even at the same cursor. Arrow-key preview makes no further requests, and only the choice you accept enters the note. Local recall, writing starters and local models keep their offline paths.
+**Retrieval is hybrid.** A local BM25 index finds passages with matching words. Optional **semantic search** with Google EmbeddingGemma 2 finds passages by meaning. Turn it on in **Preferences → Knowledge**:
 
-Set your own suggestion instructions and choose a few words, one sentence, or an adaptive length. **Find in attached context** uses the same BM25 retriever to search your attached sources. Suggestions prioritize the words near the cursor. Retrieval is lexical: it finds matching words rather than embedding-based semantic similarity. A model can still get a fact wrong despite receiving the right passage.
+- **Inside TypeNext** (desktop): TypeNext downloads the pinned llama.cpp `b11696` build (about 12–20 MB) and the model (Q4 175.7 MB or Q8 309.9 MB). It checks the SHA-256 of each file. It runs `llama-server` on a private loopback port with a random key, and stops it when the app closes.
+- **My own server**: run the `llama-server` command that the pane shows.
 
-Notes and extracted references are stored locally. Desktop keys can be remembered in the operating system credential vault; otherwise they stay in the session. Browser keys are session-only. Website import contacts the selected website, and optional Firecrawl import sends its URL to Firecrawl. Files are parsed locally.
+If the embedding server is slow or stopped, TypeNext uses BM25 alone. Vectors stay in a local cache. With the optional media encoder (554.8 MB), images (up to 20 MB), audio (30 MB and 3 minutes) and video (50 MB and 45 seconds) become references. TypeNext keeps only the vector, a small thumbnail and the caption, not the file.
 
-Both built-in models download only when requested. Whistle records and transcribes locally; microphone access starts only from a dictation or microphone-setup gesture. Recordings stop at 30 seconds, and captured audio is discarded after transcription or cancellation. Transcripts are inserted automatically at the recording position, which follows typing edits; an insertion failure keeps the transcript available to edit and recover. Dictated text uses the same suggestion mode as typed text, including an intentionally activated external provider. The text worker has bounded input/output, cancellation and idle unloading; downloaded weights are separate from notebook saves. Server models remain managed by your chosen server. Scanned PDFs need OCR, and legacy `.doc` files need conversion to `.docx` or text. The researched model/runtime choices and current boundaries are in [AI design](docs/ai-design.md).
+**Web facts** are optional. Select text and press Ctrl/⌘ Shift K, or choose **Search the web for facts** in the insert menu. TypeNext asks the OpenAI Responses API with web search for up to three cited facts. The accepted fact inserts Markdown links to its sources. A search sends the selected text, nearby writing, the note title and the objective to OpenAI, with your OpenAI key. OpenAI charges for each search.
+
+What stays local and what leaves the device:
+
+- Notes, extracted references and vectors stay on your device. Files are parsed locally.
+- Desktop keys stay in memory unless you choose the operating system credential vault. Browser keys last for the session.
+- Website import contacts the website. Optional Firecrawl import sends the address to Firecrawl.
+- Link hover cards in **Notes & web** mode contact the linked website for its title. They send no note text.
+- Model and runtime files download only when you ask. Whistle records and transcribes locally, and the microphone starts only from a dictation action.
+
+A model can still get a fact wrong with the right passage. Scanned PDFs need OCR, and `.doc` files need conversion to `.docx` or text. Design details are in [AI design](docs/ai-design.md) and [built-in models](docs/builtin-models.md).
 
 <details>
-<summary>Models, contrast themes, and dictation</summary>
-
-![Choosing local or continuous external suggestions](docs/screenshots/model-chooser.png)
+<summary>Contrast themes and dictation</summary>
 
 ![Dark contrast and curated colour presets](docs/screenshots/contrast-presets.png)
 
@@ -68,7 +79,7 @@ Both built-in models download only when requested. Whistle records and transcrib
 
 </details>
 
-Measured runtime limits and model provenance are in [built-in models](docs/builtin-models.md). The [prose FIM training recipe](docs/fim-training.md) includes a Colab-ready notebook; no custom-trained checkpoint is shipped.
+The [prose FIM training recipe](docs/fim-training.md) includes a Colab notebook. No custom-trained checkpoint is shipped.
 
 ## Development
 
@@ -96,9 +107,9 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npm run tauri:build
 ```
 
-Browser tests use installed Edge on Windows or Playwright Chromium elsewhere. Install the latter with `npx playwright install --with-deps chromium` when needed. `npm run test:native:windows` builds a separate test profile and exercises the real Windows WebView and Rust bridge. Live provider tests are opt-in and use synthetic text; see [testing](docs/testing.md).
+Browser tests use installed Edge on Windows or Playwright Chromium elsewhere. Install the latter with `npx playwright install --with-deps chromium` when needed. `npm run test:native:windows` builds a separate test profile and exercises the real Windows WebView and Rust bridge. Live provider and embedding tests are opt-in and use synthetic text. Keys come from a local, untracked `.env` file and never from the repository. See [testing](docs/testing.md).
 
-The active implementation is in `src/notebook`, `src/components/notebook`, and the notebook services. Earlier template code is preserved but excluded from the active TypeScript project and production bundle. `package-lock.json` is the canonical dependency lockfile.
+The active implementation is in `src/notebook`, `src/components/notebook`, the notebook services and `src-tauri/src`. The [editor](docs/developer/editor.md) and [semantic search](docs/developer/semantic-search.md) guides describe the new systems. Earlier template code is preserved but excluded from the active TypeScript project and production bundle. `package-lock.json` is the canonical dependency lockfile.
 
 ## Project website
 
@@ -108,9 +119,9 @@ The project website is live at [alshell7.github.io/typenext](https://alshell7.gi
 
 ## Contributing
 
-Keep the writing flow small, keyboard-friendly, and understandable in the app. Changes to suggestions should test cursor movement, cancellation, suffix preservation, and the local/external privacy boundary. Changes to storage should preserve a recoverable copy and make failures visible.
+Keep the writing flow small, keyboard-friendly, and understandable in the app. Changes to suggestions should test cursor movement, cancellation, suffix preservation, and the local/external privacy boundary. Changes to the editor should keep the typing-latency test green. Changes to storage should preserve a recoverable copy and make failures visible.
 
-TypeNext uses Tauri 2, React, TypeScript, CodeMirror 6, and a small local BM25 index. Source extraction uses PDF.js, Mammoth, and Mozilla Readability. See [third-party notices](docs/third-party.md) for bundled fonts and libraries.
+TypeNext uses Tauri 2, React, TypeScript, CodeMirror 6, a small local BM25 index and optional llama.cpp embeddings. Source extraction uses PDF.js, Mammoth, and Mozilla Readability. See [third-party notices](docs/third-party.md) for bundled fonts and libraries.
 
 ## License
 

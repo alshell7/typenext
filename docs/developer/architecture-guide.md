@@ -1,244 +1,112 @@
-# Architecture Guide
+# Architecture guide
 
-High-level architectural overview and mental models for building Tauri + React applications with this template.
+This guide gives the high-level structure of TypeNext and the patterns to follow. System guides in `docs/developer/` give the details.
 
-## Philosophy
+## Principles
 
-This template follows these core principles:
+1. **Clarity over cleverness.** Use predictable patterns.
+2. **Local first.** Writing, references and vectors stay on the device. A network request needs a deliberate action by the writer.
+3. **Markdown is the source of truth.** The editor never keeps a second document model.
+4. **Bounded work.** Every cache, queue, import and prompt has a limit. Every asynchronous request can be cancelled.
+5. **Performance by design.** Typing must stay fast in a long note.
 
-1. **Clarity over Cleverness** - Predictable patterns over magic
-2. **AI-Friendly Architecture** - Clear patterns that AI agents can follow
-3. **Performance by Design** - Patterns that prevent common performance pitfalls
-4. **Security First** - Built-in security patterns for file system operations
-5. **Extensible Foundation** - Easy to add new features without refactoring
+## Active code
 
-## Mental Models
-
-### The "Onion" State Architecture
-
-State management follows a clear three-layer hierarchy:
-
-```
-┌─────────────────────────────────────┐
-│           useState                  │  ← Component UI State
-│  ┌─────────────────────────────────┐│
-│  │          Zustand                ││  ← Global UI State
-│  │  ┌─────────────────────────────┐││
-│  │  │      TanStack Query         │││  ← Persistent Data
-│  │  └─────────────────────────────┘││
-│  └─────────────────────────────────┘│
-└─────────────────────────────────────┘
-```
-
-**Decision Tree:**
-
-```
-Is this data needed across multiple components?
-├─ No → useState
-└─ Yes → Does this data persist between app sessions?
-    ├─ No → Zustand
-    └─ Yes → TanStack Query
-```
-
-See [state-management.md](./state-management.md) for detailed patterns.
-
-### Event-Driven Bridge Architecture
-
-Rust and React communicate through events for loose coupling:
-
-```
-Rust Menu Click → Event Emission → React Listener → Command Execution → State Update
-Keyboard Shortcut → Event Handler → Command Execution → State Update
-Command Palette → Command Selection → Command Execution → State Update
-```
-
-This ensures the same actions work consistently across all interaction methods.
-
-### Command-Centric Design
-
-All user actions flow through a centralized command system:
-
-- **Commands** are pure objects with `execute()` functions
-- **Context** provides all state and actions commands need
-- **Registration** merges commands from different domains at runtime
-
-This decouples UI triggers from implementations and enables consistent behavior.
-
-## System Architecture
-
-### Core Systems
-
-Each major system has focused documentation:
-
-- **[Command System](./command-system.md)** - Unified action dispatch
-- **[Keyboard Shortcuts](./keyboard-shortcuts.md)** - Native event handling
-- **[Native Menus](./menus.md)** - Cross-platform menu integration
-- **[Data Persistence](./data-persistence.md)** - Disk storage patterns
-- **[Notifications](./notifications.md)** - Toast and native notifications
-- **[Logging](./logging.md)** - Rust and TypeScript logging
-- **[Testing](./testing.md)** - Quality gates and test patterns
-- **[Releases](./releases.md)** - Automated release process
-- **[Auto-Updates](./auto-updates.md)** - Update system integration
-
-### Component Hierarchy
-
-```
-MainWindow (Top-level orchestrator)
-├── TitleBar (Window controls + toolbar)
-├── LeftSidebar (Collapsible panel)
-├── MainWindowContent (Primary content area)
-├── RightSidebar (Collapsible panel)
-└── Global Overlays
-    ├── PreferencesDialog (Settings)
-    ├── CommandPalette (Cmd+K)
-    └── Toaster (Notifications)
-```
-
-### File Organization
+TypeNext started from a Tauri React template. `tsconfig.json` compiles only the active paths below. Template code in `src/legacy`, `src/store`, `src/lib/commands`, `src/components/layout` and similar folders is not part of the app or the bundle.
 
 ```
 src/
-├── components/
-│   ├── layout/          # Layout components (MainWindow, sidebars)
-│   ├── command-palette/ # Command palette system
-│   ├── preferences/     # Preferences dialog system
-│   └── ui/              # Shadcn UI components
-├── hooks/               # Custom React hooks
-├── lib/
-│   └── commands/        # Command system implementation
-├── services/            # TanStack Query + Tauri integration
-├── store/               # Zustand stores
-└── types/               # Shared TypeScript types
+├── App.tsx                  Window shell: sidebar, tabs, toolbar, zen mode, dialogs, global keys
+├── app-shell.css            Shell layout, macOS title bar space, zen levels
+├── notebook/                Notes, contexts, Preferences, graph, model chooser
+│   ├── useNotebook.ts       Workspace state, load and autosave
+│   ├── model.ts             Defaults, note creation, automatic titles
+│   ├── context/             Context panel parts: Intent, connection board, search
+│   ├── preferences/         Preference panes
+│   ├── NoteGraph.tsx        Graph dialog (canvas and list)
+│   └── note-links.ts        [[link]] parsing, resolution, graph data
+├── components/notebook/     CodeMirror editor and its extensions
+├── services/                Completion, retrieval, semantic search, web facts, storage, native bridge
+└── types/notebook.ts        Shared types
+src-tauri/src/
+├── lib.rs                   Tauri setup, menus, command registration, exit handling
+├── workspace.rs             Atomic workspace and Markdown file storage
+├── credentials.rs           Operating system credential vault
+├── http.rs                  Native HTTP with public-address checks
+└── embedding.rs             Managed llama.cpp embedding server
 ```
 
-## Performance Patterns
+## State
 
-### The `getState()` Pattern (Critical)
+The workspace (notes, contexts, settings) is one `Workspace` object. `useNotebook` loads it, holds it in React state and saves it after typing stops (650 ms idle, 2 s maximum wait). Component state stays in `useState`. Editor state stays in CodeMirror `StateField`s. The active app does not use Zustand or TanStack Query.
 
-**Problem**: Store subscriptions in callbacks cause render cascades.
+Rules:
 
-**Solution**: Use `getState()` for callbacks that need current state:
+- Change settings through the `update` and `latest()` functions that the Preferences panes receive. `latest()` prevents lost updates from stale closures.
+- Normalise stored data in `services/storage.ts` and `notebook/model.ts`. Every new setting needs a default and a migration for old workspaces.
+- Use `useSyncExternalStore` for service status that changes outside React, for example the embedding runtime and the semantic index.
 
-```typescript
-// ✅ Good: Stable callback, no cascades
-const handleAction = useCallback(() => {
-  const { currentData, updateData } = useStore.getState()
-  updateData(currentData.modified)
-}, []) // Empty deps - stable reference
+## Bridge between React and Rust
 
-// ❌ Bad: Re-creates on every state change
-const { currentData, updateData } = useStore()
-const handleAction = useCallback(() => {
-  updateData(currentData.modified)
-}, [currentData, updateData]) // Cascades on every change
+- **React → Rust:** `invoke('command_name', args)` through `services/native.ts`. Do not call `@tauri-apps/api` from components.
+- **Rust → React:** `app.emit("event-name", payload)` and `listen("event-name", handler)`. Example: `embedding-runtime-status`.
+- **Native menus** emit events that `App.tsx` handles, for example `menu-preferences`.
+
+Rust commands: `load_workspace`, `persist_workspace`, `open_workspace_folder`, `write_markdown_file`, `get_secret`, `set_secret`, `http_request`, `cancel_http_request`, `exit_app`, and the six `embedding_runtime_*` commands.
+
+## Systems
+
+| System                    | Guide or source                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| Editor                    | [editor.md](./editor.md)                                                        |
+| Semantic search           | [semantic-search.md](./semantic-search.md)                                      |
+| Suggestions and retrieval | [AI design](../ai-design.md), `services/completion.ts`, `services/retrieval.ts` |
+| Web facts                 | `services/web-facts.ts`, [AI design](../ai-design.md#web-facts)                 |
+| Storage and recovery      | [reliability](../reliability.md), `src-tauri/src/workspace.rs`                  |
+| Testing                   | [testing.md](./testing.md)                                                      |
+| Releases                  | [releases.md](./releases.md)                                                    |
+
+### Suggestions
+
+`MarkdownEditor.tsx` schedules a request after a pause or on Ctrl/⌘ Space. `completion.ts` resolves the sources of the note, runs hybrid retrieval, builds a bounded prompt and calls one engine: recall and starters, built-in SmolLM2, a local server, or an external provider. Only one generation request runs at a time. A revision check drops results for a changed document or cursor.
+
+### Retrieval
+
+BM25 (`retrieval.ts`) always runs. Semantic search (`semantic-retrieval.ts`) runs when it is on and stays within a latency budget. Reciprocal rank fusion merges the two lists. When semantic search is slow or fails, BM25 results are used alone.
+
+### Note graph
+
+`note-links.ts` parses links outside code and builds nodes and edges from links and context use. `note-graph-layout.ts` runs a seeded force layout with a Barnes–Hut approximation. `NoteGraph.tsx` draws on a canvas and offers a list view for screen readers.
+
+### Window shell
+
+`App.tsx` owns zen mode (`settings.zenLevel`: `sidebars`, `chrome`, `full`). `app-shell.css` hides the chrome and shows it at the window edges. On macOS, `tauri.macos.conf.json` uses an overlay title bar with native window buttons. On Windows and Linux, the base configuration has no decorations and `App.tsx` draws the window buttons.
+
+## Security
+
+- All file writes happen in Rust and are atomic: write a temporary file, then rename it.
+- Native HTTP for website import and link previews uses `publicOnly` to refuse private addresses, pins DNS and checks redirects again.
+- Keys come from the credential vault or session memory. They never enter notes, prompts or `localStorage`.
+- The embedding server listens on `127.0.0.1` only and needs a random key for each start.
+- Downloaded runtimes and models are pinned by SHA-256.
+
+## Quality gates
+
+```sh
+npm run check:all
 ```
 
-See [performance-patterns.md](./performance-patterns.md) for complete patterns.
+This runs the TypeScript type check, ESLint with zero warnings, Vitest, `cargo fmt --check` and `cargo clippy -D warnings`. Also run `cargo test --manifest-path src-tauri/Cargo.toml` and `npm run test:e2e`. See [testing.md](./testing.md).
 
-## Security Architecture
+## Add a feature
 
-### Rust-First Security
+1. Read the guide for the system that you change.
+2. Put logic in `services/` or a pure module. Keep components thin.
+3. Add a setting with a default in `model.ts` and validation in `storage.ts`.
+4. Add a bound to every new cache, queue or request.
+5. Add unit tests, and a browser test for a new user flow.
+6. Update the user guide (`docs/userguide/userguide.md`) and this folder.
 
-All file operations happen in Rust with built-in validation:
+## Template documents
 
-```rust
-// Path validation prevents traversal attacks
-fn is_blocked_directory(path: &Path) -> bool {
-    let blocked_patterns = ["/System/", "/usr/", "/etc/", "/.ssh/"];
-    blocked_patterns.iter().any(|pattern| path.starts_with(pattern))
-}
-```
-
-### Input Sanitization
-
-```rust
-// Filename sanitization
-pub fn sanitize_filename(filename: &str) -> String {
-    filename.chars()
-        .filter(|c| !['/', '\\', ':', '*', '?', '"', '<', '>', '|'].contains(c))
-        .collect()
-}
-```
-
-## Integration Patterns
-
-### Multi-Source Event Coordination
-
-The same action can be triggered from multiple sources:
-
-```typescript
-// All trigger the same command
-handleKeyboard('cmd+comma') → commandContext.openPreferences()
-handleMenu('menu-preferences') → commandContext.openPreferences()
-handleCommand('open-preferences') → commandContext.openPreferences()
-```
-
-### Atomic File Operations
-
-All disk writes use atomic operations to prevent corruption:
-
-```rust
-// Write to temp file, then rename (atomic)
-std::fs::write(&temp_path, content)?;
-std::fs::rename(&temp_path, &final_path)?;
-```
-
-## Development Workflow
-
-### Quality Gates
-
-Before any changes are committed:
-
-```bash
-npm run check:all  # Runs all checks
-```
-
-This includes:
-
-- TypeScript type checking
-- ESLint linting
-- Prettier formatting
-- Vitest tests
-- Rust formatting (cargo fmt)
-- Rust linting (clippy)
-- Rust tests
-
-### Documentation-Driven Development
-
-1. **Understand patterns** - Read relevant docs in `docs/developer/`
-2. **Follow established patterns** - Don't invent new approaches
-3. **Update docs** - Document new patterns as they emerge
-4. **Test comprehensively** - Use the established testing patterns
-
-## Extension Points
-
-### Adding New Features
-
-1. **Commands** - Add to appropriate command group file
-2. **State** - Choose appropriate layer (useState/Zustand/TanStack Query)
-3. **UI** - Follow component architecture guidelines
-4. **Persistence** - Use established data persistence patterns
-5. **Testing** - Add tests following established patterns
-6. **Documentation** - Update relevant docs
-
-### Adding New Systems
-
-When adding entirely new systems:
-
-1. **Create focused docs** - Add new file to `docs/developer/`
-2. **Follow architectural patterns** - Use established bridge patterns
-3. **Integrate with command system** - Make actions discoverable
-4. **Add keyboard shortcuts** - Follow shortcut conventions
-5. **Update this guide** - Add system to architecture overview
-
-## Best Practices Summary
-
-1. **Follow the onion** - Use the three-layer state architecture
-2. **Commands everywhere** - Route all actions through the command system
-3. **Performance first** - Use `getState()` pattern to avoid cascades
-4. **Security by default** - Validate all inputs, especially file paths
-5. **Event-driven bridges** - Keep Rust and React loosely coupled
-6. **Test everything** - Use quality gates to maintain code health
-7. **Document patterns** - Keep docs current as patterns evolve
-
-This architecture provides a solid foundation for building maintainable, performant, and secure desktop applications with Tauri and React.
+These documents come from the original template: `command-system.md`, `keyboard-shortcuts.md`, `menus.md`, `notifications.md`, `state-management.md`, `data-persistence.md`, `auto-updates.md`, `architectural-patterns.md`, `performance-patterns.md`, `bundle-optimization.md`, `logging.md`. Parts of them do not agree with the active app, for example the Zustand and TanStack Query patterns. When a template document and the active code do not agree, follow the code and this guide.

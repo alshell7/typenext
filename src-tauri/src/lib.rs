@@ -1,4 +1,5 @@
 mod credentials;
+mod embedding;
 mod http;
 mod workspace;
 
@@ -118,6 +119,15 @@ pub fn run() {
         .manage(ExitState::default())
         .setup(|app| {
             app.manage(http::HttpState::new()?);
+            let handle = app.handle().clone();
+            app.manage(embedding::EmbeddingState::new(
+                app.path().app_data_dir()?.join("embedding"),
+                move |status| {
+                    if let Err(error) = handle.emit(embedding::STATUS_EVENT, status) {
+                        log::warn!("Could not report the embedding runtime status: {error}");
+                    }
+                },
+            ));
             create_app_menu(app)?;
             app.on_menu_event(|app, event| {
                 let name = match event.id().as_ref() {
@@ -144,6 +154,12 @@ pub fn run() {
             credentials::set_secret,
             http::http_request,
             http::cancel_http_request,
+            embedding::embedding_runtime_status,
+            embedding::embedding_runtime_install,
+            embedding::embedding_runtime_cancel,
+            embedding::embedding_runtime_start,
+            embedding::embedding_runtime_stop,
+            embedding::embedding_runtime_remove,
             exit_app,
         ])
         .build(tauri::generate_context!())
@@ -161,6 +177,12 @@ pub fn run() {
             {
                 api.prevent_exit();
                 let _ = app.emit("native-close-requested", ());
+            }
+            // Managed state is not dropped on exit, so stop llama-server here.
+            tauri::RunEvent::Exit => {
+                if let Some(embedding) = app.try_state::<embedding::EmbeddingState>() {
+                    embedding.shutdown();
+                }
             }
             _ => {}
         });

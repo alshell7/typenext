@@ -22,6 +22,53 @@ export interface PalettePreferences {
   customDark: PaletteColors
 }
 
+export type EmbeddingDimensions = 128 | 256 | 512 | 768
+export type EmbeddingQuantization = 'UD-Q4_K_XL' | 'Q8_0'
+
+/** Semantic retrieval with EmbeddingGemma 2, beside the lexical BM25 index. */
+export interface SemanticSettings {
+  enabled: boolean
+  /** managed: TypeNext installs and runs llama.cpp. server: the writer runs it. */
+  runtime: 'managed' | 'server'
+  /** Base URL of a llama.cpp server started with --embeddings (server mode). */
+  endpoint: string
+  quantization: EmbeddingQuantization
+  /** Matryoshka truncation. Vectors are re-normalized after truncation. */
+  dimensions: EmbeddingDimensions
+  /** Load the vision and audio encoder for image, audio and video sources. */
+  media: boolean
+}
+
+/** Optional OpenAI web search that returns cited facts as insertions. */
+export interface WebFactSettings {
+  enabled: boolean
+  model: string
+  /** Also ground Ctrl/Command + Space choices with web facts. */
+  withSuggestions: boolean
+}
+
+/** sidebars: hide side panels. chrome: also toolbars and tabs. full: only the page. */
+export type ZenLevel = 'sidebars' | 'chrome' | 'full'
+
+export interface SlashCommandSetting {
+  id: string
+  name: string
+  /** Markdown to insert. {cursor} marks the caret, {date} and {time} expand. */
+  template: string
+}
+
+export interface EditorSettings {
+  slashMenu: boolean
+  /** One character that opens the insert menu at the start of a word. */
+  slashTrigger: string
+  /** Writer-defined entries. A matching name replaces a built-in entry. */
+  customCommands: SlashCommandSetting[]
+  /** Render bullets, tasks, rules and tables when the cursor is elsewhere. */
+  livePreview: boolean
+  /** notes: previews of linked notes only. all: also fetch website titles. */
+  linkPreviews: 'off' | 'notes' | 'all'
+}
+
 export interface NotebookSettings {
   theme: 'light' | 'dark' | 'system'
   palette: PalettePreferences
@@ -41,12 +88,34 @@ export interface NotebookSettings {
   externalProvider: Exclude<ProviderId, 'local'>
   profiles: Record<ProviderId, ProviderProfile>
   websiteImporter: 'direct' | 'firecrawl'
+  semantic: SemanticSettings
+  webFacts: WebFactSettings
+  zenLevel: ZenLevel
+  editor: EditorSettings
+}
+
+export type MediaKind = 'image' | 'audio' | 'video'
+
+/** Media is embedded once at import. The original file is not stored. */
+export interface MediaInfo {
+  mime: string
+  bytes: number
+  durationSeconds?: number
+  width?: number
+  height?: number
+  /** Small JPEG data URL for images and video posters (at most 64 KB). */
+  thumbnail?: string
+  /** Base64 little-endian Float32 vector at full model width (768). */
+  vector?: string
+  /** Model identity that produced the vector. */
+  vectorModel?: string
 }
 
 export interface ContextSource {
   id: string
   name: string
-  kind: 'text' | 'markdown' | 'pdf' | 'docx' | 'website' | 'note'
+  kind: 'text' | 'markdown' | 'pdf' | 'docx' | 'website' | 'note' | MediaKind
+  /** For media sources: the caption and file name used for search and prompts. */
   text: string
   origin?: string
   linkedNoteId?: string
@@ -54,6 +123,7 @@ export interface ContextSource {
   folder?: string
   enabled: boolean
   addedAt: number
+  media?: MediaInfo
 }
 
 export interface ContextPackage {
@@ -76,6 +146,8 @@ export interface Note {
   updatedAt: number
   filePath?: string
   exportedAt?: number
+  /** The title follows the first line until the writer names the note. */
+  autoTitle?: boolean
 }
 
 export interface Workspace {
@@ -101,12 +173,17 @@ export interface RetrievedChunk {
   sourceName: string
   text: string
   score: number
+  /** How the passage was found. Hybrid hits matched both indexes. */
+  match?: 'lexical' | 'semantic' | 'hybrid'
+  mediaKind?: MediaKind
 }
 
 export interface SuggestionCandidate {
   text: string
   sources: string[]
-  mode?: 'model' | 'recall' | 'starter'
+  mode?: 'model' | 'recall' | 'starter' | 'web'
+  /** Web citations for mode 'web'. */
+  citations?: { title: string; url: string }[]
 }
 
 export interface SuggestionResult extends SuggestionCandidate {

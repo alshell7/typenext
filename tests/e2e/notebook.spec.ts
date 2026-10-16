@@ -1,3 +1,4 @@
+import { savedMarkdown, startNote } from './support/notes'
 import {
   test,
   expect,
@@ -61,16 +62,7 @@ function editor(page: Page) {
 }
 
 async function createNote(page: Page, title: string, context = '') {
-  const start = page.getByRole('button', { name: 'Start a note', exact: true })
-  if (await start.isVisible()) await start.click()
-  else await page.getByRole('button', { name: /^New note/ }).click()
-  const dialog = page.getByRole('dialog', {
-    name: 'Where would you like to begin?',
-  })
-  await expect(dialog).toBeVisible()
-  await dialog.getByLabel('Title', { exact: true }).fill(title)
-  if (context) await dialog.getByLabel(/^Context for suggestions/).fill(context)
-  await dialog.getByRole('button', { name: 'Create note', exact: true }).click()
+  await startNote(page, title, context)
   await expect(
     page.getByRole('textbox', { name: 'Note title', exact: true })
   ).toHaveValue(title)
@@ -80,7 +72,7 @@ async function createNote(page: Page, title: string, context = '') {
 
 async function preferences(
   page: Page,
-  pane: 'Writing' | 'Local suggestions' | 'External models'
+  pane: 'Writing' | 'Suggestions' | 'Models' | 'Knowledge'
 ) {
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Make yourself at home' })
@@ -88,8 +80,23 @@ async function preferences(
   return dialog
 }
 
+function localModels(dialog: Locator) {
+  return dialog.getByRole('region', { name: 'On this device', exact: true })
+}
+
+function externalModels(dialog: Locator) {
+  return dialog.getByRole('region', { name: 'External providers', exact: true })
+}
+
+async function selectLocalServer(dialog: Locator) {
+  await dialog.getByRole('tab', { name: 'Models', exact: true }).click()
+  const local = localModels(dialog)
+  await local.getByRole('radio', { name: 'Local server', exact: true }).click()
+  return local
+}
+
 async function setAutomaticSuggestions(page: Page, enabled: boolean) {
-  const dialog = await preferences(page, 'Local suggestions')
+  const dialog = await preferences(page, 'Suggestions')
   await dialog
     .getByRole('switch', { name: /^Suggest after a pause/ })
     .setChecked(enabled)
@@ -97,24 +104,31 @@ async function setAutomaticSuggestions(page: Page, enabled: boolean) {
 }
 
 async function configureLocalModel(page: Page, automatic = false) {
-  const dialog = await preferences(page, 'Local suggestions')
+  const dialog = await preferences(page, 'Suggestions')
   await dialog
     .getByRole('switch', { name: /^Suggest after a pause/ })
     .setChecked(automatic)
-  await dialog.getByLabel('Server address', { exact: true }).fill(localServer)
-  await dialog.getByLabel('Model', { exact: true }).fill('stub-local-writer')
+  const local = await selectLocalServer(dialog)
+  await local.getByLabel('Server address', { exact: true }).fill(localServer)
+  await local.getByLabel('Model', { exact: true }).fill('stub-local-writer')
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
 }
 
 async function configureExternalModel(page: Page) {
-  const dialog = await preferences(page, 'External models')
-  await dialog.getByLabel('Configure provider').selectOption('openai')
-  await dialog.getByLabel('Server address', { exact: true }).fill(openAI)
-  await dialog.getByLabel('Model', { exact: true }).fill('stub-external-writer')
-  await dialog.getByLabel('API key', { exact: true }).fill('e2e-not-a-real-key')
-  await dialog.getByRole('button', { name: 'Save key', exact: true }).click()
+  const dialog = await preferences(page, 'Models')
+  const external = externalModels(dialog)
+  await external.getByRole('radio', { name: 'OpenAI', exact: true }).click()
+  await external.getByText('Connection details', { exact: true }).click()
+  await external.getByLabel('Server address', { exact: true }).fill(openAI)
+  await external
+    .getByLabel('Model', { exact: true })
+    .fill('stub-external-writer')
+  await external
+    .getByLabel('API key', { exact: true })
+    .fill('e2e-not-a-real-key')
+  await external.getByRole('button', { name: 'Save key', exact: true }).click()
   await expect(
-    dialog.getByText('Ready for this session.', { exact: true })
+    external.getByText('Ready for this session.', { exact: true })
   ).toBeVisible()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
 }
@@ -128,11 +142,16 @@ async function openContext(page: Page) {
     await page.getByRole('button', { name: /^Context(?: \d+)?$/ }).click()
   }
   await expect(panel).toBeVisible()
-  const legacy = panel
-    .locator('details')
-    .filter({
-      has: page.getByText('Attach a single reference', { exact: true }),
-    })
+  // Intent collapses to a summary once a note has an objective or background.
+  const intent = panel.getByRole('button', { name: 'Intent', exact: true })
+  if (
+    (await intent.count()) &&
+    (await intent.getAttribute('aria-expanded')) === 'false'
+  )
+    await intent.click()
+  const legacy = panel.locator('details').filter({
+    has: page.getByText('Attach a single reference', { exact: true }),
+  })
   if (
     (await legacy.count()) &&
     !(await legacy.evaluate(element => (element as HTMLDetailsElement).open))
@@ -154,13 +173,13 @@ async function attachFile(page: Page, name: string) {
 
 async function cursorAt(content: Locator, offset: number) {
   await content.focus()
-  await content.press('Control+Home')
+  await content.press('ControlOrMeta+Home')
   for (let index = 0; index < offset; index++) await content.press('ArrowRight')
 }
 
 async function requestLocal(page: Page) {
   await editor(page).focus()
-  await editor(page).press('Control+Space')
+  await editor(page).press('ControlOrMeta+Space')
 }
 
 async function savedNote(
@@ -259,21 +278,18 @@ function providerData(request: Request) {
   }
 }
 
-test('first run asks for a title and context, then autosaves the writer’s Markdown across reload', async ({
+test('a note starts at once, takes its title from the first line, then autosaves the writer’s Markdown across reload', async ({
   page,
 }) => {
   await page.getByRole('button', { name: 'Start a note', exact: true }).click()
-  const dialog = page.getByRole('dialog', {
-    name: 'Where would you like to begin?',
-  })
+  await expect(editor(page)).toBeFocused()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.keyboard.type('# Morning pages\nA first thought.')
   await expect(
-    dialog.getByRole('button', { name: 'Create note', exact: true })
-  ).toBeDisabled()
-  await dialog.getByLabel('Title', { exact: true }).fill('   ')
-  await expect(
-    dialog.getByRole('button', { name: 'Create note', exact: true })
-  ).toBeDisabled()
-  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    page.getByRole('textbox', { name: 'Note title', exact: true })
+  ).toHaveValue('Morning pages')
+  await page.getByRole('button', { name: /^Delete Morning pages/ }).click()
+  await page.getByRole('button', { name: 'Delete note', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'A little room to think.' })
   ).toBeVisible()
@@ -291,7 +307,9 @@ test('first run asks for a title and context, then autosaves the writer’s Mark
     'For a reflective essay; keep my direct voice.'
   )
   await page.reload()
-  await expect(editor(page)).toHaveText(markdown, { useInnerText: true })
+  // Live preview draws bullets; the saved Markdown keeps the source.
+  await expect(editor(page)).toContainText('A concrete detail')
+  await savedMarkdown(page, markdown)
   await expect(
     page.getByRole('textbox', { name: 'Note title', exact: true })
   ).toHaveValue('A patient draft')
@@ -378,14 +396,14 @@ test('attached text controls exact private recall, word acceptance, Tab, undo, a
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-text')).toHaveText(' pauses and listens')
   await expectSaved(page, 'Grounded writing', original)
-  await content.press('Control+ArrowRight')
+  await content.press('ControlOrMeta+ArrowRight')
   await expect(page.locator('.cm-ghost-text')).toHaveText('and listens')
   await content.press('Tab')
   const accepted = 'The patient writer pauses and listens before breakfast.'
   await expect(content).toHaveText(accepted)
   await expectSaved(page, 'Grounded writing', accepted)
-  await content.press('Control+z')
-  await content.press('Control+z')
+  await content.press('ControlOrMeta+z')
+  await content.press('ControlOrMeta+z')
   await expect(content).toHaveText(original)
 
   await panel
@@ -479,7 +497,7 @@ test('exact local recall withholds a sentence before an unrelated lowercase suff
   await content.press('Tab')
   await expect(content).toHaveText(reference)
   await expectSaved(page, title, reference)
-  await content.press('Control+z')
+  await content.press('ControlOrMeta+z')
   await expect(content).toHaveText(`${prefix}${matchingSuffix}`)
   expect(
     outgoing,
@@ -517,7 +535,7 @@ for (const name of ['reference.pdf', 'reference.docx']) {
     )
     await preview.getByRole('button', { name: 'Done', exact: true }).click()
     await content.fill('The patient writer')
-    await content.press('Control+End')
+    await content.press('ControlOrMeta+End')
     await requestLocal(page)
     await expect(page.locator('.cm-ghost-text')).toHaveText(
       ' pauses and listens before breakfast.'
@@ -570,7 +588,10 @@ test('font, size, theme, and per-session key behavior persist correctly', async 
     .getByLabel('Typeface', { exact: true })
     .selectOption('JetBrains Mono')
   await dialog.getByLabel('Size (px)', { exact: true }).fill('21')
-  await dialog.getByLabel('Appearance', { exact: true }).selectOption('dark')
+  await dialog
+    .getByRole('radiogroup', { name: 'Appearance', exact: true })
+    .getByRole('radio', { name: 'Dark', exact: true })
+    .click()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(page.locator('.document-font')).toContainText('JetBrains Mono')
@@ -594,11 +615,13 @@ test('font, size, theme, and per-session key behavior persist correctly', async 
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(editor(page)).toHaveCSS('font-size', '21px')
-  const reopened = await preferences(page, 'External models')
-  await expect(reopened.getByLabel('Model', { exact: true })).toHaveValue(
-    'stub-external-writer'
-  )
-  await expect(reopened.getByLabel('API key', { exact: true })).toHaveValue('')
+  const reopened = await preferences(page, 'Models')
+  await expect(
+    externalModels(reopened).getByLabel('Model', { exact: true })
+  ).toHaveValue('stub-external-writer')
+  await expect(
+    externalModels(reopened).getByLabel('API key', { exact: true })
+  ).toHaveValue('')
   await reopened.getByRole('button', { name: 'Done', exact: true }).click()
 })
 
@@ -629,7 +652,7 @@ test('local inference sends the first-line objective and exact cursor context wi
   await configureLocalModel(page)
   const text = 'Clarify the promise of a quiet page.\nThe patient writer'
   await content.fill(text)
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-text')).toHaveText(
     ' chooses one clear sentence.'
@@ -676,7 +699,7 @@ test('external mode stays local until enabled, then continues until switched off
     .uncheck()
   await configureExternalModel(page)
   await content.fill('The patient writer before breakfast.')
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await requestLocal(page)
   expect(requests).toHaveLength(0)
   await page.getByRole('button', { name: 'Choose suggestion engine' }).click()
@@ -686,7 +709,9 @@ test('external mode stays local until enabled, then continues until switched off
   await expect(chooser).toContainText('nearby writing')
   await expect(chooser).toContainText('stays active')
   expect(requests).toHaveLength(0)
-  await chooser.getByRole('button', { name: 'Use OpenAI continuously' }).click()
+  await chooser
+    .getByRole('option', { name: 'stub-external-writer', exact: true })
+    .click()
   await cursorAt(content, 'The patient writer'.length)
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-text')).toHaveText(' pauses and listens')
@@ -701,7 +726,7 @@ test('external mode stays local until enabled, then continues until switched off
   expect(requests[0]?.postData()).not.toContain('DISABLED_PRIVATE_REFERENCE')
   await content.press('Tab')
   await content.fill('The patient writer has another though')
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await content.press('t')
   await expect.poll(() => requests.length).toBe(2)
   await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -714,7 +739,9 @@ test('external mode stays local until enabled, then continues until switched off
     )
     .toBe('openai')
   await page.getByRole('button', { name: 'Choose suggestion engine' }).click()
-  await chooser.getByRole('button', { name: /On this device/ }).click()
+  await chooser
+    .getByRole('option', { name: 'Writing starters & recall', exact: true })
+    .click()
   await content.fill('A different private thought')
   await requestLocal(page)
   await page.waitForTimeout(1300)
@@ -738,7 +765,7 @@ test('local provider errors stay visible, and a new manual request can recover',
   const content = await createNote(page, 'A recoverable connection')
   await configureLocalModel(page)
   await content.fill('The next sentence')
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await requestLocal(page)
   await expect(page.locator('.suggestion-message')).toContainText(
     /rate|429|too many/i
@@ -780,7 +807,7 @@ test('Escape cancels a pending request and a late response cannot enter a newly 
     const first = await createNote(page, 'The previous thought')
     await configureLocalModel(page)
     await first.fill('An unfinished old sentence')
-    await first.press('Control+End')
+    await first.press('ControlOrMeta+End')
     await requestLocal(page)
     await expect.poll(() => requests).toBe(1)
     await expect(page.locator('.suggestion-message')).toContainText(
@@ -790,7 +817,7 @@ test('Escape cancels a pending request and a late response cannot enter a newly 
     await expect.poll(() => aborted.length).toBe(1)
     const second = await createNote(page, 'A new thought')
     await second.fill('This new page')
-    await second.press('Control+End')
+    await second.press('ControlOrMeta+End')
     await requestLocal(page)
     await expect(page.locator('.cm-ghost-text')).toHaveText(' starts cleanly.')
     release?.()
@@ -984,7 +1011,7 @@ test('website context is fetched once without note text, previewed, then reused 
   )
   await preview.getByRole('button', { name: 'Done', exact: true }).click()
   await content.fill('The patient writer')
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-text')).toHaveText(
     ' pauses and listens before breakfast.'
@@ -1049,12 +1076,13 @@ test('native FIM on a local server receives both sides of the cursor and keeps t
     'An infill draft',
     'Preserve my existing sentence.'
   )
-  const dialog = await preferences(page, 'Local suggestions')
+  const dialog = await preferences(page, 'Suggestions')
   await dialog.getByRole('switch', { name: /^Suggest after a pause/ }).uncheck()
-  await dialog.getByLabel('Server address', { exact: true }).fill(localServer)
-  await dialog.getByLabel('Model', { exact: true }).fill('stub-fim-writer')
-  await dialog.getByText('Advanced protocol', { exact: true }).click()
-  await dialog
+  const local = await selectLocalServer(dialog)
+  await local.getByLabel('Server address', { exact: true }).fill(localServer)
+  await local.getByLabel('Model', { exact: true }).fill('stub-fim-writer')
+  await local.getByText('Advanced server options', { exact: true }).click()
+  await local
     .getByLabel('Completion protocol', { exact: true })
     .selectOption('fim')
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
@@ -1091,15 +1119,16 @@ test('a remote address placed in local settings is blocked for both automatic an
     await completionResponse(route, ' MUST_NEVER_BE_REQUESTED.')
   })
   const content = await createNote(page, 'Keep local private')
-  const dialog = await preferences(page, 'Local suggestions')
-  await dialog
+  const dialog = await preferences(page, 'Suggestions')
+  await dialog.getByLabel('Pause before suggesting').selectOption('650')
+  const local = await selectLocalServer(dialog)
+  await local
     .getByLabel('Server address', { exact: true })
     .fill('https://remote.example.org/v1')
-  await dialog.getByLabel('Model', { exact: true }).fill('a-remote-model')
-  await dialog.getByLabel('Pause before suggesting').selectOption('650')
+  await local.getByLabel('Model', { exact: true }).fill('a-remote-model')
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   await content.fill('My writing belongs on this device')
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await content.press('Space')
   await expect(page.locator('.suggestion-message')).toContainText(
     'Local suggestions require a server on localhost'
@@ -1217,7 +1246,7 @@ test('continuous writing reaches a durable browser snapshot before the writer pa
   await setAutomaticSuggestions(page, false)
   await content.fill('A thought worth keeping. ')
   await expectSaved(page, title, 'A thought worth keeping. ')
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   let typingFinished = false
   const continuation =
     'The writer can keep following this sentence while the notebook saves in the background.'
@@ -1251,7 +1280,7 @@ test('an oversized paste keeps existing writing and explains the limit on a narr
   const content = await createNote(page, 'Keep the original words')
   const original = 'These words must survive a rejected paste.'
   await content.fill(original)
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await content.evaluate(element => {
     const clipboardData = new DataTransfer()
     clipboardData.setData('text/plain', 'x'.repeat(8 * 1024 * 1024 + 1))
@@ -1504,15 +1533,17 @@ test('one activation supports repeated external requests and saved model switchi
   const content = await createNote(page, 'Continuous suggestions')
   await setAutomaticSuggestions(page, false)
   await configureExternalModel(page)
-  const dialog = await preferences(page, 'External models')
+  const dialog = await preferences(page, 'Suggestions')
   await dialog
     .getByLabel('Suggestion instructions', { exact: true })
     .fill('Preserve my direct voice. Never add a metaphor.')
-  await dialog
+  await dialog.getByRole('tab', { name: 'Models', exact: true }).click()
+  const external = externalModels(dialog)
+  await external
     .getByRole('button', { name: 'Save this model', exact: true })
     .click()
-  await dialog.getByLabel('Model', { exact: true }).fill('second-writer')
-  await dialog
+  await external.getByLabel('Model', { exact: true }).fill('second-writer')
+  await external
     .getByRole('button', { name: 'Save this model', exact: true })
     .click()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
@@ -1521,12 +1552,11 @@ test('one activation supports repeated external requests and saved model switchi
     name: 'Choose your suggestion engine',
   })
   await chooser
-    .getByRole('button', { name: 'stub-external-writer', exact: true })
+    .getByRole('option', { name: 'stub-external-writer', exact: true })
     .click()
-  await chooser.getByRole('button', { name: 'Use OpenAI continuously' }).click()
   for (let round = 1; round <= 10; round++) {
     await content.fill(`This synthetic thought number ${round}`)
-    await content.press('Control+End')
+    await content.press('ControlOrMeta+End')
     await requestLocal(page)
     await expect(page.locator('.cm-ghost-text')).toHaveText(
       ' continues carefully.'
@@ -1536,9 +1566,8 @@ test('one activation supports repeated external requests and saved model switchi
   }
   await page.getByRole('button', { name: 'Choose suggestion engine' }).click()
   await chooser
-    .getByRole('button', { name: 'second-writer', exact: true })
+    .getByRole('option', { name: 'second-writer', exact: true })
     .click()
-  await chooser.getByRole('button', { name: 'Use OpenAI continuously' }).click()
   await content.fill('A new sentence with another model')
   await requestLocal(page)
   await expect.poll(() => requests).toBe(11)
@@ -1563,7 +1592,7 @@ test('with both models configured, an actual automatic inference and the normal 
   await configureExternalModel(page)
   await configureLocalModel(page, true)
   await content.fill('This synthetic thought')
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await content.press('Space')
   await expect(page.locator('.cm-ghost-text')).toHaveText(
     'stays with its writer.'
@@ -1606,8 +1635,7 @@ test('optional Firecrawl import discloses its service and sends only the website
     'Service import',
     'PRIVATE_BACKGROUND_NEVER_SENT_TO_IMPORTER'
   )
-  const settings = await preferences(page, 'External models')
-  await settings.getByText('Website import service', { exact: true }).click()
+  const settings = await preferences(page, 'Knowledge')
   await settings
     .getByLabel('Website importer', { exact: true })
     .selectOption('firecrawl')
@@ -1669,25 +1697,19 @@ test('preferences support keyboard tab navigation and Escape restores the invoki
   const dialog = await preferences(page, 'Writing')
   const writing = dialog.getByRole('tab', { name: 'Writing', exact: true })
   await writing.focus()
-  await writing.press('ArrowRight')
-  const local = dialog.getByRole('tab', {
-    name: 'Local suggestions',
-    exact: true,
-  })
-  await expect(local).toBeFocused()
-  await expect(local).toHaveAttribute('aria-selected', 'true')
+  await writing.press('ArrowDown')
+  const editorTab = dialog.getByRole('tab', { name: 'Editor', exact: true })
+  await expect(editorTab).toBeFocused()
+  await expect(editorTab).toHaveAttribute('aria-selected', 'true')
   await expect(dialog.getByRole('tabpanel')).toHaveAttribute(
     'aria-labelledby',
-    'tab-local'
+    'tab-editor'
   )
-  await local.press('End')
-  const external = dialog.getByRole('tab', {
-    name: 'External models',
-    exact: true,
-  })
-  await expect(external).toBeFocused()
-  await expect(external).toHaveAttribute('aria-selected', 'true')
-  await external.press('Home')
+  await editorTab.press('End')
+  const shortcuts = dialog.getByRole('tab', { name: 'Shortcuts', exact: true })
+  await expect(shortcuts).toBeFocused()
+  await expect(shortcuts).toHaveAttribute('aria-selected', 'true')
+  await shortcuts.press('Home')
   await expect(writing).toBeFocused()
   await expect(writing).toHaveAttribute('aria-selected', 'true')
   await writing.press('Escape')
@@ -1704,8 +1726,12 @@ test('focus mode hides surrounding panels and its keyboard shortcut restores the
   const content = await createNote(page, 'A focused paragraph')
   await content.fill(text)
   await openContext(page)
+  // The first level of zen mode hides only the side panels.
   await page
-    .getByRole('button', { name: 'Enter focus mode', exact: true })
+    .getByRole('button', { name: 'Choose zen mode level', exact: true })
+    .click()
+  await page
+    .getByRole('menuitemradio', { name: /Hide side panels/ })
     .click()
   await expect(
     page.getByRole('complementary', { name: 'Notebook', exact: true })
@@ -1718,9 +1744,9 @@ test('focus mode hides surrounding panels and its keyboard shortcut restores the
   ).not.toBeVisible()
   await expect(content).toHaveText(text)
   await content.focus()
-  await content.press('Control+Shift+F')
+  await content.press('ControlOrMeta+Shift+F')
   await expect(
-    page.getByRole('button', { name: 'Enter focus mode', exact: true })
+    page.getByRole('button', { name: 'Enter zen mode', exact: true })
   ).toBeVisible()
   await expect(
     page.getByRole('complementary', { name: 'Notebook', exact: true })
@@ -1730,7 +1756,7 @@ test('focus mode hides surrounding panels and its keyboard shortcut restores the
   ).toBeVisible()
   await expect(content).toHaveText(text)
   await page
-    .getByRole('button', { name: 'Enter focus mode', exact: true })
+    .getByRole('button', { name: 'Enter zen mode', exact: true })
     .click()
   await page
     .getByRole('button', { name: 'Show note sidebar', exact: true })
@@ -1739,18 +1765,18 @@ test('focus mode hides surrounding panels and its keyboard shortcut restores the
     page.getByRole('complementary', { name: 'Notebook', exact: true })
   ).toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Enter focus mode', exact: true })
+    page.getByRole('button', { name: 'Enter zen mode', exact: true })
   ).toBeVisible()
   await page
-    .getByRole('button', { name: 'Enter focus mode', exact: true })
+    .getByRole('button', { name: 'Enter zen mode', exact: true })
     .click()
   await content.focus()
-  await content.press('Control+b')
+  await content.press('ControlOrMeta+b')
   await expect(
     page.getByRole('complementary', { name: 'Notebook', exact: true })
   ).toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Enter focus mode', exact: true })
+    page.getByRole('button', { name: 'Enter zen mode', exact: true })
   ).toBeVisible()
   await expect(content).toHaveText(text)
   await expectSaved(page, 'A focused paragraph', text)
@@ -1819,7 +1845,7 @@ test('another note provides live private context that follows edits, persists as
   await expect(preview.locator('.source-preview-text')).toHaveText(original)
   await expect(preview).toContainText('Linked note · Live context')
   await preview.getByRole('button', { name: 'Done', exact: true }).click()
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-text')).toHaveText(
     original.slice(prefix.length)
@@ -1841,7 +1867,7 @@ test('another note provides live private context that follows edits, persists as
     'pauses and listens'
   )
   await preview.getByRole('button', { name: 'Done', exact: true }).click()
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-text')).toHaveText(
     revised.slice(prefix.length)
@@ -1859,21 +1885,21 @@ test('another note provides live private context that follows edits, persists as
   expect((await savedNote(page, title))?.sources[0]?.text).toBe('')
 
   await reloadedInclusion.uncheck()
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-suggestion')).toHaveCount(0)
   await expect(page.locator('.suggestion-message')).toContainText(
     'Try a new line'
   )
   await reloadedInclusion.check()
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-text')).toHaveText(
     revised.slice(prefix.length)
   )
   await content.press('Tab')
   await expect(content).toHaveText(revised)
-  await content.press('Control+z')
+  await content.press('ControlOrMeta+z')
   await expect(content).toHaveText(prefix)
   await reloadedPanel
     .getByRole('button', { name: `Remove ${sourceTitle}`, exact: true })
@@ -1882,7 +1908,7 @@ test('another note provides live private context that follows edits, persists as
   await expect
     .poll(async () => (await savedNote(page, title))?.sources.length)
     .toBe(0)
-  await content.press('Control+End')
+  await content.press('ControlOrMeta+End')
   await requestLocal(page)
   await expect(page.locator('.cm-ghost-suggestion')).toHaveCount(0)
   expect(outgoing, 'Linked notes and exact recall must remain private').toEqual(
@@ -1964,19 +1990,25 @@ test('three providers keep independent keys and models, and the chooser routes t
     })
   const content = await createNote(page, 'Every model, one notebook')
   await setAutomaticSuggestions(page, false)
-  const prefs = await preferences(page, 'External models')
+  const prefs = await preferences(page, 'Suggestions')
   await prefs
     .getByLabel('Suggestion instructions', { exact: true })
     .fill('Keep my direct voice. Use simple words.')
+  await prefs.getByRole('tab', { name: 'Models', exact: true }).click()
+  const external = externalModels(prefs)
   for (const provider of providers) {
-    await prefs.getByLabel('Configure provider').selectOption(provider.id)
-    await prefs.getByLabel('Model', { exact: true }).fill(provider.model)
-    await prefs.getByLabel('API key', { exact: true }).fill(provider.key)
-    await prefs.getByRole('button', { name: 'Save key', exact: true }).click()
+    await external
+      .getByRole('radio', { name: provider.name, exact: true })
+      .click()
+    await external.getByLabel('Model', { exact: true }).fill(provider.model)
+    await external.getByLabel('API key', { exact: true }).fill(provider.key)
+    await external
+      .getByRole('button', { name: 'Save key', exact: true })
+      .click()
     await expect(
-      prefs.getByText('Ready for this session.', { exact: true })
+      external.getByText('Ready for this session.', { exact: true })
     ).toBeVisible()
-    await prefs
+    await external
       .getByRole('button', { name: 'Save this model', exact: true })
       .click()
   }
@@ -1988,17 +2020,12 @@ test('three providers keep independent keys and models, and the chooser routes t
       name: 'Choose your suggestion engine',
     })
     await chooser
-      .getByRole('button', { name: provider.name, exact: true })
-      .click()
-    await expect(chooser.getByLabel('Model', { exact: true })).toHaveValue(
-      provider.model
-    )
-    await chooser
-      .getByRole('button', { name: `Use ${provider.name} continuously` })
+      .getByRole('group', { name: provider.name, exact: true })
+      .getByRole('option', { name: provider.model, exact: true })
       .click()
     await expect(content).toBeFocused()
     await content.fill(`The writer ${index}`)
-    await content.press('Control+End')
+    await content.press('ControlOrMeta+End')
     await requestLocal(page)
     await expect(page.locator('.cm-ghost-text')).toHaveText(
       ' makes room for a thought.'
@@ -2017,7 +2044,10 @@ test('three providers keep independent keys and models, and the chooser routes t
     )
   }
   const writing = await preferences(page, 'Writing')
-  await writing.getByLabel('Appearance', { exact: true }).selectOption('dark')
+  await writing
+    .getByRole('radiogroup', { name: 'Appearance', exact: true })
+    .getByRole('radio', { name: 'Dark', exact: true })
+    .click()
   await writing.getByRole('button', { name: 'Done', exact: true }).click()
   await expect
     .poll(() =>

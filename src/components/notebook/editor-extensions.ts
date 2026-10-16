@@ -24,6 +24,19 @@ export interface InlineSuggestion {
   text: string
   sources: string[]
   mode?: SuggestionCandidate['mode']
+  /** Web citations, appended as Markdown links when the fact is accepted. */
+  citations?: SuggestionCandidate['citations']
+}
+
+/** Markdown links for the first two citations of a web fact. */
+export function citationSuffix(citations: InlineSuggestion['citations']) {
+  const links = (citations ?? [])
+    .slice(0, 2)
+    .map(
+      citation =>
+        `[${citation.title.replace(/[[\]\n]/gu, ' ').trim()}](${citation.url.replace(/[()\s]/gu, encodeURIComponent)})`
+    )
+  return links.length ? ` (${links.join(', ')})` : ''
 }
 
 /** External file updates must not echo back through React's onChange. */
@@ -375,6 +388,16 @@ export function acceptInlineSuggestion(
   if (!remaining.trim()) {
     text = suggestion.text
     remaining = ''
+  }
+  // A completed web fact keeps its sources with it.
+  if (!remaining && suggestion.citations?.length) {
+    const sentenceEnd = /[.!?]["”’)]*$/u.exec(text)
+    const suffix = citationSuffix(suggestion.citations)
+    text = sentenceEnd
+      ? text.slice(0, sentenceEnd.index) +
+        suffix +
+        text.slice(sentenceEnd.index)
+      : text + suffix
   }
   const nextCursor = suggestion.at + text.length
 

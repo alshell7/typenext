@@ -3,20 +3,41 @@ import {
   ArrowLeft,
   ArrowUpRight,
   BookOpen,
-  FileText,
   FolderOpen,
-  Globe,
   Link,
   LoaderCircle,
   Notebook,
   Pencil,
   Plus,
+  Search,
   Trash2,
   Upload,
   X,
 } from 'lucide-react'
-import type { ContextPackage, ContextSource, Note } from '../types/notebook'
+import type {
+  ContextPackage,
+  ContextSource,
+  Note,
+  NotebookSettings,
+} from '../types/notebook'
 import { Modal } from './Modal'
+import { MediaHint } from './context/MediaHint'
+import {
+  hasMediaFiles,
+  mediaNeedsSetup,
+  SOURCE_ACCEPT,
+  SOURCE_FORMATS_HELP,
+  SOURCE_FORMATS_SHORT,
+} from './context/media'
+import { prefersReducedMotion } from './context/usePresence'
+import {
+  countGroups,
+  isMediaSource,
+  KindCluster,
+  mediaDetail,
+  safeThumbnail,
+  SourceThumb,
+} from './context/source-kinds'
 import {
   CONTEXT_PREVIEW_CHARACTERS,
   contextLibraryFolders,
@@ -26,6 +47,7 @@ import {
   MAX_CONTEXT_PACKAGE_SOURCES,
   resolveLibrarySource,
 } from './context-library'
+import './context/context-panel.css'
 import './ContextLibrary.css'
 
 const EMPTY_SOURCES: ContextSource[] = []
@@ -59,6 +81,9 @@ export interface ContextLibraryProps {
   onFiles(files: FileList | null, packageId: string): Promise<void>
   onWebsite(packageId: string): void
   onUseNote(noteId: string, packageId: string): void
+  /** Enables the media setup hint when semantic media search is off. */
+  settings?: NotebookSettings
+  onOpenKnowledgeSettings?(): void
 }
 
 function sourceKind(source: ContextSource) {
@@ -66,16 +91,12 @@ function sourceKind(source: ContextSource) {
   if (source.kind === 'website') return 'Website snapshot'
   if (source.kind === 'markdown') return 'Markdown'
   if (source.kind === 'text') return 'Text'
+  if (isMediaSource(source)) {
+    const detail = mediaDetail(source)
+    const name = source.kind[0]!.toUpperCase() + source.kind.slice(1)
+    return detail ? `${name} · ${detail}` : name
+  }
   return source.kind.toUpperCase()
-}
-function SourceIcon({ source }: { source: ContextSource }) {
-  return source.kind === 'note' ? (
-    <Notebook size={16} strokeWidth={1.5} />
-  ) : source.kind === 'website' ? (
-    <Globe size={16} strokeWidth={1.5} />
-  ) : (
-    <FileText size={16} strokeWidth={1.5} />
-  )
 }
 
 export function ContextLibrary({
@@ -100,6 +121,8 @@ export function ContextLibrary({
   onFiles,
   onWebsite,
   onUseNote,
+  settings,
+  onOpenKnowledgeSettings,
 }: ContextLibraryProps) {
   const fileInput = useRef<HTMLInputElement>(null)
   const folderInput = useRef<HTMLInputElement | null>(null)
@@ -125,7 +148,9 @@ export function ContextLibrary({
   const [choosingNote, setChoosingNote] = useState(false)
   const [noteQuery, setNoteQuery] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [mediaHint, setMediaHint] = useState(false)
   const dragDepth = useRef(0)
+  const previewPanel = useRef<HTMLDivElement>(null)
   const selected =
     open && selectedId
       ? packages.find(context => context.id === selectedId)
@@ -215,6 +240,13 @@ export function ContextLibrary({
           removingSource.name)
         : removingSource?.name
   const selectedUsage = selected ? (usage.get(selected.id) ?? 0) : 0
+  const selectedCounts = useMemo(
+    () => countGroups(sources.filter(source => sourceIndex.has(source.id))),
+    [sources, sourceIndex]
+  )
+  const previewItem = previewId
+    ? matching.find(item => item.id === previewId)
+    : undefined
 
   useEffect(() => {
     const opening = !wasOpen.current
@@ -247,8 +279,16 @@ export function ContextLibrary({
     setEditing(null)
     setMessage('')
     setDragging(false)
+    setMediaHint(false)
     dragDepth.current = 0
   }, [open])
+  useEffect(() => {
+    if (!open || !previewId) return
+    previewPanel.current?.scrollIntoView?.({
+      block: 'nearest',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+    })
+  }, [open, previewId])
 
   function closePreview() {
     setPreviewId(null)
@@ -278,6 +318,7 @@ export function ContextLibrary({
       setMessage('Create or choose a context before adding sources.')
       return
     }
+    if (hasMediaFiles(files) && mediaNeedsSetup(settings)) setMediaHint(true)
     void onFiles(files, selected.id).finally(() => {
       if (input) input.value = ''
     })
@@ -286,6 +327,75 @@ export function ContextLibrary({
     setRemoving(null)
     removeTrigger.current?.focus()
   }
+
+  function renderPreview(item: ContextSource) {
+    const linked =
+      item.kind === 'note' ? byNoteId.get(item.linkedNoteId ?? '') : undefined
+    const displayName = linked?.title ?? item.name
+    const available =
+      sourceIndex.has(item.id) && (item.kind !== 'note' || !!linked)
+    const source = resolveLibrarySource(item, notes)
+    const thumbnail = isMediaSource(item) ? safeThumbnail(item) : undefined
+    return (
+      <div
+        ref={previewPanel}
+        className="context-library-preview"
+        role="region"
+        aria-label={`Preview of ${displayName}`}
+      >
+        <div className="context-library-preview-heading">
+          <strong title={displayName}>{displayName}</strong>
+          <span>
+            {item.kind === 'note'
+              ? 'Live writing'
+              : isMediaSource(item)
+                ? 'Embedded on this device'
+                : 'Cached on this device'}
+          </span>
+          {item.kind === 'website' &&
+            item.origin &&
+            /^https?:\/\//i.test(item.origin) && (
+              <a href={item.origin} target="_blank" rel="noreferrer">
+                View original <ArrowUpRight size={12} />
+              </a>
+            )}
+          <button
+            className="icon-button"
+            aria-label="Close source preview"
+            onClick={closePreview}
+          >
+            <X size={13} />
+          </button>
+        </div>
+        {thumbnail && (
+          <img
+            className="context-library-preview-media"
+            src={thumbnail}
+            alt={`Preview of ${displayName}`}
+          />
+        )}
+        <div className="context-library-preview-text" tabIndex={0}>
+          {source.text.slice(0, previewLength) ||
+            (available
+              ? 'This source is empty. Writing added to a linked note appears here automatically.'
+              : 'This source is unavailable. Remove it from this context or add it again.')}
+        </div>
+        {source.text.length > previewLength && (
+          <button
+            className="button subtle context-library-show-more"
+            onClick={() =>
+              setPreviewLength(length => length + CONTEXT_PREVIEW_CHARACTERS)
+            }
+          >
+            Showing the first {previewLength.toLocaleString()} characters. Show
+            more
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const full = sources.length >= MAX_CONTEXT_PACKAGE_SOURCES
 
   return (
     <Modal
@@ -327,7 +437,8 @@ export function ContextLibrary({
             event.dataTransfer.dropEffect = 'copy'
           }
         }}
-        onDragLeave={() => {
+        onDragLeave={event => {
+          if (!event.dataTransfer.types.includes('Files')) return
           if (--dragDepth.current <= 0) {
             dragDepth.current = 0
             setDragging(false)
@@ -344,69 +455,87 @@ export function ContextLibrary({
           className="context-library-packages"
           aria-label="Reusable contexts"
         >
-          <button
-            className="button secondary context-package-create"
-            disabled={importing || packages.length >= MAX_CONTEXT_PACKAGES}
-            onClick={startCreating}
-          >
-            <Plus size={15} /> New context
-          </button>
-          {packages.length > 0 && (
-            <>
-              <label
-                className="visually-hidden"
-                htmlFor="context-package-search"
-              >
-                Find a context
-              </label>
-              <input
-                id="context-package-search"
-                className="context-package-search"
-                type="search"
-                value={packageQuery}
-                placeholder="Find a context"
-                onChange={event => setPackageQuery(event.target.value)}
-              />
-            </>
-          )}
-          <div className="context-package-list">
-            {matchingPackages.map(context => (
-              <div
-                className={`context-package-row ${context.id === selectedId && !editing ? 'is-selected' : ''}`}
-                key={context.id}
-              >
-                <input
-                  type="checkbox"
-                  checked={attached.has(context.id)}
-                  disabled={!activeNote || importing}
-                  aria-label={`Use ${context.name} in this note`}
-                  onChange={event =>
-                    event.target.checked
-                      ? onAttachPackage(context.id)
-                      : onDetachPackage(context.id)
-                  }
-                />
-                <button
-                  className="context-package-select"
-                  aria-label={`Open ${context.name} context`}
-                  aria-current={
-                    context.id === selectedId && !editing ? 'page' : undefined
-                  }
-                  onClick={() => chooseContext(context.id)}
+          <div className="context-library-packages-top">
+            <button
+              className="button secondary context-package-create"
+              disabled={importing || packages.length >= MAX_CONTEXT_PACKAGES}
+              onClick={startCreating}
+            >
+              <Plus size={15} /> New context
+            </button>
+            {packages.length > 0 && (
+              <div className="context-package-search-field">
+                <Search size={13} aria-hidden="true" />
+                <label
+                  className="visually-hidden"
+                  htmlFor="context-package-search"
                 >
-                  <span title={context.name}>{context.name}</span>
-                  <small>{context.sourceIds.length}</small>
-                </button>
+                  Find a context
+                </label>
+                <input
+                  id="context-package-search"
+                  className="context-package-search"
+                  type="search"
+                  value={packageQuery}
+                  placeholder="Find a context"
+                  onChange={event => setPackageQuery(event.target.value)}
+                />
               </div>
-            ))}
+            )}
+          </div>
+          <div className="context-package-list">
+            {matchingPackages.map(context => {
+              const isSelected = context.id === selectedId && !editing
+              const isAttached = attached.has(context.id)
+              return (
+                <div
+                  className={`context-package-row ${isSelected ? 'is-selected' : ''} ${isAttached ? 'is-attached' : ''}`}
+                  key={context.id}
+                >
+                  <button
+                    className="context-package-select"
+                    aria-label={`Open ${context.name} context`}
+                    aria-current={isSelected ? 'page' : undefined}
+                    onClick={() => chooseContext(context.id)}
+                  >
+                    <span className="context-package-mark" aria-hidden="true" />
+                    <span className="context-package-name" title={context.name}>
+                      {context.name}
+                    </span>
+                    <small>{context.sourceIds.length}</small>
+                  </button>
+                  <label
+                    className="context-switch"
+                    title={
+                      activeNote
+                        ? `${isAttached ? 'Used in' : 'Use in'} ${activeNote.title}`
+                        : 'Open a note to use this context'
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isAttached}
+                      disabled={!activeNote || importing}
+                      aria-label={`Use ${context.name} in this note`}
+                      onChange={event =>
+                        event.target.checked
+                          ? onAttachPackage(context.id)
+                          : onDetachPackage(context.id)
+                      }
+                    />
+                    <span aria-hidden="true" />
+                  </label>
+                </div>
+              )
+            })}
           </div>
           {packageQuery && !matchingPackages.length && (
             <p role="status">No contexts match.</p>
           )}
-          <p>
+          <p className="context-library-packages-note">
             {activeNote ? (
               <>
-                Contexts for <strong>{activeNote.title}</strong>. Check any
+                Contexts for <strong>{activeNote.title}</strong>. Switch on any
                 combination.
               </>
             ) : (
@@ -441,8 +570,8 @@ export function ContextLibrary({
             >
               <h3>{editing === 'create' ? 'New context' : 'Rename context'}</h3>
               <p>
-                A collection of files, folders, websites, or live notes you can
-                use across drafts.
+                A collection of files, folders, websites, media, or live notes
+                you can use across drafts.
               </p>
               <label className="field-label" htmlFor="context-package-name">
                 Context name
@@ -483,8 +612,16 @@ export function ContextLibrary({
           ) : selected ? (
             <>
               <div className="context-package-heading">
-                <BookOpen size={18} strokeWidth={1.5} />
+                <span
+                  className="context-package-heading-icon"
+                  aria-hidden="true"
+                >
+                  <BookOpen size={16} strokeWidth={1.6} />
+                </span>
                 <h3 title={selected.name}>{selected.name}</h3>
+                {attached.has(selected.id) && (
+                  <span className="context-package-badge">In this note</span>
+                )}
                 <button
                   className="icon-button"
                   aria-label={`Rename ${selected.name}`}
@@ -513,14 +650,16 @@ export function ContextLibrary({
               <p className="context-library-help">
                 {selectedUsage
                   ? `Used in ${selectedUsage} ${selectedUsage === 1 ? 'note' : 'notes'}. Changes to this context follow every attached note.`
-                  : 'Add sources, then check this context beside any note that needs it.'}
+                  : 'Add sources, then switch this context on beside any note that needs it.'}
               </p>
-              <div className="context-library-actions">
+              <div
+                className="context-library-actions"
+                role="group"
+                aria-label="Add sources"
+              >
                 <button
-                  className="button secondary"
-                  disabled={
-                    importing || sources.length >= MAX_CONTEXT_PACKAGE_SOURCES
-                  }
+                  className="context-library-action"
+                  disabled={importing || full}
                   onClick={() => fileInput.current?.click()}
                 >
                   {importing ? (
@@ -531,30 +670,22 @@ export function ContextLibrary({
                   {importing ? 'Reading sources…' : 'Add files'}
                 </button>
                 <button
-                  className="button subtle"
-                  disabled={
-                    importing || sources.length >= MAX_CONTEXT_PACKAGE_SOURCES
-                  }
+                  className="context-library-action"
+                  disabled={importing || full}
                   onClick={() => folderInput.current?.click()}
                 >
                   <FolderOpen size={15} /> Add folder
                 </button>
                 <button
-                  className="button subtle"
-                  disabled={
-                    importing || sources.length >= MAX_CONTEXT_PACKAGE_SOURCES
-                  }
+                  className="context-library-action"
+                  disabled={importing || full}
                   onClick={() => onWebsite(selected.id)}
                 >
                   <Link size={15} /> Add a website
                 </button>
                 <button
-                  className="button subtle"
-                  disabled={
-                    importing ||
-                    !notes.length ||
-                    sources.length >= MAX_CONTEXT_PACKAGE_SOURCES
-                  }
+                  className="context-library-action"
+                  disabled={importing || !notes.length || full}
                   onClick={() => {
                     setChoosingNote(true)
                     setNoteQuery('')
@@ -564,6 +695,19 @@ export function ContextLibrary({
                   <Notebook size={15} /> Use a note
                 </button>
               </div>
+              {mediaHint && (
+                <MediaHint
+                  onOpenSettings={
+                    onOpenKnowledgeSettings
+                      ? () => {
+                          onOpenChange(false)
+                          onOpenKnowledgeSettings()
+                        }
+                      : undefined
+                  }
+                  onDismiss={() => setMediaHint(false)}
+                />
+              )}
               {message && (
                 <p className="field-error" role="alert">
                   {message}
@@ -629,7 +773,7 @@ export function ContextLibrary({
               ) : (
                 <>
                   <div className="context-package-filters">
-                    <div>
+                    <div className="context-filter-search">
                       <label className="field-label" htmlFor="library-search">
                         Find a source
                       </label>
@@ -643,7 +787,7 @@ export function ContextLibrary({
                           setQuery(event.target.value)
                           closePreview()
                         }}
-                        placeholder="File, website, or note"
+                        placeholder="File, website, media, or note"
                       />
                     </div>
                     {folders.length > 0 && (
@@ -672,38 +816,40 @@ export function ContextLibrary({
                       </div>
                     )}
                   </div>
-                  <p className="context-library-selection">
+                  <div className="context-library-selection">
                     <span>
                       {sources.length}{' '}
                       {sources.length === 1 ? 'source' : 'sources'}
                     </span>
+                    <KindCluster counts={selectedCounts} />
                     {folders.length > 0 && (
                       <small>Folder imports are snapshots.</small>
                     )}
-                  </p>
-                  <ul
-                    className="context-library-list"
-                    aria-label="Sources in this context"
-                  >
-                    {matching.map(item => {
-                      const linked =
-                        item.kind === 'note'
-                          ? byNoteId.get(item.linkedNoteId ?? '')
-                          : undefined
-                      const displayName = linked?.title ?? item.name
-                      const available =
-                        sourceIndex.has(item.id) &&
-                        (item.kind !== 'note' || !!linked)
-                      const self =
-                        item.kind === 'note' &&
-                        item.linkedNoteId === activeNote?.id
-                      const preview = previewId === item.id
-                      const source = preview
-                        ? resolveLibrarySource(item, notes)
-                        : item
-                      return (
-                        <li className="context-library-item" key={item.id}>
-                          <div className="context-library-row">
+                  </div>
+                  {previewItem && renderPreview(previewItem)}
+                  {matching.length > 0 && (
+                    <ul
+                      className="context-library-list context-source-grid"
+                      aria-label="Sources in this context"
+                    >
+                      {matching.map(item => {
+                        const linked =
+                          item.kind === 'note'
+                            ? byNoteId.get(item.linkedNoteId ?? '')
+                            : undefined
+                        const displayName = linked?.title ?? item.name
+                        const available =
+                          sourceIndex.has(item.id) &&
+                          (item.kind !== 'note' || !!linked)
+                        const self =
+                          item.kind === 'note' &&
+                          item.linkedNoteId === activeNote?.id
+                        const preview = previewId === item.id
+                        return (
+                          <li
+                            className={`context-library-item context-source-card ${preview ? 'is-previewing' : ''} ${available ? '' : 'is-unavailable'}`}
+                            key={item.id}
+                          >
                             <button
                               className="context-library-preview-button"
                               aria-label={`Preview ${displayName}`}
@@ -713,8 +859,8 @@ export function ContextLibrary({
                                 setPreviewLength(CONTEXT_PREVIEW_CHARACTERS)
                               }}
                             >
-                              <SourceIcon source={item} />
-                              <span>
+                              <SourceThumb source={item} size="card" />
+                              <span className="context-source-copy">
                                 <strong title={displayName}>
                                   {displayName}
                                 </strong>
@@ -736,68 +882,29 @@ export function ContextLibrary({
                                 setRemoving({ kind: 'source', id: item.id })
                               }}
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={13} />
                             </button>
-                          </div>
-                          {preview && (
-                            <div className="context-library-preview">
-                              <div className="context-library-preview-heading">
-                                <span>
-                                  {item.kind === 'note'
-                                    ? 'Live writing'
-                                    : 'Cached on this device'}
-                                </span>
-                                {item.kind === 'website' &&
-                                  item.origin &&
-                                  /^https?:\/\//i.test(item.origin) && (
-                                    <a
-                                      href={item.origin}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      View original <ArrowUpRight size={12} />
-                                    </a>
-                                  )}
-                                <button
-                                  className="icon-button"
-                                  aria-label="Close source preview"
-                                  onClick={closePreview}
-                                >
-                                  <X size={13} />
-                                </button>
-                              </div>
-                              <div
-                                className="context-library-preview-text"
-                                tabIndex={0}
-                              >
-                                {source.text.slice(0, previewLength) ||
-                                  (available
-                                    ? 'This source is empty. Writing added to a linked note appears here automatically.'
-                                    : 'This source is unavailable. Remove it from this context or add it again.')}
-                              </div>
-                              {source.text.length > previewLength && (
-                                <button
-                                  className="button subtle context-library-show-more"
-                                  onClick={() =>
-                                    setPreviewLength(
-                                      length =>
-                                        length + CONTEXT_PREVIEW_CHARACTERS
-                                    )
-                                  }
-                                >
-                                  Showing the first{' '}
-                                  {previewLength.toLocaleString()} characters.
-                                  Show more
-                                </button>
-                              )}
-                            </div>
-                          )}
+                          </li>
+                        )
+                      })}
+                      {!query && !folder && !full && (
+                        <li className="context-source-drop">
+                          <button
+                            disabled={importing}
+                            onClick={() => fileInput.current?.click()}
+                          >
+                            <Upload size={15} aria-hidden="true" />
+                            <span>Drop files here, or browse</span>
+                          </button>
                         </li>
-                      )
-                    })}
-                  </ul>
+                      )}
+                    </ul>
+                  )}
                   {!matching.length && (
-                    <div className="context-library-empty" role="status">
+                    <div
+                      className={`context-library-empty ${sources.length ? '' : 'is-drop'}`}
+                      role="status"
+                    >
                       <FolderOpen size={26} strokeWidth={1.3} />
                       <strong>
                         {sources.length
@@ -807,8 +914,9 @@ export function ContextLibrary({
                       <span>
                         {sources.length
                           ? 'Try another name or choose All folders.'
-                          : 'Add files, a folder snapshot, a website, or a note. The same context can support several drafts.'}
+                          : 'Drop files here, or add a folder snapshot, a website, or a note. The same context can support several drafts.'}
                       </span>
+                      {!sources.length && <small>{SOURCE_FORMATS_HELP}</small>}
                     </div>
                   )}
                 </>
@@ -829,10 +937,12 @@ export function ContextLibrary({
           )}
         </section>
         {dragging && (
-          <div className="context-library-drop">
-            <Upload size={24} />
+          <div className="context-library-drop" aria-hidden="true">
+            <span className="context-drop-icon">
+              <Upload size={20} strokeWidth={1.6} />
+            </span>
             <strong>Drop sources into {selected?.name ?? 'a context'}</strong>
-            <span>Text, Markdown, PDF, or Word</span>
+            <span>{SOURCE_FORMATS_SHORT}</span>
           </div>
         )}
       </div>
@@ -840,7 +950,7 @@ export function ContextLibrary({
         ref={fileInput}
         type="file"
         multiple
-        accept=".txt,.md,.markdown,.pdf,.docx"
+        accept={SOURCE_ACCEPT}
         className="visually-hidden"
         aria-label="Add files to this context"
         disabled={importing || !selected}
@@ -885,7 +995,7 @@ export function ContextLibrary({
             Cancel
           </button>
           <button
-            className="button danger"
+            className="button destructive"
             onClick={() => {
               if (removing.kind === 'package') onRemovePackage(selected.id)
               else onRemoveSource(selected.id, removing.id)
