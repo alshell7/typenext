@@ -151,3 +151,18 @@ test('a workspace can wear an icon chosen from the picker', async ({
   await page.keyboard.press('Escape')
   await expect(switcher.locator('.space-avatar')).toHaveText('N')
 })
+
+test('Shift keeps its own shortcuts: ⌘ ⇧ F is zen mode, never find', async ({
+  page,
+}) => {
+  await startNote(page, 'Zen key')
+  await page.keyboard.type('Some words.')
+  // Some layouts and drivers send a lowercase "f" with Shift held.
+  await page.keyboard.down('Shift')
+  await page.keyboard.press('ControlOrMeta+f')
+  await page.keyboard.up('Shift')
+  await expect(page.getByRole('search', { name: 'Find in note' })).toHaveCount(
+    0
+  )
+  await expect(page.locator('.app-shell')).toHaveClass(/zen/u)
+})

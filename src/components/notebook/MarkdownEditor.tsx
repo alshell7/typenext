@@ -1367,22 +1367,6 @@ export const MarkdownEditor = forwardRef<
           },
         },
         {
-          key: 'Mod-f',
-          run: () => {
-            openFindRef.current('find')
-            return true
-          },
-          preventDefault: true,
-        },
-        {
-          key: 'Mod-Alt-f',
-          run: () => {
-            openFindRef.current('replace')
-            return true
-          },
-          preventDefault: true,
-        },
-        {
           // After suggestions and menus have had their Escape.
           key: 'Escape',
           run: () => {
@@ -1395,6 +1379,18 @@ export const MarkdownEditor = forwardRef<
         ...defaultKeymap,
       ]),
       EditorView.domEventHandlers({
+        // Find reads the physical key and refuses Shift: some layouts and
+        // test drivers send a lowercase "f" with Shift held, and ⌘ ⇧ F is
+        // zen mode, which must never open find.
+        keydown: event => {
+          const primary = /Mac|iPhone|iPad/u.test(navigator.platform)
+            ? event.metaKey && !event.ctrlKey
+            : event.ctrlKey && !event.metaKey
+          if (!primary || event.shiftKey || event.code !== 'KeyF') return false
+          event.preventDefault()
+          openFindRef.current(event.altKey ? 'replace' : 'find')
+          return true
+        },
         focus: () => {
           // A focused empty page can offer one quiet starter after the normal
           // pause. Revisiting existing writing never triggers an idle request.
