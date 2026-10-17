@@ -6,7 +6,7 @@ const FILM = `${import.meta.env.BASE_URL}assets/typenext-film.mp4`
 const POSTER = `${import.meta.env.BASE_URL}assets/typenext-film-poster.jpg`
 
 /**
- * The 30-second film. It plays without sound while it is on screen and
+ * The 45-second film. It plays without sound while it is on screen and
  * pauses when it scrolls away. With reduced motion it waits for a click.
  */
 export default function Film() {
@@ -56,7 +56,7 @@ export default function Film() {
             You dictate. Not the AI.
           </h2>
           <p className="section-lead">
-            Thirty seconds of the real app: suggestions from your own files, dictation on your device, and a writing
+            Forty-five seconds of the real app: suggestions from your own files, dictation on your device, and a writing
             space that stays out of the way.
           </p>
         </Reveal>
@@ -73,7 +73,7 @@ export default function Film() {
               controls={reduced}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
-              aria-label="TypeNext film, 30 seconds"
+              aria-label="TypeNext film, 45 seconds"
             />
             {!reduced && (
               <div className="film-controls">

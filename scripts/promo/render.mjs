@@ -15,6 +15,9 @@ const args = process.argv.slice(2)
 const stillsArg = args.includes('--stills') ? args[args.indexOf('--stills') + 1] : null
 const fromArg = args.includes('--from') ? Number(args[args.indexOf('--from') + 1]) : 0
 const toArg = args.includes('--to') ? Number(args[args.indexOf('--to') + 1]) : DURATION
+// Motion blur: render this many sub-frames per output frame and average them
+// (a 180° shutter at 2). --blur 1 turns it off for quick previews.
+const SUB = args.includes('--blur') ? Number(args[args.indexOf('--blur') + 1]) : 2
 mkdirSync(`${out}/stills`, { recursive: true })
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.jpg': 'image/jpeg', '.png': 'image/png' }
@@ -31,7 +34,8 @@ const server = createServer((request, response) => {
 await new Promise(done => server.listen(0, '127.0.0.1', done))
 const url = `http://127.0.0.1:${server.address().port}/scripts/promo/film.html`
 
-const browser = await chromium.launch()
+// WebGL for the 3D layer; hardware when available, SwiftShader otherwise.
+const browser = await chromium.launch({ args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-unsafe-swiftshader'] })
 const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 1 })
 page.on('pageerror', error => console.error('film error:', error.message))
 page.on('console', message => message.type() === 'error' && console.error('film console:', message.text()))
@@ -53,22 +57,23 @@ try {
       'ffmpeg',
       [
         '-y', '-loglevel', 'error',
-        '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'png', '-i', '-',
-        ...(existsSync(audio) ? ['-ss', String(fromArg), '-i', audio, '-map', '0:v', '-map', '1:a', '-af', 'volume=-3.6dB,alimiter=limit=0.89:level=false', '-c:a', 'aac', '-b:a', '256k', '-shortest'] : []),
-        '-c:v', 'libx264', '-preset', 'slow', '-crf', '15', '-pix_fmt', 'yuv420p', '-profile:v', 'high',
+        '-f', 'image2pipe', '-framerate', String(FPS * SUB), '-c:v', 'png', '-i', '-',
+        ...(existsSync(audio) ? ['-ss', String(fromArg), '-i', audio, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '320k', '-shortest'] : []),
+        ...(SUB > 1 ? ['-vf', `tmix=frames=${SUB},framestep=${SUB}`, '-r', String(FPS)] : []),
+        '-c:v', 'libx264', '-preset', 'slow', '-crf', '14', '-pix_fmt', 'yuv420p', '-profile:v', 'high',
         '-movflags', '+faststart', target,
       ],
       { stdio: ['pipe', 'inherit', 'inherit'] }
     )
     const done = new Promise((resolveDone, reject) => ffmpeg.on('close', code => (code === 0 ? resolveDone() : reject(new Error(`ffmpeg exited ${code}`)))))
-    const first = Math.round(fromArg * FPS)
-    const last = Math.round(toArg * FPS)
+    const first = Math.round(fromArg * FPS * SUB)
+    const last = Math.round(toArg * FPS * SUB)
     const started = Date.now()
     for (let frame = first; frame < last; frame++) {
-      await page.evaluate(t => window.renderAt(t), frame / FPS)
+      await page.evaluate(t => window.renderAt(t), frame / (FPS * SUB))
       const png = await page.screenshot({ type: 'png' })
       if (!ffmpeg.stdin.write(png)) await new Promise(next => ffmpeg.stdin.once('drain', next))
-      if ((frame - first) % 120 === 0) console.log(`frame ${frame}/${last} · ${((Date.now() - started) / 1000).toFixed(0)} s`)
+      if ((frame - first) % (120 * SUB) === 0) console.log(`frame ${frame}/${last} · ${((Date.now() - started) / 1000).toFixed(0)} s`)
     }
     ffmpeg.stdin.end()
     await done
