@@ -2,7 +2,13 @@ import { execFileSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ROOT, assertRemoteAssets, hashFile, releaseVersion } from './lib.mjs'
+import {
+  RELEASE_ASSET_COUNT,
+  ROOT,
+  assertRemoteAssets,
+  hashFile,
+  releaseVersion,
+} from './lib.mjs'
 
 const runGh = (args, { input } = {}) =>
   execFileSync('gh', args, {
@@ -66,7 +72,7 @@ export async function publishRelease({
     verified.tag !== tag ||
     verified.commit !== commit ||
     !Array.isArray(verified.assets) ||
-    verified.assets.length !== 8
+    verified.assets.length !== RELEASE_ASSET_COUNT
   )
     throw new Error('The complete validated release asset set is required.')
   for (const asset of verified.assets)

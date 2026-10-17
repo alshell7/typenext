@@ -18,6 +18,7 @@
     "fs:allow-read-file",
     "fs:allow-stat",
     "opener:allow-open-url",
-    "log:default"
+    "log:default",
+    "updater:default"
   ]
 }

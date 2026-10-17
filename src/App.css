@@ -324,7 +324,13 @@ kbd {
   padding: 26px 10px 0;
   white-space: nowrap;
 }
-.sidebar-brand > span:nth-child(2) {
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.brand-name {
   font-weight: 600;
   font-size: 21px;
   letter-spacing: -0.035em;
@@ -337,11 +343,11 @@ kbd {
   user-select: none;
 }
 .brand-detail {
-  position: absolute;
-  top: 54px;
-  left: 43px;
+  overflow: hidden;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
 }
 .sidebar-actions {
   padding-bottom: 24px;
@@ -703,6 +709,8 @@ kbd {
   color: var(--accent);
 }
 .note-title {
+  width: 100%;
+  text-overflow: ellipsis;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -990,7 +998,16 @@ kbd {
   padding: 5px 22px 10px;
   font-size: 11px;
   min-height: 30px;
+  gap: 12px;
+  white-space: nowrap;
   color: var(--muted);
+  container-type: inline-size;
+}
+/* A narrow page keeps the word count and the save state on one line. */
+@container (max-width: 480px) {
+  .stat-optional {
+    display: none;
+  }
 }
 .footer-divider {
   margin: 0 9px;
@@ -1336,7 +1353,8 @@ kbd {
 }
 .notice {
   position: fixed;
-  bottom: 49px;
+  /* Above the suggestion bar and the footer, never over their text. */
+  bottom: 84px;
   left: 50%;
   transform: translateX(-50%);
   max-width: min(560px, calc(100vw - 28px));

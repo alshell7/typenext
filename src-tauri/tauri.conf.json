@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TypeNext",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "identifier": "com.typenext.ai",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -63,6 +63,17 @@
     "macOS": {
       "minimumSystemVersion": "10.15",
       "entitlements": "Entitlements.plist"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENBNjNDNjJDNTAzNzMzRDMKUldUVE16ZFFMTVpqeWkwRmRydWJJUkFObkRqanpEZmRjWlJmQjRVZ2FFd3RDb1BRV3UxVFZKU3UK",
+      "endpoints": [
+        "https://github.com/alshell7/typenext/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

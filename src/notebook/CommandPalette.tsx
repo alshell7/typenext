@@ -269,7 +269,7 @@ export function CommandPalette({
             Search notes, headings in this note and actions. Type &gt; for
             actions only or # for headings only.
           </Dialog.Description>
-          <div className="palette-search">
+          <div className="cmd-search">
             <Search size={16} aria-hidden="true" />
             <input
               ref={input}
@@ -301,13 +301,13 @@ export function CommandPalette({
               onKeyDown={onKeyDown}
             />
             {mode !== 'all' && (
-              <span className="palette-mode" aria-hidden="true">
+              <span className="cmd-mode" aria-hidden="true">
                 {MODE_LABEL[mode]}
               </span>
             )}
           </div>
           <div
-            className="palette-list"
+            className="cmd-list"
             role="listbox"
             id={`${id}-list`}
             aria-label="Results"
@@ -318,10 +318,10 @@ export function CommandPalette({
                 role="group"
                 key={group.id}
                 aria-labelledby={`${id}-group-${groupIndex}`}
-                className="palette-group"
+                className="cmd-group"
               >
                 <div
-                  className="palette-group-label"
+                  className="cmd-group-label"
                   id={`${id}-group-${groupIndex}`}
                   role="presentation"
                 >
@@ -349,7 +349,7 @@ export function CommandPalette({
               </div>
             ))}
             {!total && (
-              <p className="palette-empty">
+              <p className="cmd-empty">
                 {mode === 'headings'
                   ? headings.length
                     ? 'No heading matches.'
@@ -360,13 +360,13 @@ export function CommandPalette({
               </p>
             )}
           </div>
-          <div className="palette-hints">
-            <span className="palette-keys" aria-hidden="true">
+          <div className="cmd-hints">
+            <span className="cmd-keys" aria-hidden="true">
               <kbd>↑</kbd>
               <kbd>↓</kbd> move <Sep /> <kbd>↵</kbd> {enterLabel} <Sep />
               <kbd>esc</kbd> close
             </span>
-            <span className="palette-prefixes">
+            <span className="cmd-prefixes">
               <button
                 type="button"
                 tabIndex={-1}
@@ -399,7 +399,7 @@ export function CommandPalette({
 }
 
 function Sep() {
-  return <span className="palette-sep">·</span>
+  return <span className="cmd-sep">·</span>
 }
 
 function Option({
@@ -435,7 +435,7 @@ function Option({
           {item.snippet && (
             <>
               {' · '}
-              <span className="palette-snippet">
+              <span className="cmd-snippet">
                 <Highlight
                   text={item.snippet.text}
                   ranges={item.snippet.ranges}
@@ -452,21 +452,20 @@ function Option({
       title = (
         <Highlight text={item.heading.text || 'Heading'} ranges={item.ranges} />
       )
-      end = <span className="palette-level">H{item.heading.level}</span>
+      end = <span className="cmd-level">H{item.heading.level}</span>
       break
     case 'action':
       icon = item.action.icon ?? <Command size={14} />
       title = <Highlight text={item.action.title} ranges={item.ranges} />
       end = item.action.shortcut ? (
-        <kbd className="palette-shortcut">{item.action.shortcut}</kbd>
+        <kbd className="cmd-shortcut">{item.action.shortcut}</kbd>
       ) : null
       break
     case 'create':
       icon = <Plus size={15} />
       title = (
         <>
-          Create note “
-          <span className="palette-create-title">{item.title}</span>”
+          Create note “<span className="cmd-create-title">{item.title}</span>”
         </>
       )
       break
@@ -479,11 +478,11 @@ function Option({
       role="option"
       aria-selected={selected}
       aria-disabled={disabled || undefined}
-      className={`palette-option${active ? ' is-active' : ''}`}
+      className={`cmd-option${active ? ' is-active' : ''}`}
       style={
         item.kind === 'heading'
           ? ({
-              '--palette-indent': `${Math.min(Math.max(item.heading.level - 1, 0), 4) * 12}px`,
+              '--cmd-indent': `${Math.min(Math.max(item.heading.level - 1, 0), 4) * 12}px`,
             } as CSSProperties)
           : undefined
       }
@@ -491,15 +490,15 @@ function Option({
       onMouseDown={event => event.preventDefault()}
       onClick={onChoose}
     >
-      <span className="palette-option-icon" aria-hidden="true">
+      <span className="cmd-option-icon" aria-hidden="true">
         {icon}
       </span>
-      <span className="palette-option-text">
-        <span className="palette-option-title">{title}</span>
-        {detail && <small className="palette-option-detail">{detail}</small>}
+      <span className="cmd-option-text">
+        <span className="cmd-option-title">{title}</span>
+        {detail && <small className="cmd-option-detail">{detail}</small>}
       </span>
       {end && (
-        <span className="palette-option-end" aria-hidden="true">
+        <span className="cmd-option-end" aria-hidden="true">
           {end}
         </span>
       )}

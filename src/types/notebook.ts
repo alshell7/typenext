@@ -107,6 +107,13 @@ export interface DictationSettings {
   voiceCommands: boolean
 }
 
+export interface UpdateSettings {
+  /** Look for a new version on GitHub after launch and every few hours. */
+  autoCheck: boolean
+  /** Download a found version in the background, ready to install. */
+  autoDownload: boolean
+}
+
 export interface TimingSettings {
   /** Wait longer while typing quickly, and less after a pause or accept. */
   adaptiveDelay: boolean
@@ -144,6 +151,7 @@ export interface NotebookSettings {
   git: GitSyncSettings
   dictation: DictationSettings
   timing: TimingSettings
+  updates: UpdateSettings
 }
 
 export type MediaKind = 'image' | 'audio' | 'video'

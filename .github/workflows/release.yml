@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Existing release tag, for example v0.2.0'
+        description: 'Existing release tag, for example v0.3.0'
         required: true
-        default: v0.2.0
+        default: v0.3.0
         type: string
 
 permissions:
@@ -138,7 +138,11 @@ jobs:
           # Ad-hoc signatures are required for usable unsigned Apple Silicon
           # bundles. Developer ID notarization is a separate documented setup.
           APPLE_SIGNING_IDENTITY: '-'
-        run: npm run tauri:build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          # Signs the in-app update payloads (.sig files). The public key is
+          # in tauri.conf.json; the private key lives only in these secrets.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri:build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json
       - name: Verify native architecture and stage complete licensed assets
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -171,6 +175,7 @@ jobs:
           path: artifacts/release-downloads
       - name: Require all three platforms, exact commit/version and SHA-256
         env:
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
         run: node scripts/release/verify-artifacts.mjs

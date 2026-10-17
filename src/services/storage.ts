@@ -3,6 +3,7 @@ import type {
   ContextPackage,
   ContextSource,
   DictationSettings,
+  UpdateSettings,
   EditorSettings,
   GitSyncSettings,
   MediaInfo,
@@ -406,6 +407,7 @@ function parseSettings(value: unknown): NotebookSettings {
     editor: parseEditor(settings.editor),
     git: parseGit(settings.git),
     dictation: parseDictation(settings.dictation),
+    updates: parseUpdates(settings.updates),
     timing: parseTiming(settings.timing),
   }
 }
@@ -427,6 +429,16 @@ function parseGit(value: unknown): GitSyncSettings {
     delaySeconds: numeric(git.delaySeconds ?? defaults.delaySeconds, 10, 3600),
     pullMinutes: numeric(git.pullMinutes ?? defaults.pullMinutes, 0, 1440),
     push: boolean(git.push ?? defaults.push),
+  }
+}
+
+function parseUpdates(value: unknown): UpdateSettings {
+  const defaults = defaultSettings().updates
+  if (value === undefined || value === null) return defaults
+  const updates = record(value)
+  return {
+    autoCheck: boolean(updates.autoCheck ?? defaults.autoCheck),
+    autoDownload: boolean(updates.autoDownload ?? defaults.autoDownload),
   }
 }
 

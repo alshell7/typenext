@@ -12,8 +12,11 @@ import {
   assertInstallerContainer,
   assertManifestSet,
   assertRemoteAssets,
+  buildUpdaterFeed,
   loadMetadata,
   releaseVersion,
+  RELEASE_ASSET_COUNT,
+  UPDATER_FEED,
 } from './lib.mjs'
 import { collectNativeNotices } from './collect-rust-notices.mjs'
 import { publishRelease, selectDraftRelease } from './publish.mjs'
@@ -41,7 +44,17 @@ function manifests() {
       bytes: 100 + index,
       sha256,
     })),
+    updater: {
+      platform: info.updater.platform,
+      asset: `TypeNext_0.1.0_${info.id.replace('-', '_')}${ASSET_SUFFIXES[info.updater.role]}`,
+      signature: signatureFor(info.id),
+    },
   }))
+}
+function signatureFor(id) {
+  return Buffer.from(
+    `untrusted comment: signature for ${id}\n${'R'.repeat(120)}`
+  ).toString('base64')
 }
 
 async function publisherFixture(
@@ -55,6 +68,7 @@ async function publisherFixture(
   await writeFile(notesFile, notes)
   const assets = [
     ...assertManifestSet(manifests(), { tag, commit }),
+    { name: UPDATER_FEED, role: 'updater-feed' },
     { name: 'SHA256SUMS.txt', role: 'checksums' },
   ]
   for (const asset of assets) {
@@ -160,7 +174,7 @@ test('an authenticated paginated draft is resumed, verified and published by the
   const fixture = await publisherFixture(t)
   assert.equal(await publishRelease(fixture.options), 404133245)
   assert.equal(fixture.state.release.draft, false)
-  assert.equal(fixture.state.release.assets.length, 8)
+  assert.equal(fixture.state.release.assets.length, RELEASE_ASSET_COUNT)
   assert.equal(
     fixture.state.calls.filter(args => args.includes('POST')).length,
     0
@@ -221,7 +235,7 @@ test('a newly created draft can be fully verified and published while the list s
     ).length,
     2
   )
-  assert.equal(fixture.state.release.assets.length, 8)
+  assert.equal(fixture.state.release.assets.length, RELEASE_ASSET_COUNT)
   assert.equal(fixture.state.release.draft, false)
 })
 
@@ -408,7 +422,7 @@ test('only explicit stable semantic version tags are accepted', () => {
     assert.throws(() => releaseVersion(value))
 })
 test('all three native targets and every required asset are necessary', () => {
-  assert.equal(assertManifestSet(manifests(), { tag, commit }).length, 7)
+  assert.equal(assertManifestSet(manifests(), { tag, commit }).length, 9)
   assert.throws(
     () => assertManifestSet(manifests().slice(0, 2), { tag, commit }),
     /all required/u
@@ -464,7 +478,7 @@ test('every remote asset must be complete with matching size and digest', () => 
     digest: `sha256:${asset.sha256}`,
     state: 'uploaded',
   }))
-  assert.equal(assertRemoteAssets(expected, actual), 7)
+  assert.equal(assertRemoteAssets(expected, actual), 9)
   for (const patch of [
     { size: 1 },
     { state: 'new' },
@@ -866,5 +880,68 @@ test('reviewed MIT references retain placeholders and refuse unreviewed package 
       fixture
     ),
     /explicitly reviewed/u
+  )
+})
+
+test('every platform carries a well-formed update signature for its payload', () => {
+  assert.equal(RELEASE_ASSET_COUNT, 11)
+  assert.equal(assertManifestSet(manifests(), { tag, commit }).length, 9)
+  for (const breakIt of [
+    manifest => delete manifest.updater,
+    manifest => (manifest.updater.platform = 'linux-x86_64'),
+    manifest => (manifest.updater.asset = 'TypeNext_0.1.0_other.exe'),
+    manifest => (manifest.updater.signature = 'not base64!'),
+    manifest => (manifest.updater.signature = ''),
+  ]) {
+    const set = manifests()
+    breakIt(set[1])
+    assert.throws(
+      () => assertManifestSet(set, { tag, commit }),
+      /update signature/u
+    )
+  }
+})
+
+test('the updater feed lists each platform with its signature and release URL', () => {
+  const feed = buildUpdaterFeed({
+    manifests: manifests(),
+    tag,
+    repository: 'example/typenext',
+    notes: '  # TypeNext 0.1.0\n\n- Faster\n  ',
+    date: new Date('2026-11-02T10:00:00Z'),
+  })
+  assert.equal(feed.version, '0.1.0')
+  assert.equal(feed.pub_date, '2026-11-02T10:00:00.000Z')
+  assert.equal(feed.notes, '# TypeNext 0.1.0\n\n- Faster')
+  assert.deepEqual(Object.keys(feed.platforms).sort(), [
+    'darwin-aarch64',
+    'darwin-x86_64',
+    'windows-x86_64',
+  ])
+  assert.deepEqual(feed.platforms['windows-x86_64'], {
+    signature: signatureFor('windows-x64'),
+    url: 'https://github.com/example/typenext/releases/download/v0.1.0/TypeNext_0.1.0_windows_x64_setup.exe',
+  })
+  assert.equal(
+    feed.platforms['darwin-aarch64'].url,
+    'https://github.com/example/typenext/releases/download/v0.1.0/TypeNext_0.1.0_macos_arm64.app.tar.gz'
+  )
+  assert.throws(
+    () =>
+      buildUpdaterFeed({
+        manifests: manifests().slice(1),
+        tag,
+        repository: 'example/typenext',
+      }),
+    /every platform/u
+  )
+  assert.throws(
+    () =>
+      buildUpdaterFeed({
+        manifests: manifests(),
+        tag,
+        repository: 'not a repo',
+      }),
+    /repository/u
   )
 })

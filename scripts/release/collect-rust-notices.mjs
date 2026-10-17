@@ -30,6 +30,7 @@ const referencedLicenseOptions = Object.freeze({
   'objc2-quartz-core@0.3.1': 'Apache-2.0',
   'objc2-security@0.3.1': 'Apache-2.0',
   'objc2-web-kit@0.3.1': 'Apache-2.0',
+  'objc2-osa-kit@0.3.1': 'Apache-2.0',
   'convert_case@0.4.0': 'MIT',
   'seahash@4.1.0': 'MIT',
   'block2@0.6.1': 'MIT',

@@ -26,7 +26,7 @@
 }
 
 /* Search field: borderless, large, the dialog's own top edge. */
-.palette-search {
+.cmd-search {
   position: relative;
   display: flex;
   align-items: center;
@@ -34,10 +34,10 @@
   padding: 0 16px;
   border-bottom: 1px solid var(--line);
 }
-.palette-search > svg {
+.cmd-search > svg {
   color: var(--muted);
 }
-.command-palette .palette-search > input {
+.command-palette .cmd-search > input {
   flex: 1;
   min-width: 0;
   height: 50px;
@@ -49,10 +49,10 @@
   font-size: 16px;
   letter-spacing: -0.01em;
 }
-.command-palette .palette-search > input:focus {
+.command-palette .cmd-search > input:focus {
   box-shadow: none;
 }
-.palette-mode {
+.cmd-mode {
   flex-shrink: 0;
   padding: 2px 8px;
   border-radius: 5px;
@@ -60,11 +60,11 @@
   color: var(--accent);
   font-size: 11px;
   font-weight: 600;
-  animation: palette-fade 120ms ease-out;
+  animation: cmd-fade 120ms ease-out;
 }
 
 /* Results */
-.palette-list {
+.cmd-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -73,7 +73,7 @@
   scrollbar-width: thin;
   scroll-padding: 28px 0 6px;
 }
-.palette-group-label {
+.cmd-group-label {
   padding: 10px 10px 4px;
   font-size: 11px;
   font-weight: 600;
@@ -81,27 +81,27 @@
   text-transform: uppercase;
   color: var(--muted);
 }
-.palette-option {
+.cmd-option {
   display: flex;
   align-items: center;
   gap: 11px;
   min-height: 36px;
-  padding: 5px 10px 5px calc(10px + var(--palette-indent, 0px));
+  padding: 5px 10px 5px calc(10px + var(--cmd-indent, 0px));
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 90ms ease-out;
 }
-.palette-option[aria-selected='true'] {
+.cmd-option[aria-selected='true'] {
   background: var(--hover);
 }
-.palette-option[aria-disabled='true'] {
+.cmd-option[aria-disabled='true'] {
   cursor: default;
 }
-.palette-option[aria-disabled='true'] .palette-option-text,
-.palette-option[aria-disabled='true'] .palette-option-icon {
+.cmd-option[aria-disabled='true'] .cmd-option-text,
+.cmd-option[aria-disabled='true'] .cmd-option-icon {
   opacity: 0.45;
 }
-.palette-option-icon {
+.cmd-option-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -115,84 +115,84 @@
     background-color 140ms ease-out,
     color 140ms ease-out;
 }
-.palette-option[aria-selected='true'] .palette-option-icon {
+.cmd-option[aria-selected='true'] .cmd-option-icon {
   background: var(--paper);
   color: var(--ink);
 }
-.palette-option.is-active .palette-option-icon,
-.palette-option[data-kind='create'] .palette-option-icon {
+.cmd-option.is-active .cmd-option-icon,
+.cmd-option[data-kind='create'] .cmd-option-icon {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.palette-option-text {
+.cmd-option-text {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
 }
-.palette-option-title,
-.palette-option-detail {
+.cmd-option-title,
+.cmd-option-detail {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.palette-option-title {
+.cmd-option-title {
   font-size: 13.5px;
   font-weight: 600;
   line-height: 1.4;
 }
-.palette-option[data-kind='action'] .palette-option-title,
-.palette-option[data-kind='heading'] .palette-option-title {
+.cmd-option[data-kind='action'] .cmd-option-title,
+.cmd-option[data-kind='heading'] .cmd-option-title {
   font-weight: 500;
 }
-.palette-option[data-kind='create'] .palette-option-title {
+.cmd-option[data-kind='create'] .cmd-option-title {
   font-weight: 500;
   color: var(--secondary);
 }
-.palette-create-title {
+.cmd-create-title {
   color: var(--ink);
   font-weight: 600;
 }
-.palette-option-detail {
+.cmd-option-detail {
   font-size: 12px;
   line-height: 1.4;
   color: var(--muted);
 }
-.palette-snippet {
+.cmd-snippet {
   color: var(--secondary);
 }
-.palette-option mark {
+.cmd-option mark {
   background: transparent;
   color: var(--accent);
   font-weight: 600;
 }
-.palette-snippet mark {
+.cmd-snippet mark {
   padding: 0 1px;
   border-radius: 3px;
   background: var(--accent-soft);
   color: var(--ink);
 }
-.palette-option-end {
+.cmd-option-end {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
   color: var(--muted);
 }
-.palette-shortcut,
-.palette-level {
+.cmd-shortcut,
+.cmd-level {
   font-size: 11px;
   color: var(--muted);
   letter-spacing: 0.02em;
 }
-.palette-shortcut {
+.cmd-shortcut {
   padding: 1px 6px;
   border-radius: 4px;
   background: var(--surface);
 }
-.palette-option[aria-selected='true'] .palette-shortcut {
+.cmd-option[aria-selected='true'] .cmd-shortcut {
   background: var(--paper);
 }
-.palette-empty {
+.cmd-empty {
   padding: 28px 12px;
   text-align: center;
   font-size: 13px;
@@ -200,7 +200,7 @@
 }
 
 /* Hint row */
-.palette-hints {
+.cmd-hints {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -210,21 +210,21 @@
   font-size: 11px;
   color: var(--muted);
 }
-.palette-keys {
+.cmd-keys {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   white-space: nowrap;
 }
-.palette-sep {
+.cmd-sep {
   margin: 0 4px;
   opacity: 0.6;
 }
-.palette-prefixes {
+.cmd-prefixes {
   display: inline-flex;
   gap: 2px;
 }
-.palette-prefixes > button {
+.cmd-prefixes > button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -236,15 +236,15 @@
     background-color 120ms ease-out,
     color 120ms ease-out;
 }
-.palette-prefixes > button:hover {
+.cmd-prefixes > button:hover {
   background: var(--hover);
   color: var(--secondary);
 }
-.palette-prefixes > button.is-on {
+.cmd-prefixes > button.is-on {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.palette-prefixes > button.is-on kbd {
+.cmd-prefixes > button.is-on kbd {
   color: inherit;
 }
 
@@ -258,7 +258,7 @@
     transform: translateX(-50%);
   }
 }
-@keyframes palette-fade {
+@keyframes cmd-fade {
   from {
     opacity: 0;
   }
@@ -268,22 +268,22 @@
 }
 
 @media (max-width: 560px) {
-  .palette-keys {
+  .cmd-keys {
     display: none;
   }
-  .palette-hints {
+  .cmd-hints {
     justify-content: flex-end;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .command-palette,
   .command-palette-overlay,
-  .palette-mode {
+  .cmd-mode {
     animation: none;
   }
-  .palette-option,
-  .palette-option-icon,
-  .palette-prefixes > button {
+  .cmd-option,
+  .cmd-option-icon,
+  .cmd-prefixes > button {
     transition: none;
   }
 }

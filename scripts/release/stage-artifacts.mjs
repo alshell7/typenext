@@ -81,6 +81,14 @@ async function add(source, name, role) {
   await copyFile(source, destination)
   assets.push(await fileRecord(destination, role))
 }
+let updater = null
+/** The bundler signs update payloads when TAURI_SIGNING_PRIVATE_KEY is set. */
+async function signedUpdate(source, name) {
+  const signature = (await readFile(`${source}.sig`, 'utf8')).trim()
+  if (!/^[A-Za-z0-9+/=]{100,4096}$/u.test(signature))
+    throw new Error(`The update signature for ${name} is missing or malformed.`)
+  updater = { platform: info.updater.platform, asset: name, signature }
+}
 
 if (info.os === 'win32') {
   const executable = join(release, 'typenext.exe')
@@ -102,6 +110,7 @@ if (info.os === 'win32') {
     join(ROOT, 'src-tauri/icons/icon.ico')
   )
   await add(installer, `${prefix}_setup.exe`, 'installer-exe')
+  await signedUpdate(installer, `${prefix}_setup.exe`)
   await add(
     await bundleFile(join(release, 'bundle/msi'), '.msi'),
     `${prefix}.msi`,
@@ -152,11 +161,25 @@ if (info.os === 'win32') {
     { stdio: 'inherit' }
   )
   assets.push(await fileRecord(zip, 'app-zip'))
+  // The in-app updater replaces TypeNext.app with this signed archive.
+  const archive = join(release, 'bundle/macos/TypeNext.app.tar.gz')
+  await add(archive, `${prefix}.app.tar.gz`, 'updater-app')
+  await signedUpdate(archive, `${prefix}.app.tar.gz`)
 }
+if (!updater) throw new Error('No signed update payload was staged.')
 await writeFile(
   join(upload, `manifest-${info.id}.json`),
   JSON.stringify(
-    { schema: 1, tag, version, commit, target, platform: info.id, assets },
+    {
+      schema: 1,
+      tag,
+      version,
+      commit,
+      target,
+      platform: info.id,
+      assets,
+      updater,
+    },
     null,
     2
   ) + '\n'

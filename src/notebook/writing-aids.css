@@ -127,6 +127,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 .goal-ring {
   margin-right: 7px;

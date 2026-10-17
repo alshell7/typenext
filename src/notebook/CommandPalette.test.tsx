@@ -154,7 +154,7 @@ describe('command palette', () => {
     expect(options[0]!.querySelector('mark')).toHaveTextContent('Garden')
     expect(options[1]).toHaveTextContent('Letters')
     expect(
-      options[1]!.querySelector('.palette-snippet mark')
+      options[1]!.querySelector('.cmd-snippet mark')
     ).toHaveTextContent('garden')
     expect(screen.getByRole('status')).toHaveTextContent('2 results')
   })

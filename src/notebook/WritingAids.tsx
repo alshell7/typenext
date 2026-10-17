@@ -68,12 +68,16 @@ export const NoteOutline = memo(function NoteOutline({
       onMouseLeave={() => setOpen(false)}
       onFocus={() => setOpen(true)}
       onBlur={event => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false)
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setOpen(false)
       }}
     >
       <ol>
         {headings.map((heading, index) => (
-          <li key={`${heading.from}-${index}`} style={{ '--depth': heading.level - top } as React.CSSProperties}>
+          <li
+            key={`${heading.from}-${index}`}
+            style={{ '--depth': heading.level - top } as React.CSSProperties}
+          >
             <button
               type="button"
               className={index === active ? 'is-active' : ''}
@@ -102,8 +106,8 @@ export const LinkedFrom = memo(function LinkedFrom({
   return (
     <section className="linked-from" aria-label="Linked from">
       <h2>
-        <CornerDownRight size={13} aria-hidden="true" /> Linked from {notes.length}{' '}
-        {notes.length === 1 ? 'note' : 'notes'}
+        <CornerDownRight size={13} aria-hidden="true" /> Linked from{' '}
+        {notes.length} {notes.length === 1 ? 'note' : 'notes'}
       </h2>
       <div>
         {notes.slice(0, 24).map(item => (
@@ -116,7 +120,8 @@ export const LinkedFrom = memo(function LinkedFrom({
   )
 })
 
-const TODAY_KEY = () => `typenext.words.${new Date().toISOString().slice(0, 10)}`
+const TODAY_KEY = () =>
+  `typenext.words.${new Date().toISOString().slice(0, 10)}`
 
 export function wordsToday(): number {
   try {
@@ -180,18 +185,20 @@ export const WritingStats = memo(function WritingStats({
         {words.toLocaleString()} word{words !== 1 ? 's' : ''}
       </span>
       {words > 0 && (
-        <>
+        <span className="stat-optional">
           <span className="footer-divider">·</span>
           <span>{readingMinutes(words)} min read</span>
-        </>
+        </span>
       )}
       {today > 0 && (
-        <>
+        <span className="stat-optional">
           <span className="footer-divider">·</span>
           <span title="Words you wrote today, in all notes">
-            {goal > 0 ? `${today.toLocaleString()} / ${goal.toLocaleString()} today` : `+${today.toLocaleString()} today`}
+            {goal > 0
+              ? `${today.toLocaleString()} / ${goal.toLocaleString()} today`
+              : `+${today.toLocaleString()} today`}
           </span>
-        </>
+        </span>
       )}
     </span>
   )
