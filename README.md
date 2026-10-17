@@ -18,7 +18,7 @@ A quiet, local-first Markdown notepad. A suggestion from your own files waits at
 
 <a href="docs/media/typenext-film.mp4"><img src="docs/media/typenext-film.gif" alt="From the TypeNext film: you dictate, not the AI. You write; it suggests, and Tab keeps it. A real suggestion from an attached requirements file, with its source." width="880" /></a>
 
-<sub><b><a href="docs/media/typenext-film.mp4">▶ Watch the 30-second film with sound</a></b> · recorded in the real app</sub>
+<sub><b><a href="docs/media/typenext-film.mp4">▶ Watch the 45-second film with sound</a></b> · recorded in the real app</sub>
 
 </div>
 

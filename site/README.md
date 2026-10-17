@@ -22,7 +22,7 @@ Inside `site/`: `npm run dev`, `npm run build`, `npm run preview` and `npm run t
 - `src/components/reactbits/` – React Bits components (see below).
 - `src/styles/` – design tokens (`global.css`, paper and ink from `DESIGN.md`) and section styles.
 - `scripts/sync-assets.mjs` – copies the screenshots from `docs/screenshots/`, the film from `docs/media/`, the icon and the licence texts into `public/assets/` (ignored by Git) before `dev` and `build`.
-- `src/sections/Film.tsx` – the 30-second film. It plays without sound while it is on screen. To make the film again, see `docs/developer/film.md`.
+- `src/sections/Film.tsx` – the 45-second film. It plays without sound while it is on screen. To make the film again, see `docs/developer/film.md`.
 
 ## Screenshots
 
