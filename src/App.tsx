@@ -683,7 +683,7 @@ function App() {
   }, [status.kind, status.state, status.message, notify])
   useEffect(() => {
     if (!notice) return
-    const timer = setTimeout(() => setNotice(''), 6500)
+    const timer = setTimeout(() => setNotice(''), 4500)
     return () => clearTimeout(timer)
   }, [notice])
   const activeTitle = note ? displayTitle(note) : undefined
@@ -1704,8 +1704,10 @@ function App() {
             draggable={false}
             data-tauri-drag-region
           />
-          <span>TypeNext</span>
-          <span className="brand-detail">a place for your words</span>
+          <span className="brand-text">
+            <span className="brand-name">TypeNext</span>
+            <span className="brand-detail">a place for your words</span>
+          </span>
         </div>
         <div className="sidebar-actions">
           <button
