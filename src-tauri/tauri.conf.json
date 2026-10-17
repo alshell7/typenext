@@ -64,5 +64,16 @@
       "minimumSystemVersion": "10.15",
       "entitlements": "Entitlements.plist"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENBNjNDNjJDNTAzNzMzRDMKUldUVE16ZFFMTVpqeWkwRmRydWJJUkFObkRqanpEZmRjWlJmQjRVZ2FFd3RDb1BRV3UxVFZKU3UK",
+      "endpoints": [
+        "https://github.com/alshell7/typenext/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

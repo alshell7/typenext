@@ -11,6 +11,7 @@ export const ASSET_SUFFIXES = Object.freeze({
   'portable-zip': '_portable.zip',
   dmg: '.dmg',
   'app-zip': '.app.zip',
+  'updater-app': '.app.tar.gz',
 })
 export const TARGETS = Object.freeze({
   'x86_64-pc-windows-msvc': {
@@ -18,20 +19,28 @@ export const TARGETS = Object.freeze({
     os: 'win32',
     arch: 'x64',
     roles: ['installer-exe', 'installer-msi', 'portable-zip'],
+    // The NSIS installer is also the in-app update payload.
+    updater: { platform: 'windows-x86_64', role: 'installer-exe' },
   },
   'aarch64-apple-darwin': {
     id: 'macos-arm64',
     os: 'darwin',
     arch: 'arm64',
-    roles: ['dmg', 'app-zip'],
+    roles: ['dmg', 'app-zip', 'updater-app'],
+    updater: { platform: 'darwin-aarch64', role: 'updater-app' },
   },
   'x86_64-apple-darwin': {
     id: 'macos-x64',
     os: 'darwin',
     arch: 'x64',
-    roles: ['dmg', 'app-zip'],
+    roles: ['dmg', 'app-zip', 'updater-app'],
+    updater: { platform: 'darwin-x86_64', role: 'updater-app' },
   },
 })
+/** Every platform asset, plus SHA256SUMS.txt and the updater feed. */
+export const RELEASE_ASSET_COUNT =
+  Object.values(TARGETS).reduce((sum, info) => sum + info.roles.length, 0) + 2
+export const UPDATER_FEED = 'latest.json'
 
 export function releaseVersion(tag) {
   if (!/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u.test(tag ?? ''))
@@ -134,6 +143,18 @@ export function assertManifestSet(manifests, { tag, commit }) {
       names.add(asset.name)
       roles.add(asset.role)
     }
+    const signed = manifest.assets.find(
+      asset => asset.role === info.updater.role
+    )
+    if (
+      manifest.updater?.platform !== info.updater.platform ||
+      manifest.updater?.asset !== signed?.name ||
+      typeof manifest.updater?.signature !== 'string' ||
+      !/^[A-Za-z0-9+/=]{100,4096}$/u.test(manifest.updater.signature)
+    )
+      throw new Error(
+        `The ${info.id} update signature is missing or malformed.`
+      )
     platforms.add(info.id)
   }
   if (platforms.size !== Object.keys(TARGETS).length)
@@ -141,6 +162,39 @@ export function assertManifestSet(manifests, { tag, commit }) {
       'Windows x64, Apple Silicon and Intel Mac assets are all required before publication.'
     )
   return manifests.flatMap(manifest => manifest.assets)
+}
+
+/**
+ * The static feed the in-app updater reads from
+ * releases/latest/download/latest.json. Signatures are minisign files made
+ * with TAURI_SIGNING_PRIVATE_KEY during the build.
+ */
+export function buildUpdaterFeed({
+  manifests,
+  tag,
+  repository,
+  notes,
+  date = new Date(),
+}) {
+  const version = releaseVersion(tag)
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository ?? ''))
+    throw new Error('The updater feed needs the GitHub repository.')
+  const platforms = {}
+  for (const manifest of manifests) {
+    const { updater } = manifest
+    platforms[updater.platform] = {
+      signature: updater.signature,
+      url: `https://github.com/${repository}/releases/download/${tag}/${encodeURIComponent(updater.asset)}`,
+    }
+  }
+  if (Object.keys(platforms).length !== Object.keys(TARGETS).length)
+    throw new Error('The updater feed needs every platform.')
+  return {
+    version,
+    notes: String(notes ?? '').trim(),
+    pub_date: date.toISOString(),
+    platforms,
+  }
 }
 
 export function assertRemoteAssets(expected, actual) {

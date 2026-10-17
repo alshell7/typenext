@@ -108,6 +108,7 @@ export function defaultSettings(): NotebookSettings {
       livePhrases: true,
       voiceCommands: true,
     },
+    updates: { autoCheck: true, autoDownload: true },
     timing: {
       adaptiveDelay: true,
       minCharacters: 0,
@@ -176,6 +177,7 @@ export function normalizeWorkspace(value: Workspace): Workspace {
     git: { ...defaults.git, ...value.settings?.git },
     dictation: { ...defaults.dictation, ...value.settings?.dictation },
     timing: { ...defaults.timing, ...value.settings?.timing },
+    updates: { ...defaults.updates, ...value.settings?.updates },
   }
   settings.fontSize = Math.min(
     32,

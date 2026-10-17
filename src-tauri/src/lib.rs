@@ -21,6 +21,39 @@ fn exit_app(app: tauri::AppHandle, state: tauri::State<'_, ExitState>) {
     app.exit(0);
 }
 
+/// Stop the local model servers. Managed state is not dropped on exit.
+fn stop_runtimes(app: &tauri::AppHandle) {
+    if let Some(embedding) = app.try_state::<embedding::EmbeddingState>() {
+        embedding.shutdown();
+    }
+    if let Some(speech) = app.try_state::<speech::SpeechState>() {
+        speech.shutdown();
+    }
+}
+
+/// Called after the notebook is saved and before an update installs. The
+/// Windows installer ends this process without the usual exit event, and a
+/// macOS restart must not stop at "Save before closing?".
+#[tauri::command]
+fn prepare_for_update(app: tauri::AppHandle, state: tauri::State<'_, ExitState>) {
+    state.allowed.store(true, Ordering::SeqCst);
+    stop_runtimes(&app);
+}
+
+/// The install failed: closing the window asks about unsaved work again.
+#[tauri::command]
+fn cancel_update(state: tauri::State<'_, ExitState>) {
+    state.allowed.store(false, Ordering::SeqCst);
+}
+
+/// Start the installed version (macOS and Linux replace the app in place).
+#[tauri::command]
+fn restart_for_update(app: tauri::AppHandle, state: tauri::State<'_, ExitState>) {
+    state.allowed.store(true, Ordering::SeqCst);
+    stop_runtimes(&app);
+    app.restart();
+}
+
 fn create_app_menu(app: &mut tauri::App) -> tauri::Result<()> {
     let file = SubmenuBuilder::new(app, "File")
         .item(
@@ -141,6 +174,9 @@ pub fn run() {
                     }
                 },
             ));
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
             create_app_menu(app)?;
             app.on_menu_event(|app, event| {
                 let name = match event.id().as_ref() {
@@ -185,6 +221,9 @@ pub fn run() {
             git_sync::git_sync_init,
             git_sync::git_sync_run,
             exit_app,
+            prepare_for_update,
+            cancel_update,
+            restart_for_update,
         ])
         .build(tauri::generate_context!())
         .expect("Could not start TypeNext")
@@ -203,14 +242,7 @@ pub fn run() {
                 let _ = app.emit("native-close-requested", ());
             }
             // Managed state is not dropped on exit, so stop the servers here.
-            tauri::RunEvent::Exit => {
-                if let Some(embedding) = app.try_state::<embedding::EmbeddingState>() {
-                    embedding.shutdown();
-                }
-                if let Some(speech) = app.try_state::<speech::SpeechState>() {
-                    speech.shutdown();
-                }
-            }
+            tauri::RunEvent::Exit => stop_runtimes(app),
             _ => {}
         });
 }

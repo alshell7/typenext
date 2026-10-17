@@ -748,6 +748,32 @@ A note that another computer deleted stays on this computer if you changed it af
 
 When the remote is not available, TypeNext commits in the local repository and shows **Git offline · saved locally**. It sends the commits at the next sync.
 
+## Updates
+
+The desktop app updates itself from the TypeNext releases on GitHub. It always asks before it restarts.
+
+### How updates work
+
+1. Shortly after launch, and every six hours, TypeNext asks GitHub for the latest version number. It sends no notes or settings.
+2. When a new version is found, TypeNext downloads it in the background and checks it against the TypeNext signing key. A download that does not match is not installed.
+3. A small notice shows **TypeNext 0.x is ready**. Select **What’s new** to read the highlights.
+4. Select **Restart to update**. TypeNext saves your notes first, installs the new version and opens again. Select **Later** to keep writing. The notice comes back at the next launch.
+
+The notice does not show in zen mode or while a dialog is open.
+
+### Check for updates now
+
+Go to **Preferences → Updates** and select **Check now**. Or open the command palette (Ctrl/⌘ P) and select **Check for updates**.
+
+### Turn automatic updates off
+
+In **Preferences → Updates**:
+
+- **Check for updates automatically**: turn off to check only when you select **Check now**.
+- **Download updates in the background**: turn off to see **Download** in the notice instead.
+
+On Windows, the installer shows a short progress window, then TypeNext opens again. Version 0.2.0 and earlier cannot update themselves: download 0.3.0 once from the releases page.
+
 ## Preferences
 
 Press Ctrl/⌘ , or select **Preferences** in the sidebar.
@@ -761,6 +787,7 @@ Press Ctrl/⌘ , or select **Preferences** in the sidebar.
 | **Knowledge**   | **Semantic search**, **Run with**, **Vector size**, **Images, audio and video**, **Website importer**.                                              |
 | **Web facts**   | **Web facts**, **Also ground Ctrl / ⌘ Space choices with web facts**, **Search model**.                                                             |
 | **Sync**        | **Folder**, **Sync notes with Git**, **Sync after writing pauses**, **Wait after writing**, **Look for remote changes**, **Send commits to the remote**. |
+| **Updates**     | The installed version, **Check now**, **Check for updates automatically**, **Download updates in the background**.                                  |
 | **Shortcuts**   | A list of keyboard shortcuts.                                                                                                                       |
 
 **Models** starts with the active engine card. It shows **Suggestions come from**, the engine and **On this device** or **External**.
@@ -829,6 +856,7 @@ Global shortcuts do nothing while a dialog is open.
 | Git sync                                                    | Notes as Markdown files, to the Git remote that you choose.                    |
 | Hugging Face token                                          | The token, to huggingface.co, only for model downloads.                        |
 | Website import                                              | A request to the website. With Firecrawl, the address goes to Firecrawl.       |
+| Updates (desktop)                                           | A request to GitHub for the latest version. No notes or settings.              |
 
 On the desktop, keys stay in memory unless you select **Remember in the device credential vault**. In the browser preview, keys last for the session only.
 

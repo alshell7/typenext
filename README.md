@@ -80,6 +80,7 @@ A quiet, local-first Markdown notepad. A suggestion from your own files waits at
 
 - **Dictation on your device**: Whistle (17 MB), or **Fluid Speech Mini** by FluidVoice (347 MB) with live phrases, voice commands and auto-stop.
 - **Git sync**: every note as a Markdown file in your repository. Both versions survive a conflict.
+- **Updates in the app**: signed updates from GitHub releases download quietly; TypeNext asks before it restarts.
 - **Plain files**: open and save ordinary Markdown. Autosave keeps a recoverable copy.
 
 Try it in a minute: select **Try a sample** on the welcome screen, put the cursor after "Guests arrive at Bramble House", press ⌘/Ctrl Space, then Tab.
@@ -92,6 +93,7 @@ Try it in a minute: select **Try a sample** on the welcome screen, put the curso
 | Recall, the built-in model and local servers | Web facts: the selected text, to OpenAI |
 | Semantic search and dictation | Git sync: notes, to your remote |
 | API keys (in memory, or the OS vault if you choose) | Link previews: a request to the linked site, no note text |
+| | Updates: a version check with GitHub, no notes (Preferences → Updates) |
 
 Models download only when you ask, from pinned versions with SHA-256 checks. If Hugging Face asks for a sign-in, TypeNext shows a three-step guide. Details: [AI design](docs/ai-design.md) · [built-in models](docs/builtin-models.md) · [reliability](docs/reliability.md).
 

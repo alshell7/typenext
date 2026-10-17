@@ -47,3 +47,6 @@ public/notices/native-macos-x64/
 # Python training helpers
 __pycache__/
 *.pyc
+
+# Updater signing keys (private). Never commit.
+.keys/

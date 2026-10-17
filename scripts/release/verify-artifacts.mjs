@@ -4,8 +4,10 @@ import { join, resolve } from 'node:path'
 import {
   ROOT,
   TARGETS,
+  UPDATER_FEED,
   assertInside,
   assertManifestSet,
+  buildUpdaterFeed,
   hashFile,
 } from './lib.mjs'
 
@@ -72,18 +74,30 @@ for (const asset of assets) {
   }
   await copyFile(source, join(publish, asset.name))
 }
+const { fileRecord } = await import('./lib.mjs')
+// The in-app updater reads this feed from the latest release.
+const feed = buildUpdaterFeed({
+  manifests,
+  tag,
+  repository: process.env.GH_REPO,
+  notes: await readFile(resolve(ROOT, `docs/release-notes/${tag}.md`), 'utf8'),
+})
+await writeFile(
+  join(publish, UPDATER_FEED),
+  JSON.stringify(feed, null, 2) + '\n'
+)
+assets.push(await fileRecord(join(publish, UPDATER_FEED), 'updater-feed'))
 const checksum =
   assets
     .map(asset => `${asset.sha256}  ${asset.name}`)
     .sort()
     .join('\n') + '\n'
 await writeFile(join(publish, 'SHA256SUMS.txt'), checksum)
-const { fileRecord } = await import('./lib.mjs')
 assets.push(await fileRecord(join(publish, 'SHA256SUMS.txt'), 'checksums'))
 await writeFile(
   join(publish, 'verified-assets.json'),
   JSON.stringify({ schema: 1, tag, commit, assets }, null, 2) + '\n'
 )
 console.log(
-  `Verified all three platforms and ${assets.length - 1} executable/installer/archive assets; SHA256SUMS.txt added.`
+  `Verified all three platforms and ${assets.length - 2} executable/installer/archive assets; ${UPDATER_FEED} and SHA256SUMS.txt added.`
 )

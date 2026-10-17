@@ -9,6 +9,7 @@ export type PreferencePane =
   | 'web'
   | 'sync'
   | 'dictation'
+  | 'updates'
   | 'shortcuts'
   /** Legacy alias: Models, scrolled to On this device. */
   | 'local'

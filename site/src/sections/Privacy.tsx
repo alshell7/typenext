@@ -16,6 +16,7 @@ const leaves = [
   { title: 'Website link cards', when: 'Notes & web, the default', body: 'A request to the linked website for its title. No note text. Choose Notes or Off to contact no website.' },
   { title: 'Website import', when: 'When you import a website', body: 'A request to that website. With the optional Firecrawl importer, the address goes to Firecrawl.' },
   { title: 'Model downloads', when: 'Only when you ask', body: 'Files from Hugging Face. An optional read token goes only to huggingface.co.' },
+  { title: 'Update checks', when: 'Desktop, on by default', body: 'A request to GitHub for the latest version. No notes or settings. Turn it off in Preferences → Updates.' },
 ]
 
 export default function Privacy() {

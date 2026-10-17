@@ -45,6 +45,9 @@ libc = "0.2"
 keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
 libc = "0.2"
 
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-updater = "=2.9.0"
+
 [profile.release]
 codegen-units = 1
 lto = true

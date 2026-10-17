@@ -49,6 +49,7 @@ function settings(): NotebookSettings {
     git: defaultSettings().git,
     dictation: defaultSettings().dictation,
     timing: defaultSettings().timing,
+    updates: defaultSettings().updates,
     theme: 'light',
     palette: defaultSettings().palette,
     fontFamily: 'Segoe UI',

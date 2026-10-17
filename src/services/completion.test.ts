@@ -42,6 +42,7 @@ function settings(): NotebookSettings {
     git: defaultSettings().git,
     dictation: defaultSettings().dictation,
     timing: defaultSettings().timing,
+    updates: defaultSettings().updates,
     profiles: {
       local: {
         endpoint: 'http://localhost:1234/v1',

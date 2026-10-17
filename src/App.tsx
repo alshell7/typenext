@@ -73,6 +73,12 @@ import {
 } from './notebook/CommandPalette'
 import { tableTemplate } from './components/notebook/markdown-editing'
 import { syncNow, useGitSync } from './notebook/useGitSync'
+import { UpdateNotice, useAutoUpdates } from './notebook/UpdateNotice'
+import {
+  checkForUpdates,
+  registerUpdateSaver,
+  updatesAvailable,
+} from './services/updater'
 import { installEmbeddingRuntime } from './services/embedding-runtime'
 import { installSpeechRuntime } from './services/speech-runtime'
 import { downloadBuiltinModel } from './services/builtin-engine'
@@ -571,6 +577,17 @@ function App() {
   }, [note?.id, note])
 
   useGitSync(workspace, getWorkspace, setWorkspace, notify)
+  useAutoUpdates(settings.updates)
+  // Installing an update ends this process, so every edit must be on disk.
+  const saveForUpdate = useCallback(async () => {
+    await saveNow()
+    await waitForPendingSave()
+    await saveNow()
+  }, [saveNow, waitForPendingSave])
+  useEffect(() => {
+    registerUpdateSaver(saveForUpdate)
+    return () => registerUpdateSaver(null)
+  }, [saveForUpdate])
 
   const zenLevel: ZenLevel = settings.zenLevel ?? 'chrome'
   const enterZen = useCallback(
@@ -1571,6 +1588,20 @@ function App() {
         run: () => void syncNow(),
       },
       {
+        id: 'updates',
+        title: 'Check for updates',
+        section: 'Actions',
+        keywords: ['update', 'upgrade', 'version', 'release', 'new'],
+        disabled: !updatesAvailable(),
+        run: () => {
+          run.current.showPreferences('updates')
+          void checkForUpdates({
+            manual: true,
+            download: getWorkspace().settings.updates.autoDownload,
+          })
+        },
+      },
+      {
         id: 'sample',
         title: 'Open the sample note',
         section: 'Actions',
@@ -1632,7 +1663,7 @@ function App() {
       pane('shortcuts', 'Shortcuts', ['keys', 'keyboard']),
     ]
     return actions
-  }, [gitEnabled, webFactsOn, setWorkspace])
+  }, [gitEnabled, webFactsOn, setWorkspace, getWorkspace])
   const paletteHeadings = useMemo<PaletteHeading[]>(
     () => headings.map(({ level, text, from }) => ({ level, text, from })),
     [headings]
@@ -2385,6 +2416,10 @@ function App() {
           createNote(title)
         }}
         onJumpToHeading={heading => editorRef.current?.jumpTo(heading.from)}
+      />
+      <UpdateNotice
+        hidden={focusMode || preferencesOpen || libraryOpen || graphOpen}
+        onOpenSettings={() => showPreferences('updates')}
       />
       <HuggingFaceGuide
         onRetry={source => {

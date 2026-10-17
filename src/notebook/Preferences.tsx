@@ -10,6 +10,7 @@ import {
   type LucideIcon,
   GitBranch,
   Mic,
+  ArrowUpCircle,
 } from 'lucide-react'
 import type { NotebookSettings } from '../types/notebook'
 import { Modal } from './Modal'
@@ -27,6 +28,7 @@ import {
 import { WebFactsPane } from './preferences/WebFactsPane'
 import { SyncPane } from './preferences/SyncPane'
 import { DictationPane } from './preferences/DictationPane'
+import { UpdatesPane } from './preferences/UpdatesPane'
 import { WritingPane } from './preferences/WritingPane'
 import './preferences.css'
 
@@ -85,6 +87,12 @@ export const PREFERENCE_PANES: {
     label: 'Sync',
     description: 'Keep notes in a Git repository.',
     icon: GitBranch,
+  },
+  {
+    id: 'updates',
+    label: 'Updates',
+    description: 'New versions, checked and installed with your say.',
+    icon: ArrowUpCircle,
   },
   {
     id: 'shortcuts',
@@ -222,6 +230,7 @@ export function Preferences({
             {active === 'web' && <WebFactsPane {...props} />}
             {active === 'sync' && <SyncPane {...props} />}
             {active === 'dictation' && <DictationPane {...props} />}
+            {active === 'updates' && <UpdatesPane {...props} />}
             {active === 'shortcuts' && <ShortcutsPane {...props} />}
           </div>
         </div>
