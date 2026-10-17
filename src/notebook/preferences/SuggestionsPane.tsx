@@ -1,6 +1,19 @@
-import { ArrowRight } from 'lucide-react'
-import type { NotebookSettings } from '../../types/notebook'
-import { Group, Row, Section, SwitchRow } from './controls'
+import { ArrowRight, Ban } from 'lucide-react'
+import type { AiIndicatorStyle } from '../../types/notebook'
+import {
+  Group,
+  Row,
+  Section,
+  Segmented,
+  SwitchRow,
+  TileGroup,
+} from './controls'
+import { AiPulse } from '../AiPulse'
+import { PULSE_STYLES } from '../../components/notebook/ai-pulse'
+import { aiEngine } from '../../services/text-actions'
+import { shortcutKeys } from '../shortcuts'
+import { useState } from 'react'
+import { INSTRUCTION_TEMPLATES } from './instruction-templates'
 import { engineSummary } from './engine'
 import type { PaneProps } from './types'
 
@@ -90,21 +103,69 @@ export function SuggestionsPane({
             disabled={!settings.suggestionsEnabled}
             onChange={autoSuggest => update({ autoSuggest })}
           />
-          <Row label="Suggestion length" htmlFor="suggestion-length">
-            <select
-              id="suggestion-length"
-              value={settings.suggestionLength}
-              onChange={event =>
-                update({
-                  suggestionLength: event.target
-                    .value as NotebookSettings['suggestionLength'],
-                })
+          <Row
+            label="Suggestion length"
+            description={
+              settings.suggestionWords > 0
+                ? `Up to ${settings.suggestionWords} ${settings.suggestionWords === 1 ? 'word' : 'words'}, wherever you write. Table cells and headings stay short.`
+                : settings.suggestionLength === 'short'
+                  ? 'Just a few words: finish the phrase.'
+                  : settings.suggestionLength === 'sentence'
+                    ? 'Up to one sentence.'
+                    : 'A word inside a sentence, a phrase mid-line, a sentence after a full stop.'
+            }
+            stacked={settings.suggestionWords > 0}
+          >
+            <Segmented
+              label="Suggestion length"
+              value={
+                settings.suggestionWords > 0
+                  ? 'custom'
+                  : settings.suggestionLength
               }
-            >
-              <option value="adaptive">Adapt to the sentence</option>
-              <option value="short">Just a few words</option>
-              <option value="sentence">Up to one sentence</option>
-            </select>
+              onChange={value =>
+                value === 'custom'
+                  ? update({
+                      suggestionWords:
+                        latest().suggestionWords > 0
+                          ? latest().suggestionWords
+                          : 12,
+                    })
+                  : update({ suggestionLength: value, suggestionWords: 0 })
+              }
+              options={[
+                { value: 'adaptive', label: 'Adapt' },
+                { value: 'short', label: 'Few words' },
+                { value: 'sentence', label: 'Sentence' },
+                { value: 'custom', label: 'Custom' },
+              ]}
+            />
+            {settings.suggestionWords > 0 && (
+              <>
+                <span className="pref-range">
+                  <input
+                    id="suggestion-words"
+                    type="range"
+                    min={1}
+                    max={60}
+                    step={1}
+                    value={settings.suggestionWords}
+                    aria-label="Most words in a suggestion"
+                    aria-valuetext={`${settings.suggestionWords} words`}
+                    onChange={event =>
+                      update({ suggestionWords: Number(event.target.value) })
+                    }
+                  />
+                  <output htmlFor="suggestion-words">
+                    {settings.suggestionWords} words
+                  </output>
+                </span>
+                <span className="pref-range-labels" aria-hidden="true">
+                  <span>A word or two</span>
+                  <span>A few sentences</span>
+                </span>
+              </>
+            )}
           </Row>
           <Row label="Creativity" htmlFor="suggestion-temperature" stacked>
             <span className="pref-range">
@@ -131,6 +192,12 @@ export function SuggestionsPane({
           </Row>
         </Group>
       </Section>
+      <AiSections
+        settings={settings}
+        update={update}
+        latest={latest}
+        onPaneChange={onPaneChange}
+      />
       <Section
         title="Timing"
         description="How long TypeNext waits before it offers a suggestion, and other small delays."
@@ -217,6 +284,12 @@ export function SuggestionsPane({
         title="Instructions"
         description="Applied to every model with the chosen length. They never change your text by themselves."
       >
+        <InstructionTemplates
+          value={settings.suggestionInstructions}
+          onChoose={suggestionInstructions =>
+            update({ suggestionInstructions })
+          }
+        />
         <label className="pref-field-label" htmlFor="suggestion-instructions">
           Suggestion instructions
         </label>
@@ -235,5 +308,153 @@ export function SuggestionsPane({
         </p>
       </Section>
     </>
+  )
+}
+
+function AiSections({ settings, update, latest, onPaneChange }: PaneProps) {
+  const engine = aiEngine({
+    ...settings,
+    ai: { ...settings.ai, selectionActions: true },
+  })
+  const patch = (next: Partial<PaneProps['settings']['ai']>) =>
+    update({ ai: { ...latest().ai, ...next } })
+  return (
+    <>
+      <Section
+        title="Edit with AI"
+        description="Select text, then choose Polish, Fix grammar, Rewrite, Paraphrase, Shorter or Longer. You see every change before it enters the page."
+      >
+        <Group>
+          <SwitchRow
+            label="AI actions for selected text"
+            description={
+              engine
+                ? `Written by ${engine.label}. The selection and a little text around it are sent.`
+                : 'Activate a chat model in Models to use them. Local recall and the built-in model cannot edit text.'
+            }
+            checked={settings.ai.selectionActions}
+            onChange={selectionActions => patch({ selectionActions })}
+          />
+          <Row
+            label="Open them with"
+            description="Or click ✦ AI on the format bar."
+          >
+            <button
+              type="button"
+              className="pref-keys-button"
+              onClick={() => onPaneChange('shortcuts')}
+              title="Change in Shortcuts"
+            >
+              {shortcutKeys(settings.shortcuts.aiActions).map((key, index) => (
+                <kbd key={index}>{key}</kbd>
+              ))}
+              <ArrowRight size={13} aria-hidden="true" />
+            </button>
+          </Row>
+        </Group>
+      </Section>
+      <Section
+        title="While AI works"
+        description="A small animation at the cursor and in the status bar while a model thinks."
+      >
+        <TileGroup<AiIndicatorStyle>
+          label="Animation while AI works"
+          className="pref-pulse-tiles"
+          value={settings.ai.indicator}
+          onChange={indicator => patch({ indicator })}
+          options={[
+            ...PULSE_STYLES.map(style => ({
+              value: style.id,
+              title: style.name,
+              description:
+                style.id === 'orb'
+                  ? `${style.description}. The default.`
+                  : style.description,
+              icon: <AiPulse style={style.id} instant />,
+            })),
+            {
+              value: 'off' as const,
+              title: 'Off',
+              description: 'Only words in the status bar',
+              icon: <Ban size={15} />,
+            },
+          ]}
+        />
+      </Section>
+    </>
+  )
+}
+
+/**
+ * Starting points for the instructions. Choosing one fills the field; text
+ * the writer had is one click away with Undo. A template edited later is no
+ * longer marked as chosen.
+ */
+function InstructionTemplates({
+  value,
+  onChoose,
+}: {
+  value: string
+  onChoose(text: string): void
+}) {
+  const [previous, setPrevious] = useState<{
+    text: string
+    name: string
+  } | null>(null)
+  const chosen = INSTRUCTION_TEMPLATES.find(
+    template => template.text === value.trim()
+  )
+  return (
+    <div className="pref-templates">
+      <div className="pref-templates-head">
+        <span className="pref-field-label">Start from a template</span>
+        {previous && (
+          <span className="pref-templates-undo" role="status">
+            Using {previous.name}.
+            <button
+              type="button"
+              className="pref-aside-link"
+              onClick={() => {
+                onChoose(previous.text)
+                setPrevious(null)
+              }}
+            >
+              Undo
+            </button>
+          </span>
+        )}
+      </div>
+      <div
+        className="pref-templates-list"
+        role="group"
+        aria-label="Instruction templates"
+      >
+        {INSTRUCTION_TEMPLATES.map(template => (
+          <button
+            key={template.id}
+            type="button"
+            className="pref-template"
+            aria-pressed={chosen?.id === template.id}
+            title={template.text}
+            onClick={() => {
+              if (chosen?.id === template.id) return
+              // Offer Undo only when it would bring back the writer's own text.
+              setPrevious(
+                value.trim() &&
+                  !INSTRUCTION_TEMPLATES.some(
+                    item => item.text === value.trim()
+                  )
+                  ? { text: value, name: template.name }
+                  : previous && { ...previous, name: template.name }
+              )
+              onChoose(template.text)
+            }}
+          >
+            <strong>{template.name}</strong>
+            <small>{template.hint}</small>
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }

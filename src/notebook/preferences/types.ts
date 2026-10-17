@@ -8,6 +8,7 @@ export type PreferencePane =
   | 'knowledge'
   | 'web'
   | 'sync'
+  | 'history'
   | 'dictation'
   | 'updates'
   | 'shortcuts'

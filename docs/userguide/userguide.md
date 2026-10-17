@@ -16,22 +16,24 @@ This guide tells you how to use each feature. It applies to the desktop app on m
 ## Contents
 
 1. [Get started](#get-started)
-2. [Notes](#notes)
+2. [Notes](#notes) — including [Workspaces](#workspaces), [Folders](#folders) and [Tags](#tags)
 3. [Write in the editor](#write-in-the-editor)
 4. [The insert menu](#the-insert-menu)
 5. [Links and the note graph](#links-and-the-note-graph)
 6. [Context](#context)
 7. [Suggestions](#suggestions)
-8. [Semantic search](#semantic-search)
-9. [Web facts](#web-facts)
-10. [Dictation](#dictation)
-11. [Zen mode](#zen-mode)
-12. [Model downloads and Hugging Face](#model-downloads-and-hugging-face)
-13. [Git sync](#git-sync)
-14. [Preferences](#preferences)
-15. [Keyboard shortcuts](#keyboard-shortcuts)
-16. [Privacy summary](#privacy-summary)
-17. [Troubleshooting](#troubleshooting)
+8. [Edit with AI](#edit-with-ai)
+9. [Semantic search](#semantic-search)
+10. [Web facts](#web-facts)
+11. [Dictation](#dictation)
+12. [Zen mode](#zen-mode)
+13. [Model downloads and Hugging Face](#model-downloads-and-hugging-face)
+14. [Git sync](#git-sync)
+15. [History](#history)
+16. [Preferences](#preferences)
+17. [Keyboard shortcuts](#keyboard-shortcuts)
+18. [Privacy summary](#privacy-summary)
+19. [Troubleshooting](#troubleshooting)
 
 ## Get started
 
@@ -91,12 +93,59 @@ To set an objective or background for the note, use the **Intent** section of th
 - Select a note in **Your notes** to open it in a tab.
 - Press Ctrl/⌘ B to show or hide the notes sidebar.
 
+### Workspaces
+
+A workspace is a separate set of notes, folders, tags and contexts, like a profile in a browser. Your notebook starts with one workspace, **Personal**.
+
+- The switcher at the bottom left shows the open workspace, its number of notes and where suggestions come from (**Local by default**, or the active provider). Select it to switch.
+- Press ⌘ ⌥ 1 to 9 (Ctrl+Alt+1 to 9) to open a workspace by its place in the switcher. The command palette also lists your workspaces.
+- Switching keeps each workspace's tabs. A workspace opens where you left it, or at its latest note.
+- To create one, open the switcher and select **New workspace**. Type a name and press Enter. A fitting icon is chosen from the name ("Work" gets a briefcase, "Novel" a book); otherwise the workspace shows its first letter.
+- To choose an icon, open **Manage workspaces** and select the workspace's large icon. Find one by name, or choose **First letter**.
+
+**Shared workspaces.** A shared workspace's notes, folders and tags appear in every other workspace, under their own heading in the sidebar. Use one for a handbook, templates or reference notes. Select **New shared workspace**, or turn on **Share with every workspace** in **Manage workspaces**. You can have several. Select **+** on a shared workspace's heading to write a note in it.
+
+**Move notes.** Select **⋯ → Move to workspace…** on a note or folder, or drag it onto a shared workspace's heading. A folder moves with its notes and subfolders.
+
+**Contexts.** A context belongs to the workspace where you created it. To use it in other workspaces too, open **Contexts**, choose the context and select the workspaces under **Available in**.
+
+**Git.** Each workspace can sync to its own repository. In **Manage workspaces**, select a workspace and **Choose folder**. The first workspace uses the folder in **Preferences → Sync**. Git sync must be on.
+
+**Manage workspaces** (from the switcher or the command palette) also renames and recolours a workspace, and removes one. When you remove a workspace, you choose whether its notes move to another workspace or are deleted with it. Your last workspace cannot be removed.
+
+Preferences are the same in every workspace.
+
+### Folders
+
+Folders keep related notes together. A folder can hold notes and other folders.
+
+- To create a folder, select the folder button next to **Your notes**. Type a name and press Enter.
+- To write a note in a folder, point to the folder and select **+**.
+- To move a note, drag it onto a folder, or onto **Your notes** for the top level. You can also select **⋯ → Move to…** on the note, or the folder name under the note's title.
+- To open or close a folder, select it. TypeNext remembers which folders are closed.
+- Select **⋯** on a folder for **New note here**, **New folder inside**, **Rename**, **Move to…**, a colour and **Remove folder**. Double-click a folder to rename it.
+
+Removing a folder never deletes notes. Its notes and folders move up one level. The toolbar shows the folder of the open note, for example **Notebook › Retreat › Arrival day**.
+
+### Tags
+
+A note can have up to 64 tags. A tag has a name and a colour.
+
+1. Under the note's title, select **Add a tag**.
+2. Type a name. Choose a tag from the list, or select **Create “name”**. Press Enter to add, and Escape to close.
+
+- To remove a tag from a note, select **×** on the tag.
+- To see the notes with a tag, select the tag above **Your notes**. Select **×** to show all notes again.
+- To rename, recolour or delete tags, select **Manage tags** (the tag button above **Your notes**, or **Manage tags** in the tag list). Renaming a tag to the name of another tag merges them. Deleting a tag removes it from every note; the notes stay.
+
+**Find a note** also matches tag names.
+
 ### Delete a note
 
 1. In **Your notes**, select the delete button of the note.
 2. In **Delete this note?**, select **Delete note**. To keep the note, select **Keep note**.
 
-A Markdown file that you saved before stays on the disk.
+A Markdown file that you saved before stays on the disk. The note's saved versions are deleted with it.
 
 ### Open and save Markdown files
 
@@ -161,6 +210,15 @@ TypeNext aligns the columns each time you move between cells.
 | Link: make the selection a link      | Ctrl/⌘ K |
 
 With Ctrl/⌘ K and selected text, TypeNext writes `[text](https://)` and selects the address. When the selection is an address, it writes `[](address)` and puts the cursor in the brackets.
+
+### Find and replace
+
+Press ⌘ F (Ctrl+F) to find in the open note. A small bar floats at the top of the page and stays there while you scroll. Selected text becomes the search.
+
+- Matches light up as you type, and the bar shows **3 of 12**. Press Enter for the next match and Shift+Enter for the previous one.
+- **Match case** (⌥ C), **Whole word** (⌥ W) and **Pattern** (⌥ R, a regular expression) refine the search.
+- Press ⌘ ⌥ F (Ctrl+Alt+F), or select **›** in the bar, to replace. Enter replaces the selected match and moves to the next one. ⌘ Enter (Ctrl+Enter) or **All** replaces every match at once; one ⌘ Z (Ctrl+Z) undoes it. With **Pattern**, the replacement can use `$1`, `$2` and so on.
+- Press Escape to close the bar and return to the writing.
 
 ### Writing flow
 
@@ -251,6 +309,8 @@ Letters, numbers and spaces are not permitted. To turn the menu off, turn off **
 
 Write a Markdown link (`[text](https://example.com)`) or an address. To open a link, Ctrl/⌘-click it, or put the cursor on it and press Alt+Enter.
 
+When the cursor is somewhere else, a link shows only its text: `[the house guide](https://…)` reads as **the house guide**, and `[[Packing list|what to pack]]` as **what to pack**. A long address shows as its site and last part, for example `example.com/…/arrival-information`. Click a link to put the cursor in it: the full Markdown appears so that you can edit it. The Markdown in the note does not change. To always see the full Markdown, turn off **Preferences → Editor → Show links as their text**.
+
 ### Note links
 
 A note link connects two notes.
@@ -278,7 +338,8 @@ Put the pointer on a link to see a card:
 
 - A note card shows the opening lines of the note, the last edit and the number of notes that link to it. Select **Open note**.
 - A card for a missing note shows **Not written yet**. Select **Create “Title”**.
-- A website card shows the address. With **Notes & web**, it also shows the page title and description. Select **Open link**.
+- A website card shows the address. With **Notes & web**, it also shows the page title and description. Select **Open link**, **Copy** (the address), **Edit** (selects the address) or **Unlink** (keeps the text and removes the link).
+- A note card also has **Unlink**.
 
 To choose the cards, go to **Preferences → Editor → Link previews**:
 
@@ -397,6 +458,15 @@ A direct reference belongs to one note only. Under **Direct references**, select
 
 Images and videos show a thumbnail. Videos also show their length.
 
+### Use a folder as context
+
+A folder of notes can be a live reference for a note:
+
+1. Open the Context panel and select **Use a folder**.
+2. Choose a folder.
+
+Every note in the folder and its subfolders is included, the 64 most recently edited first. A note that you add to the folder later is included at once. To stop, select **×** on the folder in the Context panel.
+
 ### Find in attached context
 
 1. Expand **Find in attached context**.
@@ -491,9 +561,9 @@ Go to **Preferences → Suggestions**:
 
 - **Inline suggestions**: turn suggestions on or off.
 - **Suggest after a pause**: when off, suggestions come only from Ctrl/⌘ Space.
-- **Suggestion length**: **Adapt to the sentence**, **Just a few words** or **Up to one sentence**.
+- **Suggestion length**: **Adapt** (a word inside a sentence, a phrase mid-line, a sentence after a full stop), **Few words**, **Sentence** or **Custom**. With **Custom**, a slider sets the most words in one suggestion, from 1 to 60. Table cells and headings stay short.
 - **Creativity**: from **Stay close** to **Explore a little**.
-- **Suggestion instructions**: your own instructions for all models, up to 2,000 characters.
+- **Suggestion instructions**: your own instructions for all models, up to 2,000 characters. **Start from a template** offers twelve starting points: **Keep my voice**, **Clear and concise**, **Technical writing**, **Architecture notes**, **Fiction**, **Essays and articles**, **Academic**, **Business and email**, **Meeting notes**, **Plain English**, **Poetry** and **British English**. Choosing one fills the field; edit it as you like. If you had your own text, **Undo** brings it back.
 
 **Timing**:
 
@@ -508,6 +578,25 @@ TypeNext does not offer automatic suggestions inside a web address, a link desti
 Suggestions follow the structure at the cursor. In a heading, a suggestion completes the heading on the same line. In a list item or a task, it completes only that item. In a table cell, it adds a few words and never adds a pipe or a row. The model also receives the name of the section that the cursor is in.
 
 To pause suggestions for a short time, select the suggestion status in the status bar.
+
+## Edit with AI
+
+Select text and ask a model to change it. You see every change before it enters the page, and one undo brings the text back.
+
+You need an active chat model: an external provider, or a local server with a chat model. Local recall, the built-in model and native FIM servers cannot edit text, so the actions do not appear with them.
+
+1. Select some text. Without a selection, the paragraph at the cursor is used.
+2. Select **✦ AI** on the format bar, or press ⌘ J (Ctrl+J).
+3. Choose **Polish**, **Fix grammar**, **Rewrite**, **Paraphrase**, **Make shorter** or **Make longer**. Or type your own request, for example "Translate to French", and press Enter.
+4. The proposal shows the changes word by word: removed words are struck through, added words are marked. Select **Replace** (Enter), **Try again** (R), **Copy** or **Discard** (Escape).
+
+The selection, about 600 characters before it, 300 characters after it and the note title are sent to the model. The panel shows which model writes the edit. With **History** on, TypeNext keeps the text from before each replacement. See [History](#history).
+
+To turn the actions off, go to **Preferences → Suggestions → AI actions for selected text**.
+
+### While a model works
+
+A small animation plays at the cursor and in the status bar while a suggestion or an edit is on its way. Choose it in **Preferences → Suggestions → While AI works**: **Orb** (a colourful sphere, the default), **Spark**, **Bloom**, **Firefly**, **Ink**, **Scribble**, **Orbit**, **Dots** or **Off**. Orb, Spark and Bloom use their own colours and read on any page colour; the others use your palette's accent. With reduced motion turned on in the system, the animation stays still.
 
 ## Semantic search
 
@@ -774,6 +863,32 @@ In **Preferences → Updates**:
 
 On Windows, the installer shows a short progress window, then TypeNext opens again. Version 0.2.0 and earlier cannot update themselves: download 0.3.0 once from the releases page.
 
+## History
+
+History keeps versions of each note on this device, without Git. It is off until you turn it on in **Preferences → History**.
+
+### When versions are kept
+
+- **Automatic**: when writing pauses after a meaningful change, and when you leave a note or the window.
+- **Manual**: only when you select **Save this version** or press ⌘ ⌥ S (Ctrl+Alt+S).
+
+**Changed text** sets how much must change before a pause becomes a version, from a sentence to a few paragraphs. **Time between automatic versions** sets the shortest time between two automatic versions. **Versions kept per note** sets the limit. Older automatic versions thin out to one an hour after a day, and one a day after a week. Named and pinned versions are always kept.
+
+**Safety copies** keep the text from just before an AI edit, a restore and a large deletion.
+
+### Compare and restore
+
+Select the clock button in the toolbar, or press ⌘ ⌥ H (Ctrl+Alt+H).
+
+- The timeline on the left lists versions by day, with the words added and removed. **Current text** marks a version that matches the note now.
+- Drag the slider at the top to move through time. The arrow keys move through the timeline.
+- **Changes since** shows what changed between the version and the note now. **What changed here** shows what the version itself changed. **Read** shows the version's text.
+- To bring back part of a version, select the part's box and **Bring back parts**, or select **Bring back this part**.
+- To make a version the current text, select **Restore this version**. Press ⌘ Z (Ctrl+Z) in the note to undo it.
+- Name, pin or delete a version with the buttons above it.
+
+Before a restore or a merge, TypeNext keeps your text as a safety copy. Versions are not part of Git sync or exported Markdown. To delete all of them, go to **Preferences → History → Delete all versions**.
+
 ## Preferences
 
 Press Ctrl/⌘ , or select **Preferences** in the sidebar.
@@ -781,14 +896,15 @@ Press Ctrl/⌘ , or select **Preferences** in the sidebar.
 | Pane            | Settings                                                                                                                                            |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Writing**     | **Typeface**, **Size (px)**, **Theme** (System, Light, Dark), colour palettes, **Zen mode**, **Autosave**.                                          |
-| **Editor**      | **Insert menu**, **Trigger character**, **Custom commands**, **Live preview**, **Link previews**.                                                   |
-| **Suggestions** | **Inline suggestions**, **Suggest after a pause**, **Suggestion length**, **Creativity**, **Timing**, **Suggestion instructions**.                   |
+| **Editor**      | **Insert menu**, **Trigger character**, **Custom commands**, **Live preview**, **Show links as their text**, **Link previews**.                     |
+| **Suggestions** | **Inline suggestions**, **Suggest after a pause**, **Suggestion length**, **Creativity**, **Edit with AI**, **While AI works**, **Timing**, **Suggestion instructions**. |
 | **Models**      | The active engine, **On this device**, **External providers**, keys, saved models, **Model downloads**.                                             |
 | **Knowledge**   | **Semantic search**, **Run with**, **Vector size**, **Images, audio and video**, **Website importer**.                                              |
 | **Web facts**   | **Web facts**, **Also ground Ctrl / ⌘ Space choices with web facts**, **Search model**.                                                             |
+| **History**     | **Keep revisions of my notes**, **New versions**, **Changed text**, **Time between automatic versions**, **Versions kept per note**, **Safety copies**, storage. |
 | **Sync**        | **Folder**, **Sync notes with Git**, **Sync after writing pauses**, **Wait after writing**, **Look for remote changes**, **Send commits to the remote**. |
 | **Updates**     | The installed version, **Check now**, **Check for updates automatically**, **Download updates in the background**.                                  |
-| **Shortcuts**   | A list of keyboard shortcuts.                                                                                                                       |
+| **Shortcuts**   | **Your keys** for suggestions, accepting a word and AI actions, then a list of keyboard shortcuts.                                                |
 
 **Models** starts with the active engine card. It shows **Suggestions come from**, the engine and **On this device** or **External**.
 
@@ -797,6 +913,8 @@ Press Ctrl/⌘ , or select **Preferences** in the sidebar.
 ## Keyboard shortcuts
 
 Global shortcuts do nothing while a dialog is open.
+
+To change the keys for **Suggest at the cursor**, **Accept one word** and **AI actions for the selection**, go to **Preferences → Shortcuts → Your keys**. Select a key and press the new combination. A combination that TypeNext already uses is refused with the reason. Escape cancels; the reset button brings the default back.
 
 ### Notes and window
 
@@ -815,6 +933,9 @@ Global shortcuts do nothing while a dialog is open.
 | Leave zen mode              | Escape    | Escape            |
 | Note graph                  | ⌘ Shift G | Ctrl+Shift+G      |
 | Dictation start or stop     | ⌘ Shift D | Ctrl+Shift+D      |
+| Save this version (History) | ⌘ ⌥ S     | Ctrl+Alt+S        |
+| Open workspace 1 to 9       | ⌘ ⌥ 1–9   | Ctrl+Alt+1–9      |
+| Open History                | ⌘ ⌥ H     | Ctrl+Alt+H        |
 
 ### Editor
 
@@ -824,10 +945,13 @@ Global shortcuts do nothing while a dialog is open.
 | Note link                              | `[[`      | `[[`              |
 | Italic                                 | ⌘ I       | Ctrl+I            |
 | Link                                   | ⌘ K       | Ctrl+K            |
+| Find in the note                       | ⌘ F       | Ctrl+F            |
+| Find and replace                       | ⌘ ⌥ F     | Ctrl+Alt+F        |
 | Toggle a task                          | ⌘ Enter   | Ctrl+Enter        |
 | Open the link at the cursor            | ⌥ Enter   | Alt+Enter         |
 | Open a link with the pointer           | ⌘-click   | Ctrl+click        |
 | Search the web for facts               | ⌘ Shift K | Ctrl+Shift+K      |
+| AI actions for the selection           | ⌘ J       | Ctrl+J            |
 | Next table cell, indent list item      | Tab       | Tab               |
 | Previous table cell, outdent list item | Shift Tab | Shift+Tab         |
 
@@ -851,6 +975,8 @@ Global shortcuts do nothing while a dialog is open.
 | Semantic search                                             | Nothing. The embedding server runs on your computer. The model downloads once. |
 | Dictation                                                   | Nothing. The model downloads once.                                             |
 | External provider (active)                                  | Nearby writing, objective, instructions and relevant attached context.         |
+| Edit with AI (on request)                                   | The selection, a little text around it and the note title, to the active model. |
+| History                                                     | Nothing. Versions stay on this device.                                         |
 | Web facts (on request)                                      | Selected text, nearby writing, note title and objective, to OpenAI.            |
 | Link previews (**Notes & web**)                             | A request to the linked website. No note text.                                 |
 | Git sync                                                    | Notes as Markdown files, to the Git remote that you choose.                    |
@@ -865,7 +991,8 @@ On the desktop, keys stay in memory unless you select **Remember in the device c
 | Problem                                                              | Cause and remedy                                                                                                                                           |
 | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | No suggestions appear.                                               | Make sure that **Inline suggestions** is on and the status bar does not show **Suggestions paused**. Press Ctrl/⌘ Space.                                   |
-| ⌘ Space opens Spotlight on macOS.                                    | macOS uses ⌘ Space for Spotlight by default. Change the Spotlight shortcut in macOS System Settings, or use **Suggest a continuation** in the insert menu. |
+| ⌘ Space opens Spotlight on macOS.                                    | macOS uses ⌘ Space for Spotlight by default. Choose another key in **Preferences → Shortcuts → Your keys**, change the Spotlight shortcut in macOS System Settings, or use **Suggest a continuation** in the insert menu. |
+| **✦ AI** is missing from the format bar.                             | Activate a chat model in **Preferences → Models**, and turn on **AI actions for selected text** in **Preferences → Suggestions**.                     |
 | Hugging Face refuses a model download.                               | Add a read token. See [Model downloads and Hugging Face](#model-downloads-and-hugging-face).                                                                |
 | Git sync shows **Git sync needs attention**.                         | Select the sync line in the sidebar to open **Preferences → Sync**. Make sure that Git is installed, the folder exists, and your Git sign-in works.          |
 | Cloudflare returns no models.                                        | Make sure that **Account ID** is correct and that the token has the **Workers AI** permission.                                                              |

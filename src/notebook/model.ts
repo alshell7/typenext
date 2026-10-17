@@ -63,8 +63,15 @@ export function defaultEditorSettings(): EditorSettings {
     zenFocus: true,
     smartTypography: true,
     dailyGoal: 0,
+    foldLinks: true,
   }
 }
+
+export const DEFAULT_SHORTCUTS = {
+  suggest: 'Mod-Space',
+  acceptWord: 'Mod-ArrowRight',
+  aiActions: 'Mod-j',
+} as const
 
 export function defaultSettings(): NotebookSettings {
   return {
@@ -84,6 +91,7 @@ export function defaultSettings(): NotebookSettings {
     suggestionDelay: 1100,
     maxTokens: 64,
     suggestionLength: 'adaptive',
+    suggestionWords: 0,
     provider: 'local',
     externalAutoEnabled: false,
     suggestionInstructions: '',
@@ -109,6 +117,16 @@ export function defaultSettings(): NotebookSettings {
       voiceCommands: true,
     },
     updates: { autoCheck: true, autoDownload: true },
+    ai: { selectionActions: true, indicator: 'orb' },
+    shortcuts: { ...DEFAULT_SHORTCUTS },
+    revisions: {
+      enabled: false,
+      mode: 'automatic',
+      minChanges: 240,
+      minMinutes: 10,
+      keep: 100,
+      safetyNet: true,
+    },
     timing: {
       adaptiveDelay: true,
       minCharacters: 0,
@@ -178,6 +196,9 @@ export function normalizeWorkspace(value: Workspace): Workspace {
     dictation: { ...defaults.dictation, ...value.settings?.dictation },
     timing: { ...defaults.timing, ...value.settings?.timing },
     updates: { ...defaults.updates, ...value.settings?.updates },
+    ai: { ...defaults.ai, ...value.settings?.ai },
+    shortcuts: { ...defaults.shortcuts, ...value.settings?.shortcuts },
+    revisions: { ...defaults.revisions, ...value.settings?.revisions },
   }
   settings.fontSize = Math.min(
     32,

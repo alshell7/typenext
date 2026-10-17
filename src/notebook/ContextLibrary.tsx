@@ -18,6 +18,7 @@ import type {
   ContextPackage,
   ContextSource,
   Note,
+  NoteSpace,
   NotebookSettings,
 } from '../types/notebook'
 import { Modal } from './Modal'
@@ -84,7 +85,12 @@ export interface ContextLibraryProps {
   /** Enables the media setup hint when semantic media search is off. */
   settings?: NotebookSettings
   onOpenKnowledgeSettings?(): void
+  /** With more than one workspace: where each context is available. */
+  spaces?: NoteSpace[]
+  onShareSpaces?(packageId: string, spaceIds: string[]): void
 }
+
+const NO_SPACES: NoteSpace[] = []
 
 function sourceKind(source: ContextSource) {
   if (source.kind === 'note') return 'Live note'
@@ -123,6 +129,8 @@ export function ContextLibrary({
   onUseNote,
   settings,
   onOpenKnowledgeSettings,
+  spaces = NO_SPACES,
+  onShareSpaces,
 }: ContextLibraryProps) {
   const fileInput = useRef<HTMLInputElement>(null)
   const folderInput = useRef<HTMLInputElement | null>(null)
@@ -647,6 +655,41 @@ export function ContextLibrary({
                   <Trash2 size={14} />
                 </button>
               </div>
+              {spaces.length > 1 && onShareSpaces && (
+                <div
+                  className="context-spaces"
+                  role="group"
+                  aria-label="Workspaces that can use this context"
+                >
+                  <span>Available in</span>
+                  {spaces.map(space => {
+                    const on =
+                      !selected.spaceIds?.length ||
+                      selected.spaceIds.includes(space.id)
+                    return (
+                      <button
+                        key={space.id}
+                        type="button"
+                        className={`context-space-chip org-${space.color}`}
+                        aria-pressed={on}
+                        onClick={() => {
+                          const current = selected.spaceIds?.length
+                            ? selected.spaceIds
+                            : spaces.map(item => item.id)
+                          const next = on
+                            ? current.filter(id => id !== space.id)
+                            : [...current, space.id]
+                          // A context is always available somewhere.
+                          if (next.length) onShareSpaces(selected.id, next)
+                        }}
+                      >
+                        <span className="org-dot" aria-hidden="true" />
+                        {space.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <p className="context-library-help">
                 {selectedUsage
                   ? `Used in ${selectedUsage} ${selectedUsage === 1 ? 'note' : 'notes'}. Changes to this context follow every attached note.`

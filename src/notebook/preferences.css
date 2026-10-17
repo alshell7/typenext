@@ -258,56 +258,6 @@
   opacity: 0.55;
 }
 
-/* Switch */
-input[type='checkbox'].pref-switch {
-  -webkit-appearance: none;
-  appearance: none;
-  position: relative;
-  width: 34px;
-  height: 20px;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--line);
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: background-color 180ms ease-out;
-}
-.pref-switch::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--paper);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 22%),
-    0 0 0 0.5px rgb(0 0 0 / 6%);
-  transition:
-    transform 200ms var(--pref-ease, ease-out),
-    background-color 180ms ease-out;
-}
-:root[data-theme='dark'] .pref-switch::before {
-  background: var(--secondary);
-}
-input[type='checkbox'].pref-switch:checked {
-  background: var(--accent-fill);
-}
-.pref-switch:checked::before,
-:root[data-theme='dark'] .pref-switch:checked::before {
-  transform: translateX(14px);
-  background: var(--on-accent);
-}
-.pref-switch:focus {
-  box-shadow: none;
-}
-.pref-switch:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 .pref-switch:disabled {
   opacity: 0.45;
   cursor: default;
@@ -1677,4 +1627,181 @@ input[type='checkbox'].pref-switch:checked {
   margin: 0;
   color: var(--ink);
   overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- Keys */
+.pref-shortcut-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 56px;
+  padding: 10px 10px 10px 14px;
+}
+.pref-shortcut-field + .pref-shortcut-field {
+  border-top: 1px solid var(--line);
+}
+.pref-shortcut-controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+.pref-shortcut-button,
+.pref-keys-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 112px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper);
+  transition:
+    border-color 140ms ease-out,
+    box-shadow 140ms ease-out,
+    background-color 140ms ease-out;
+}
+.pref-keys-button {
+  min-width: 0;
+  color: var(--secondary);
+}
+.pref-shortcut-button:hover,
+.pref-keys-button:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.pref-shortcut-button kbd,
+.pref-keys-button kbd {
+  min-width: 22px;
+  text-align: center;
+}
+.pref-shortcut-button.is-recording {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.pref-shortcut-listening {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pref-shortcut-listening > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pref-listening 1.1s ease-in-out infinite;
+}
+@keyframes pref-listening {
+  50% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+.pref-shortcut-problem {
+  color: var(--error);
+}
+.pref-inline-confirm {
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* ---------------------------------------------------------------- AI pulse tiles */
+.pref-pulse-tiles {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.pref-pulse-tiles .pref-tile {
+  min-height: 112px;
+}
+.pref-pulse-tiles .pref-tile-icon {
+  display: grid;
+  place-items: center;
+  min-width: 62px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+}
+.pref-pulse-tiles .pref-tile[aria-checked='true'] .pref-tile-icon {
+  background: var(--accent-soft);
+}
+/* Only the host becomes a block. Each animation keeps its own display, or
+   the dots (a flex row) lose their size and disappear. */
+.pref-pulse-tiles .pref-tile-icon .ai-pulse-host {
+  display: block;
+  line-height: 0;
+}
+.pref-pulse-tiles .pref-tile-icon .ai-pulse {
+  scale: 1.35;
+}
+@media (max-width: 640px) {
+  .pref-pulse-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Instruction templates */
+.pref-templates {
+  margin-bottom: 14px;
+}
+.pref-templates-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pref-templates-undo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  animation: pref-pane-in 200ms var(--pref-ease) both;
+}
+.pref-templates-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+.pref-template {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper);
+  text-align: left;
+  transition:
+    border-color 120ms ease-out,
+    background-color 120ms ease-out,
+    transform 160ms var(--pref-ease);
+}
+.pref-template:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  transform: translateY(-1px);
+}
+.pref-template[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.pref-template strong {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pref-template small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

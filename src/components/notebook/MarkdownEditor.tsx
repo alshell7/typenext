@@ -1,4 +1,23 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import {
+  currentMatch,
+  findField,
+  findNext,
+  findTools,
+  replaceAll as replaceAllMatches,
+  replaceNext,
+  revealFirst,
+  setFindQuery,
+} from './find'
+import { FindBar, type FindControls, type FindInfo } from './FindBar'
+import { createPortal, flushSync } from 'react-dom'
 import {
   Compartment,
   EditorSelection,
@@ -37,6 +56,7 @@ import {
 } from '../../services/builtin-engine'
 import { STORAGE_LIMITS } from '../../services/storage'
 import type {
+  AiActionId,
   CursorContext,
   Note,
   NotebookSettings,
@@ -99,6 +119,18 @@ import {
 } from './suggestion-menu'
 
 import {
+  aiPendingField,
+  aiShortcut,
+  aiTools,
+  closeAiActions,
+  openAiActions,
+  setAiPending,
+  type AiHost,
+} from './ai-actions'
+import { aiEngine, runTextAction } from '../../services/text-actions'
+import { shortcutSpeech } from '../../notebook/shortcuts'
+import { DEFAULT_SHORTCUTS } from '../../notebook/model'
+import {
   dictationAnchorField,
   dictationAnchorDecoration,
   dictationFinished,
@@ -127,6 +159,12 @@ export interface MarkdownEditorHandle {
   requestWebFacts(): void
   /** Move the cursor to a position and show it near the top of the window. */
   jumpTo(pos: number): void
+  /** Open the AI actions for the selection, or run one directly. */
+  openAiActions(action?: AiActionId): boolean
+  /** Replace the whole note as one undoable step (restoring a version). */
+  replaceDocument(text: string): boolean
+  /** Open the find bar, or find and replace. */
+  openFind(mode?: 'find' | 'replace'): void
 }
 
 interface MarkdownEditorProps {
@@ -143,16 +181,44 @@ interface MarkdownEditorProps {
   onAction?(action: EditorAction): void
   /** Full zen: typewriter scrolling and paragraph focus when allowed. */
   zenFull?: boolean
+  /** Before an AI edit replaces text: a chance to keep the text as it was. */
+  onBeforeAiReplace?(label: string): void
 }
 
 interface EditorControls {
   invalidate(): void
   request(provider?: ProviderId): void
   webFacts(): void
+  ai: AiHost
 }
 
 const EMPTY_NOTES: Note[] = []
 const livePreviewCompartment = new Compartment()
+const shortcutCompartment = new Compartment()
+
+function shortcutKeymap(
+  shortcuts: NotebookSettings['shortcuts'] | undefined,
+  request: () => void,
+  ai: AiHost
+): Extension {
+  const keys = { ...DEFAULT_SHORTCUTS, ...shortcuts }
+  return keymap.of([
+    {
+      key: keys.suggest,
+      run: () => {
+        request()
+        return true
+      },
+      preventDefault: true,
+      stopPropagation: true,
+    },
+    {
+      key: keys.acceptWord,
+      run: editor => acceptInlineSuggestion(editor, 'word'),
+    },
+    aiShortcut(ai, keys.aiActions),
+  ])
+}
 
 export function openExternalUrl(url: string) {
   if (!/^(?:https?:|mailto:)/iu.test(url)) return
@@ -421,6 +487,107 @@ export const MarkdownEditor = forwardRef<
   propsRef.current = props
   const noteId = props.note.id
   const lastRequestToken = useRef(props.requestToken)
+  const [find, setFind] = useState<{
+    mode: 'find' | 'replace'
+    initial: string
+    token: number
+  } | null>(null)
+  const [findInfo, setFindInfo] = useState<FindInfo>({ index: -1, total: 0 })
+  // The bar lives at the top of the scrolling page, above the writing.
+  const [findHost, setFindHost] = useState<HTMLElement | null>(null)
+  const findHostRef = useRef<HTMLElement | null>(null)
+  const removeFindHost = () => {
+    findHostRef.current?.remove()
+    findHostRef.current = null
+  }
+  useEffect(() => removeFindHost, [])
+  const findOpen = useRef(false)
+  findOpen.current = find !== null
+  /** Where the cursor was when the find bar opened: typing searches from here. */
+  const findStart = useRef(0)
+  const openFindRef = useRef<(mode: 'find' | 'replace') => void>(() => {})
+  openFindRef.current = mode => {
+    const view = viewRef.current
+    if (!view) return
+    const range = view.state.selection.main
+    const selected = view.state.sliceDoc(range.from, range.to)
+    const initial =
+      selected && selected.length <= 200 && !selected.includes('\n')
+        ? selected
+        : ''
+    if (!findOpen.current) findStart.current = range.from
+    if (!findHostRef.current) {
+      const scroller = containerRef.current?.closest('.document-scroll')
+      const host = document.createElement('div')
+      host.className = 'find-host'
+      ;(scroller ?? containerRef.current?.parentElement)?.prepend(host)
+      findHostRef.current = host
+    }
+    const host = findHostRef.current
+    // Render now, so the field has focus before the next key arrives.
+    flushSync(() => {
+      setFindHost(host)
+      setFind(previous => ({
+        mode,
+        initial,
+        token: (previous?.token ?? 0) + 1,
+      }))
+    })
+  }
+  const reportFind = useRef<(view: EditorView) => void>(() => {})
+  reportFind.current = view => {
+    const state = view.state.field(findField)
+    setFindInfo(previous => {
+      const next: FindInfo = {
+        index: currentMatch(view.state),
+        total: state.matches.length,
+        ...(state.truncated ? { truncated: true } : {}),
+        ...(state.error ? { error: state.error } : {}),
+      }
+      return previous.index === next.index &&
+        previous.total === next.total &&
+        previous.error === next.error &&
+        previous.truncated === next.truncated
+        ? previous
+        : next
+    })
+  }
+  const findControls = useMemo<FindControls>(
+    () => ({
+      setQuery(query, reveal) {
+        const view = viewRef.current
+        if (!view) return
+        view.dispatch({ effects: setFindQuery.of(query) })
+        if (query && reveal) revealFirst(view, findStart.current)
+        reportFind.current(view)
+      },
+      next(direction) {
+        const view = viewRef.current
+        if (!view) return
+        findNext(view, direction)
+        findStart.current = view.state.selection.main.from
+      },
+      replace(text) {
+        const view = viewRef.current
+        if (view) replaceNext(view, text)
+      },
+      replaceAll(text) {
+        const view = viewRef.current
+        return view ? replaceAllMatches(view, text) : 0
+      },
+      close() {
+        setFind(null)
+        setFindHost(null)
+        findHostRef.current?.remove()
+        findHostRef.current = null
+        const view = viewRef.current
+        if (!view) return
+        view.dispatch({ effects: setFindQuery.of(null) })
+        view.focus()
+      },
+    }),
+    []
+  )
 
   const nextConfiguration = configurationSnapshot(props.note, props.settings)
   const configurationRef = useRef(nextConfiguration)
@@ -481,6 +648,54 @@ export const MarkdownEditor = forwardRef<
         })
         view.focus()
       },
+      openFind(mode = 'find') {
+        openFindRef.current(mode)
+      },
+      replaceDocument(text) {
+        const view = viewRef.current
+        if (!view) return false
+        const insert = normalizedDocument(text)
+        const doc = view.state.doc.toString()
+        if (doc === insert) return true
+        // Change only the differing middle, so the cursor and scroll stay.
+        let start = 0
+        while (
+          start < doc.length &&
+          start < insert.length &&
+          doc.charCodeAt(start) === insert.charCodeAt(start)
+        )
+          start++
+        let end = 0
+        while (
+          end < doc.length - start &&
+          end < insert.length - start &&
+          doc.charCodeAt(doc.length - 1 - end) ===
+            insert.charCodeAt(insert.length - 1 - end)
+        )
+          end++
+        const update = view.state.update({
+          changes: {
+            from: start,
+            to: doc.length - end,
+            insert: insert.slice(start, insert.length - end),
+          },
+          annotations: [
+            Transaction.userEvent.of('input.restore'),
+            isolateHistory.of('full'),
+          ],
+          scrollIntoView: true,
+        })
+        if (!update.docChanged) return false
+        view.dispatch(update)
+        return true
+      },
+      openAiActions(action) {
+        const view = viewRef.current
+        const ai = controlsRef.current?.ai
+        if (!view || !ai) return false
+        view.focus()
+        return openAiActions(view, ai, action)
+      },
     }),
     []
   )
@@ -514,6 +729,7 @@ export const MarkdownEditor = forwardRef<
         controller.abort()
       }
       controller = null
+      if (view.state.field(aiPendingField) !== null) clearPending()
       if (clearGhost) {
         const oldSuggestion = view.state.field(inlineSuggestionField)
         const oldMenu = view.state.field(suggestionMenuField)
@@ -705,6 +921,7 @@ export const MarkdownEditor = forwardRef<
       }
 
       emitStatus({ state: 'loading' })
+      showPending()
       enqueueCompletion({
         signal: abort.signal,
         async run() {
@@ -731,8 +948,24 @@ export const MarkdownEditor = forwardRef<
             })
           } finally {
             if (controller === abort) controller = null
+            clearPending()
           }
         },
+      })
+    }
+
+    /** The model-at-work animation at the cursor. */
+    function showPending() {
+      if (view.state.field(aiPendingField) !== null) return
+      view.dispatch({
+        effects: setAiPending.of(view.state.selection.main.head),
+      })
+    }
+
+    function clearPending() {
+      queueMicrotask(() => {
+        if (!disposed && view.state.field(aiPendingField) !== null)
+          view.dispatch({ effects: setAiPending.of(null) })
       })
     }
 
@@ -824,6 +1057,7 @@ export const MarkdownEditor = forwardRef<
         view.state.doc === requestedDoc &&
         view.state.selection.eq(requestedSelection)
       emitStatus({ state: 'loading', message: 'Searching the web…' })
+      showPending()
       void searchWebFacts(
         {
           selection,
@@ -864,6 +1098,7 @@ export const MarkdownEditor = forwardRef<
         })
         .finally(() => {
           if (controller === abort) controller = null
+          clearPending()
         })
     }
 
@@ -990,6 +1225,17 @@ export const MarkdownEditor = forwardRef<
       openNote: id => propsRef.current.onOpenNote?.(id),
       createNote: title => propsRef.current.onCreateNote?.(title),
       openUrl: openExternalUrl,
+      foldLinks: () =>
+        propsRef.current.settings.editor?.foldLinks !== false &&
+        propsRef.current.settings.editor?.livePreview !== false,
+    }
+
+    const aiHost: AiHost = {
+      engine: () => aiEngine(propsRef.current.settings),
+      indicator: () => propsRef.current.settings.ai?.indicator ?? 'orb',
+      run: (request, signal) =>
+        runTextAction(request, propsRef.current.settings, signal),
+      beforeReplace: label => propsRef.current.onBeforeAiReplace?.(label),
     }
 
     const editorSettings = () => propsRef.current.settings.editor
@@ -1007,6 +1253,11 @@ export const MarkdownEditor = forwardRef<
       smartTypography: () => editorSettings()?.smartTypography === true,
       webFacts: () => webFactsAvailable(propsRef.current.settings),
       runWebFacts: () => queueMicrotask(() => webFacts()),
+      aiAvailable: () => aiHost.engine() !== null,
+      openAi: () =>
+        queueMicrotask(() => {
+          if (!disposed) openAiActions(view, aiHost)
+        }),
       linkTitle: url =>
         editorSettings()?.linkPreviews === 'all'
           ? fetchLinkPreview(url).then(preview => preview.title ?? null)
@@ -1051,6 +1302,8 @@ export const MarkdownEditor = forwardRef<
       editorCompletions(editorHost),
       linkTools(linkHost),
       writingFlow(flowHost),
+      findTools(),
+      aiTools(aiHost),
       writingSurface,
       EditorView.lineWrapping,
       highlightSpecialChars(),
@@ -1062,11 +1315,20 @@ export const MarkdownEditor = forwardRef<
       EditorView.contentAttributes.of({
         'aria-label': 'Note content',
         'aria-multiline': 'true',
-        'aria-description':
-          'Write in Markdown. Control or Command plus Space opens suggestion choices. Up and Down choose; Tab or Enter accepts; Escape dismisses.',
+        'aria-description': `Write in Markdown. ${shortcutSpeech(
+          propsRef.current.settings.shortcuts?.suggest ??
+            DEFAULT_SHORTCUTS.suggest
+        )} opens suggestion choices. Up and Down choose; Tab or Enter accepts; Escape dismisses.`,
         spellcheck: 'true',
         autocapitalize: 'sentences',
       }),
+      shortcutCompartment.of(
+        shortcutKeymap(
+          propsRef.current.settings.shortcuts,
+          () => request(),
+          aiHost
+        )
+      ),
       keymap.of([
         { key: 'ArrowDown', run: editor => moveSuggestionSelection(editor, 1) },
         { key: 'ArrowUp', run: editor => moveSuggestionSelection(editor, -1) },
@@ -1092,10 +1354,6 @@ export const MarkdownEditor = forwardRef<
           preventDefault: true,
         },
         {
-          key: 'Mod-ArrowRight',
-          run: editor => acceptInlineSuggestion(editor, 'word'),
-        },
-        {
           key: 'Escape',
           run: (): boolean => {
             const active: boolean = !!(
@@ -1109,18 +1367,30 @@ export const MarkdownEditor = forwardRef<
           },
         },
         {
-          key: 'Mod-Space',
+          // After suggestions and menus have had their Escape.
+          key: 'Escape',
           run: () => {
-            request()
+            if (!findOpen.current) return false
+            findControls.close()
             return true
           },
-          preventDefault: true,
-          stopPropagation: true,
         },
         ...historyKeymap,
         ...defaultKeymap,
       ]),
       EditorView.domEventHandlers({
+        // Find reads the physical key and refuses Shift: some layouts and
+        // test drivers send a lowercase "f" with Shift held, and ⌘ ⇧ F is
+        // zen mode, which must never open find.
+        keydown: event => {
+          const primary = /Mac|iPhone|iPad/u.test(navigator.platform)
+            ? event.metaKey && !event.ctrlKey
+            : event.ctrlKey && !event.metaKey
+          if (!primary || event.shiftKey || event.code !== 'KeyF') return false
+          event.preventDefault()
+          openFindRef.current(event.altKey ? 'replace' : 'find')
+          return true
+        },
         focus: () => {
           // A focused empty page can offer one quiet starter after the normal
           // pause. Revisiting existing writing never triggers an idle request.
@@ -1149,6 +1419,14 @@ export const MarkdownEditor = forwardRef<
         },
       }),
       EditorView.updateListener.of(update => {
+        if (
+          findOpen.current &&
+          (update.docChanged ||
+            update.selectionSet ||
+            update.startState.field(findField) !==
+              update.state.field(findField))
+        )
+          reportFind.current(update.view)
         const external = update.transactions.some(transaction =>
           transaction.annotation(externalDocumentUpdate)
         )
@@ -1224,7 +1502,7 @@ export const MarkdownEditor = forwardRef<
     })
     viewRef.current = view
     documentStrings.set(view.state.doc, content)
-    controlsRef.current = { invalidate, request, webFacts }
+    controlsRef.current = { invalidate, request, webFacts, ai: aiHost }
     const document = view.dom.ownerDocument
     const visibilityChanged = () => {
       if (document.visibilityState === 'hidden') invalidate()
@@ -1259,12 +1537,13 @@ export const MarkdownEditor = forwardRef<
         controller.abort()
       }
       if (timer !== null) clearTimeout(timer)
+      closeAiActions(view, false)
       saveEditor(noteId, view)
       controlsRef.current = null
       viewRef.current = null
       view.destroy()
     }
-  }, [noteId])
+  }, [noteId, findControls])
 
   useEffect(() => {
     controlsRef.current?.invalidate()
@@ -1279,6 +1558,22 @@ export const MarkdownEditor = forwardRef<
     })
   }, [livePreviewEnabled, noteId])
 
+  const shortcutSignature = JSON.stringify(props.settings.shortcuts ?? null)
+  useEffect(() => {
+    const view = viewRef.current
+    const controls = controlsRef.current
+    if (!view || !controls) return
+    view.dispatch({
+      effects: shortcutCompartment.reconfigure(
+        shortcutKeymap(
+          propsRef.current.settings.shortcuts,
+          () => controls.request(),
+          controls.ai
+        )
+      ),
+    })
+  }, [shortcutSignature, noteId])
+
   const flowKey = `${props.zenFull ? 1 : 0}:${props.settings.editor?.focus}:${props.settings.editor?.zenFocus}`
   useEffect(() => {
     viewRef.current?.dispatch({ effects: refreshFlow.of(null) })
@@ -1286,9 +1581,10 @@ export const MarkdownEditor = forwardRef<
 
   // Restyle [[links]] when titles change; note bodies do not affect styles.
   const titles = (props.notes ?? EMPTY_NOTES).map(item => item.title).join('\n')
+  const folding = `${props.settings.editor?.foldLinks !== false}:${livePreviewEnabled}`
   useEffect(() => {
     viewRef.current?.dispatch({ effects: refreshLinks.of(null) })
-  }, [titles])
+  }, [titles, folding])
 
   useEffect(() => {
     const view = viewRef.current
@@ -1318,5 +1614,21 @@ export const MarkdownEditor = forwardRef<
     }
   }, [props.requestToken, noteId])
 
-  return <div className="markdown-editor" ref={containerRef} />
+  return (
+    <>
+      {find &&
+        findHost &&
+        createPortal(
+          <FindBar
+            mode={find.mode}
+            initial={find.initial}
+            focusToken={find.token}
+            info={findInfo}
+            controls={findControls}
+          />,
+          findHost
+        )}
+      <div className="markdown-editor" ref={containerRef} />
+    </>
+  )
 })

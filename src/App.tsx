@@ -1,6 +1,5 @@
 import {
   lazy,
-  memo,
   Suspense,
   useCallback,
   useEffect,
@@ -15,8 +14,13 @@ import {
   ChevronRight,
   Cloud,
   FileText,
+  FolderInput,
   FolderOpen,
+  FolderPlus,
+  History,
   Keyboard,
+  Pencil,
+  Tags,
   LoaderCircle,
   Maximize2,
   Minus,
@@ -79,6 +83,55 @@ import {
   registerUpdateSaver,
   updatesAvailable,
 } from './services/updater'
+import {
+  NoteTree,
+  type DragPayload,
+  type DropTarget,
+} from './notebook/organize/NoteTree'
+import { Menu, type MenuItem } from './notebook/organize/Menu'
+import { TagStrip, type TagStripHandle } from './notebook/organize/TagStrip'
+import { TagManager } from './notebook/organize/TagManager'
+import {
+  childFolders,
+  counts as organizeCounts,
+  createFolder,
+  deleteFolder,
+  deleteTag,
+  ensureTag,
+  folderAndDescendants,
+  folderPath,
+  moveFolder,
+  moveNotes,
+  renameFolder,
+  renameTag,
+  setFolderCollapsed,
+  setFolderColor,
+  setNoteTag,
+  setTagColor,
+} from './notebook/organize/organize'
+import './notebook/organize/organize.css'
+import {
+  activeSpace,
+  createSpace,
+  deleteSpace,
+  moveToSpace,
+  setContextSpaces,
+  spaceCounts,
+  spaceGitFolder,
+  spaceList,
+  spaceOf,
+  spaceView,
+  switchSpace,
+  updateSpace,
+} from './notebook/spaces/spaces'
+import {
+  SpaceAvatar,
+  WorkspaceSwitcher,
+} from './notebook/spaces/WorkspaceSwitcher'
+import { WorkspaceManager } from './notebook/spaces/WorkspaceManager'
+import { useRevisions } from './notebook/revisions/useRevisions'
+import { addRevision, deleteNoteRevisions } from './notebook/revisions/store'
+import { AI_ACTIONS, aiEngine } from './services/text-actions'
 import { installEmbeddingRuntime } from './services/embedding-runtime'
 import { installSpeechRuntime } from './services/speech-runtime'
 import { downloadBuiltinModel } from './services/builtin-engine'
@@ -128,6 +181,11 @@ const Preferences = lazy(() =>
 const NoteGraph = lazy(() =>
   import('./notebook/NoteGraph').then(module => ({ default: module.NoteGraph }))
 )
+const RevisionHistory = lazy(() =>
+  import('./notebook/revisions/RevisionHistory').then(module => ({
+    default: module.RevisionHistory,
+  }))
+)
 import { applyPalette } from './notebook/palette'
 import { isDesktop } from './services/native'
 import {
@@ -137,9 +195,17 @@ import {
   STORAGE_LIMITS,
 } from './services/storage'
 import { importContextFile, importWebsite } from './services/sources'
-import type { ContextSource, Note, Workspace } from './types/notebook'
+import type {
+  ContextSource,
+  Note,
+  OrganizeColor,
+  Workspace,
+} from './types/notebook'
 import './App.css'
 import './app-shell.css'
+import './notebook/ai-pulse.css'
+import { AiPulse } from './notebook/AiPulse'
+import { shortcutText } from './notebook/shortcuts'
 
 const MAX_STORED_CONTEXT_CHARACTERS = 2_000_000
 const BRAND_ICON_URL = `${import.meta.env.BASE_URL}Icon.png`
@@ -175,132 +241,6 @@ function autoTitlePatch(note: Note, patch: Partial<Note>): Partial<Note> {
   return {}
 }
 
-interface NoteRow {
-  id: string
-  title: string
-  detail: string
-}
-
-const NoteListItem = memo(function NoteListItem({
-  row,
-  active,
-  onSelect,
-  onDelete,
-}: {
-  row: NoteRow
-  active: boolean
-  onSelect(id: string): void
-  onDelete(id: string): void
-}) {
-  return (
-    <div className={`note-list-item ${active ? 'active' : ''}`}>
-      <button
-        className="note-select"
-        onClick={() => onSelect(row.id)}
-        aria-current={active ? 'page' : undefined}
-      >
-        <FileText size={16} />
-        <span>
-          <strong>{row.title}</strong>
-          <small>{row.detail}</small>
-        </span>
-      </button>
-      <button
-        className="icon-button note-delete"
-        aria-label={`Delete ${row.title}`}
-        onClick={() => onDelete(row.id)}
-      >
-        <Trash2 size={13} />
-      </button>
-    </div>
-  )
-})
-
-/**
- * The note list re-renders only when a visible row changes. Typing changes
- * one note's text on every key, which no row shows.
- */
-function NoteList({
-  notes,
-  activeId,
-  empty,
-  onSelect,
-  onDelete,
-}: {
-  notes: Note[]
-  activeId: string | null
-  empty: string
-  onSelect(note: Note): void
-  onDelete(id: string): void
-}) {
-  const rows = useMemo(
-    () =>
-      notes.map(item => ({
-        id: item.id,
-        title: displayTitle(item),
-        detail: `${relativeDate(item.updatedAt)}${
-          item.sources.length > 0
-            ? ` · ${item.sources.length} source${item.sources.length > 1 ? 's' : ''}`
-            : ''
-        }`,
-      })),
-    [notes]
-  )
-  const signature = rows
-    .map(row => `${row.id}\u0000${row.title}\u0000${row.detail}`)
-    .join('\u0001')
-  const stable = useRef({ signature: '', rows })
-  if (stable.current.signature !== signature)
-    stable.current = { signature, rows }
-  const latest = useRef(notes)
-  latest.current = notes
-  const select = useCallback(
-    (id: string) => {
-      const item = latest.current.find(candidate => candidate.id === id)
-      if (item) onSelect(item)
-    },
-    [onSelect]
-  )
-  return (
-    <NoteListBody
-      rows={stable.current.rows}
-      activeId={activeId}
-      empty={empty}
-      onSelect={select}
-      onDelete={onDelete}
-    />
-  )
-}
-
-const NoteListBody = memo(function NoteListBody({
-  rows,
-  activeId,
-  empty,
-  onSelect,
-  onDelete,
-}: {
-  rows: NoteRow[]
-  activeId: string | null
-  empty: string
-  onSelect(id: string): void
-  onDelete(id: string): void
-}) {
-  return (
-    <div className="note-list">
-      {rows.map(row => (
-        <NoteListItem
-          key={row.id}
-          row={row}
-          active={row.id === activeId}
-          onSelect={onSelect}
-          onDelete={onDelete}
-        />
-      ))}
-      {!rows.length && <p className="sidebar-empty">{empty}</p>}
-    </div>
-  )
-})
-
 function App() {
   const {
     workspace,
@@ -334,6 +274,20 @@ function App() {
   const [revealChrome, setRevealChrome] = useState(false)
   const [graphOpen, setGraphOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+  if (historyOpen && !historyLoaded) setHistoryLoaded(true)
+  const [tagManagerOpen, setTagManagerOpen] = useState(false)
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null)
+  const [rootDrop, setRootDrop] = useState(false)
+  const [menu, setMenu] = useState<{
+    kind: 'note' | 'folder' | 'move'
+    id: string
+    anchor: HTMLElement
+  } | null>(null)
+  const tagStrip = useRef<TagStripHandle>(null)
   // Keep a lazy dialog mounted after its first use, so it can animate closed.
   const [preferencesLoaded, setPreferencesLoaded] = useState(false)
   const [graphLoaded, setGraphLoaded] = useState(false)
@@ -377,12 +331,14 @@ function App() {
             storedNote,
             workspace.notes,
             workspace.contextLibrary,
-            workspace.contextPackages
+            workspace.contextPackages,
+            workspace.folders
           )
         : undefined,
     [
       storedNote,
       workspace.notes,
+      workspace.folders,
       workspace.contextLibrary,
       workspace.contextPackages,
     ]
@@ -396,18 +352,89 @@ function App() {
       Boolean(settings.profiles.local.model.trim()))
   const usingExternal =
     settings.provider !== 'local' && settings.externalAutoEnabled
-  const visibleNotes = useMemo(() => {
-    const recent = [...workspace.notes].sort(
-      (a, b) => b.updatedAt - a.updatedAt
-    )
-    const query = search.toLocaleLowerCase()
-    if (!query) return recent
-    return recent.filter(
-      item =>
-        item.title.toLocaleLowerCase().includes(query) ||
-        item.content.toLocaleLowerCase().includes(query)
-    )
-  }, [workspace.notes, search])
+  const suggestKeys = shortcutText(settings.shortcuts.suggest)
+  const wordKeys = shortcutText(settings.shortcuts.acceptWord)
+  // What the open workspace sees: its own items and those of shared ones.
+  const view = useMemo(() => spaceView(workspace), [workspace])
+  const spaces = useMemo(() => spaceList(workspace), [workspace])
+  const multipleSpaces = spaces.length > 1
+  const currentSpace = view.active
+  const ownedByActive = useCallback(
+    (item: { id: string }) =>
+      !multipleSpaces || view.owner.get(item.id) === currentSpace.id,
+    [multipleSpaces, view, currentSpace.id]
+  )
+  const folders = view.folders
+  const tags = view.tags
+  const activeNotes = useMemo(
+    () => view.notes.filter(ownedByActive),
+    [view.notes, ownedByActive]
+  )
+  const activeFolders = useMemo(
+    () => folders.filter(ownedByActive),
+    [folders, ownedByActive]
+  )
+  const sharedSections = useMemo(
+    () =>
+      spaces
+        .filter(space => space.shared && space.id !== currentSpace.id)
+        .map(space => ({
+          space,
+          notes: view.notes.filter(
+            item => view.owner.get(item.id) === space.id
+          ),
+          folders: folders.filter(item => view.owner.get(item.id) === space.id),
+        })),
+    [spaces, currentSpace.id, view, folders]
+  )
+  const [collapsedShared, setCollapsedShared] = useState<Set<string>>(
+    () => new Set()
+  )
+  const [managerOpen, setManagerOpen] = useState<string | null>(null)
+  const [switching, setSwitching] = useState(0)
+  useEffect(() => {
+    if (!switching) return
+    const timer = setTimeout(() => setSwitching(0), 320)
+    return () => clearTimeout(timer)
+  }, [switching])
+  const latestNote = useMemo(
+    () =>
+      view.notes.reduce<Note | undefined>(
+        (newest, item) =>
+          !newest || item.updatedAt > newest.updatedAt ? item : newest,
+        undefined
+      ),
+    [view.notes]
+  )
+  const counts = useMemo(() => spaceCounts(workspace), [workspace])
+  const gitSpaces = useMemo(
+    () =>
+      new Set(
+        spaces
+          .filter(space => spaceGitFolder(workspace, space))
+          .map(space => space.id)
+      ),
+    [spaces, workspace]
+  )
+  /** The workspace id a new item belongs to, stored only with workspaces. */
+  const newItemSpace = useCallback(
+    (folderId?: string) => {
+      const current = getWorkspace()
+      if (!current.spaces?.length) return undefined
+      const folder = folderId
+        ? current.folders?.find(item => item.id === folderId)
+        : undefined
+      return folder ? spaceOf(current, folder) : activeSpace(current).id
+    },
+    [getWorkspace]
+  )
+  const organization = useMemo(() => organizeCounts(workspace), [workspace])
+  const activeFolderPath = useMemo(
+    () => folderPath(folders, storedNote?.folderId),
+    [folders, storedNote?.folderId]
+  )
+  // A filter for a deleted tag ends quietly.
+  if (tagFilter && !tags.some(tag => tag.id === tagFilter)) setTagFilter(null)
   // Counting a long note on every key would compete with typing, so the
   // count follows a short pause. Switching notes counts at once.
   const [countedContent, setCountedContent] = useState(note?.content ?? '')
@@ -544,9 +571,14 @@ function App() {
 
   /** Create a note at once. Title and intent can be set later. */
   const createNote = useCallback(
-    (title = '') => {
+    (title = '', folderId?: string, spaceId?: string) => {
       try {
-        const created = newNote(title)
+        const space = spaceId ?? newItemSpace(folderId)
+        const created = {
+          ...newNote(title),
+          ...(folderId ? { folderId } : {}),
+          ...(space ? { spaceId: space } : {}),
+        }
         setWorkspace(value => {
           const next = openNote(value, created)
           assertWorkspaceFits(next)
@@ -561,7 +593,161 @@ function App() {
         return null
       }
     },
+    [notify, setWorkspace, newItemSpace]
+  )
+  /** Organising changes: folders and tags. A failed change explains itself. */
+  const organize = useCallback(
+    (change: (value: Workspace) => Workspace) => {
+      try {
+        setWorkspace(value => {
+          const next = change(value)
+          if (next !== value) assertWorkspaceFits(next)
+          return next
+        })
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error))
+      }
+    },
     [notify, setWorkspace]
+  )
+  const newFolder = useCallback(
+    (parentId?: string) => {
+      let created: string | null = null
+      organize(value => {
+        const result = createFolder(value, '', parentId, newItemSpace())
+        created = result.folder.id
+        return result.workspace
+      })
+      if (created) {
+        setSearch('')
+        setTagFilter(null)
+        setSidebarVisible(true)
+        setRenamingFolder(created)
+      }
+    },
+    [organize, newItemSpace]
+  )
+  const onRenameFolder = useCallback(
+    (id: string, name: string | null | undefined) => {
+      if (name === undefined) {
+        setRenamingFolder(id)
+        return
+      }
+      setRenamingFolder(current => (current === id ? null : current))
+      if (name !== null) organize(value => renameFolder(value, id, name))
+    },
+    [organize]
+  )
+  const onToggleFolder = useCallback(
+    (id: string) =>
+      organize(value =>
+        setFolderCollapsed(
+          value,
+          id,
+          !value.folders?.find(folder => folder.id === id)?.collapsed
+        )
+      ),
+    [organize]
+  )
+  const onDropItem = useCallback(
+    (target: DropTarget, payload: DragPayload) => {
+      organize(value =>
+        payload.kind === 'note'
+          ? moveNotes(value, [payload.id], target.folderId)
+          : moveFolder(value, payload.id, target.folderId)
+      )
+      // Show where the item went.
+      if (target.folderId)
+        organize(value => setFolderCollapsed(value, target.folderId!, false))
+    },
+    [organize]
+  )
+  const toggleNoteTag = useCallback(
+    (noteId: string, tagId: string, on: boolean) =>
+      organize(value => setNoteTag(value, noteId, tagId, on)),
+    [organize]
+  )
+  const createTagFor = useCallback(
+    (noteId: string | null, name: string) =>
+      organize(value => {
+        // Tags are found among the ones this workspace can see, and a new
+        // tag joins the note's workspace.
+        const note = noteId
+          ? value.notes.find(item => item.id === noteId)
+          : undefined
+        const seen = spaceView(value)
+        const result = ensureTag(value, name, undefined, {
+          ...(value.spaces?.length
+            ? {
+                spaceId: note ? spaceOf(value, note) : activeSpace(value).id,
+              }
+            : {}),
+          visible: tag => seen.tags.some(item => item.id === tag.id),
+        })
+        return noteId
+          ? setNoteTag(result.workspace, noteId, result.tag.id, true)
+          : result.workspace
+      }),
+    [organize]
+  )
+  const switchWorkspace = useCallback(
+    (id: string) => {
+      if (getWorkspace().activeSpaceId === id) return
+      setWorkspace(value => switchSpace(value, id))
+      setSearch('')
+      setTagFilter(null)
+      setStatus({ state: 'idle' })
+      setSwitching(Date.now())
+    },
+    [getWorkspace, setWorkspace]
+  )
+  const newWorkspace = useCallback(
+    (name: string, shared: boolean, open = true) => {
+      let id: string | null = null
+      organize(value => {
+        const result = createSpace(value, name, { shared })
+        id = result.space.id
+        // Its first context list and its tabs start empty.
+        return result.workspace
+      })
+      if (id && open && !shared) switchWorkspace(id)
+      else if (id)
+        notify(
+          shared
+            ? 'Shared workspace created. It appears in every workspace.'
+            : 'Workspace created.'
+        )
+      return id
+    },
+    [organize, switchWorkspace, notify]
+  )
+  /** Move notes or folders to a workspace; tabs that leave it close. */
+  const moveToWorkspace = useCallback(
+    (items: { notes?: string[]; folders?: string[] }, spaceId: string) => {
+      organize(value => {
+        const moved = moveToSpace(value, items, spaceId)
+        const visible = new Set(spaceView(moved).notes.map(note => note.id))
+        return moved.openNoteIds.every(id => visible.has(id))
+          ? moved
+          : moved.openNoteIds
+              .filter(id => !visible.has(id))
+              .reduce((next, id) => closeNote(next, id), moved)
+      })
+      const target = spaceList(getWorkspace()).find(
+        space => space.id === spaceId
+      )
+      if (target) notify(`Moved to ${target.name}.`)
+    },
+    [organize, getWorkspace, notify]
+  )
+  const openNoteMenu = useCallback(
+    (id: string, anchor: HTMLElement) => setMenu({ kind: 'note', id, anchor }),
+    []
+  )
+  const openFolderMenu = useCallback(
+    (id: string, anchor: HTMLElement) =>
+      setMenu({ kind: 'folder', id, anchor }),
+    []
   )
   const openNoteById = useCallback(
     (id: string) => {
@@ -578,6 +764,63 @@ function App() {
 
   useGitSync(workspace, getWorkspace, setWorkspace, notify)
   useAutoUpdates(settings.updates)
+  const noteById = useCallback(
+    (id: string) => getWorkspace().notes.find(item => item.id === id),
+    [getWorkspace]
+  )
+  const { saveRevision, safetyCopy } = useRevisions({
+    note: storedNote,
+    settings: settings.revisions,
+    noteById,
+    notify,
+  })
+  const saveVersion = useCallback(
+    async (label?: string) => {
+      if (!getWorkspace().settings.revisions.enabled) {
+        notify('Turn on revisions in Preferences → History to save versions.')
+        return null
+      }
+      const saved = await saveRevision(label)
+      notify(saved ? 'Version saved.' : 'This version is already saved.')
+      return saved
+    },
+    [getWorkspace, notify, saveRevision]
+  )
+  /** Restore a version or merge parts of it, keeping the text before. */
+  const replaceFromHistory = useCallback(
+    async (
+      text: string,
+      how: { kind: 'restore' | 'merge'; revision: { createdAt: number } }
+    ) => {
+      const active = storedNote
+      if (!active) return
+      const at = new Date(how.revision.createdAt).toLocaleTimeString(
+        undefined,
+        { hour: 'numeric', minute: '2-digit' }
+      )
+      await safetyCopy(
+        active.id,
+        how.kind === 'restore'
+          ? `Before restoring ${at}`
+          : `Before bringing back parts of ${at}`
+      )
+      if (!editorRef.current?.replaceDocument(text))
+        updateNote(active.id, { content: text })
+      const current = getWorkspace().settings.revisions
+      await addRevision({
+        noteId: active.id,
+        title: active.title,
+        text,
+        kind: how.kind,
+        reason:
+          how.kind === 'restore'
+            ? `Restored the version from ${at}`
+            : `Brought back parts of ${at}`,
+        keep: current.keep,
+      }).catch(() => null)
+    },
+    [storedNote, safetyCopy, updateNote, getWorkspace]
+  )
   // Installing an update ends this process, so every edit must be on disk.
   const saveForUpdate = useCallback(async () => {
     await saveNow()
@@ -923,6 +1166,46 @@ function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (
+        !event.defaultPrevented &&
+        (event.metaKey || event.ctrlKey) &&
+        event.altKey &&
+        !event.shiftKey &&
+        !document.querySelector('[role="dialog"]')
+      ) {
+        // Option changes the character on macOS, so read the key's position.
+        if (event.code === 'KeyS') {
+          event.preventDefault()
+          void paletteRefs.current.saveVersion()
+          return
+        }
+        if (event.code === 'KeyH') {
+          event.preventDefault()
+          if (getWorkspace().settings.revisions.enabled) setHistoryOpen(true)
+          else showPreferences('history')
+          return
+        }
+        if (event.code === 'KeyF') {
+          event.preventDefault()
+          editorRef.current?.openFind('replace')
+          return
+        }
+        // ⌘ ⌥ 1–9 opens a workspace, in the switcher's order.
+        const digit = /^Digit([1-9])$/u.exec(event.code)?.[1]
+        if (digit) {
+          const all = spaceList(getWorkspace())
+          const ordered = [
+            ...all.filter(space => !space.shared),
+            ...all.filter(space => space.shared),
+          ]
+          const target = ordered[Number(digit) - 1]
+          if (target) {
+            event.preventDefault()
+            paletteRefs.current.switchWorkspace(target.id)
+          }
+          return
+        }
+      }
+      if (
         event.defaultPrevented ||
         !(event.metaKey || event.ctrlKey) ||
         event.altKey
@@ -952,6 +1235,9 @@ function App() {
       } else if (key === 'b') {
         event.preventDefault()
         toggleNotes()
+      } else if (key === 'f' && !event.shiftKey) {
+        event.preventDefault()
+        editorRef.current?.openFind('find')
       } else if (key === 'f' && event.shiftKey) {
         event.preventDefault()
         if (focusModeRef.current) setFocusMode(false)
@@ -966,7 +1252,15 @@ function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openFile, exportNote, showPreferences, toggleNotes, createNote, enterZen])
+  }, [
+    openFile,
+    exportNote,
+    showPreferences,
+    toggleNotes,
+    createNote,
+    enterZen,
+    getWorkspace,
+  ])
 
   nativeHandlers.current = {
     'menu-new-note': () => {
@@ -1036,7 +1330,8 @@ function App() {
         item,
         value.notes,
         value.contextLibrary,
-        value.contextPackages
+        value.contextPackages,
+        value.folders
       )
       // A live note can grow after attachment. Always allow removal or an
       // unchanged budget so a writer can reduce an already large context.
@@ -1045,7 +1340,8 @@ function App() {
             before,
             previous.notes,
             previous.contextLibrary,
-            previous.contextPackages
+            previous.contextPackages,
+            previous.folders
           )
         : { sources: 0, characters: 0 }
       if (
@@ -1100,7 +1396,13 @@ function App() {
       notify('You can keep up to 256 context packages.')
       return null
     }
-    const created = newContextPackage(name)
+    const created = {
+      ...newContextPackage(name),
+      // A new context starts in the workspace it was made in.
+      ...(current.spaces?.length
+        ? { spaceIds: [activeSpace(current).id] }
+        : {}),
+    }
     try {
       setWorkspace(value => {
         const next = {
@@ -1418,6 +1720,9 @@ function App() {
     createNote,
     enterZen,
     openSample,
+    newFolder,
+    saveVersion,
+    switchWorkspace,
   })
   paletteRefs.current = {
     openFile,
@@ -1428,9 +1733,20 @@ function App() {
     createNote,
     enterZen,
     openSample,
+    newFolder,
+    saveVersion,
+    switchWorkspace,
   }
   const gitEnabled = settings.git.enabled
   const webFactsOn = settings.webFacts.enabled
+  const revisionsOn = settings.revisions.enabled
+  const aiOn = aiEngine(settings) !== null
+  const suggestBinding = settings.shortcuts.suggest
+  const aiBinding = settings.shortcuts.aiActions
+  const spaceSignature = spaces
+    .map(space => `${space.id}\u0000${space.name}\u0000${space.shared ? 1 : 0}`)
+    .join('\u0001')
+  const currentSpaceId = currentSpace.id
   const paletteActions = useMemo<PaletteAction[]>(() => {
     const run = paletteRefs
     const mac = MAC_KEYS
@@ -1459,9 +1775,88 @@ function App() {
         id: 'suggest',
         title: 'Suggest at the cursor',
         section: 'Actions',
-        shortcut: key('Space'),
+        shortcut: shortcutText(suggestBinding),
         keywords: ['ai', 'complete', 'continue'],
         run: () => editorRef.current?.requestSuggestion(),
+      },
+      ...AI_ACTIONS.map((action, index): PaletteAction => ({
+        id: `ai-${action.id}`,
+        title: `AI: ${action.label} the selection`,
+        section: 'Actions',
+        shortcut: index === 0 ? shortcutText(aiBinding) : undefined,
+        keywords: ['ai', 'edit', action.hint.toLocaleLowerCase()],
+        disabled: !aiOn,
+        run: () => {
+          editorRef.current?.focus()
+          editorRef.current?.openAiActions(action.id)
+        },
+      })),
+      {
+        id: 'history',
+        title: 'Open history',
+        section: 'Actions',
+        shortcut: key('Alt H'),
+        keywords: ['revisions', 'versions', 'diff', 'restore', 'undo'],
+        disabled: !revisionsOn,
+        run: () => setHistoryOpen(true),
+      },
+      {
+        id: 'save-version',
+        title: 'Save this version',
+        section: 'Actions',
+        shortcut: key('Alt S'),
+        keywords: ['revision', 'snapshot', 'checkpoint', 'history'],
+        disabled: !revisionsOn,
+        run: () => void run.current.saveVersion(),
+      },
+      ...spaceSignature
+        .split('\u0001')
+        .filter(Boolean)
+        .map((entry): PaletteAction => {
+          const [id, name] = entry.split('\u0000')
+          return {
+            id: `space-${id}`,
+            title: `Workspace: ${name}`,
+            section: 'Go to',
+            keywords: ['workspace', 'switch', 'profile', 'space'],
+            disabled: id === currentSpaceId,
+            run: () => run.current.switchWorkspace(id!),
+          }
+        }),
+      {
+        id: 'new-workspace',
+        title: 'New workspace',
+        section: 'Actions',
+        keywords: ['workspace', 'profile', 'space', 'create'],
+        run: () => setManagerOpen('new'),
+      },
+      {
+        id: 'manage-workspaces',
+        title: 'Manage workspaces',
+        section: 'Actions',
+        keywords: ['workspace', 'shared', 'git', 'repository'],
+        run: () => setManagerOpen(''),
+      },
+      {
+        id: 'new-folder',
+        title: 'New folder',
+        section: 'Actions',
+        keywords: ['organise', 'organize', 'group', 'directory'],
+        run: () => run.current.newFolder(),
+      },
+      {
+        id: 'add-tag',
+        title: 'Tag this note',
+        section: 'Actions',
+        keywords: ['label', 'organise', 'organize', 'category'],
+        run: () => tagStrip.current?.openPicker(),
+      },
+      {
+        id: 'manage-tags',
+        title: 'Manage tags',
+        section: 'Actions',
+        keywords: ['labels', 'rename', 'colour', 'color'],
+        run: () => setTagManagerOpen(true),
       },
       {
         id: 'graph',
@@ -1659,11 +2054,180 @@ function App() {
       pane('knowledge', 'Knowledge', ['semantic', 'embedding', 'rag']),
       pane('web', 'Web facts', ['search', 'openai']),
       pane('dictation', 'Dictation', ['voice', 'whistle', 'fluid']),
+      pane('history', 'History', ['revisions', 'versions']),
       pane('sync', 'Sync', ['git']),
-      pane('shortcuts', 'Shortcuts', ['keys', 'keyboard']),
+      pane('shortcuts', 'Shortcuts', ['keys', 'keyboard', 'shortcut']),
     ]
     return actions
-  }, [gitEnabled, webFactsOn, setWorkspace, getWorkspace])
+  }, [
+    gitEnabled,
+    webFactsOn,
+    revisionsOn,
+    aiOn,
+    suggestBinding,
+    aiBinding,
+    spaceSignature,
+    currentSpaceId,
+    setWorkspace,
+    getWorkspace,
+  ])
+  /** Folders as a flat list, indented, for "Move to…". */
+  const moveItems = (
+    move: (folderId: string | undefined) => void,
+    current: string | undefined,
+    exclude = new Set<string>()
+  ): MenuItem[] => {
+    const items: MenuItem[] = [
+      {
+        label: 'Top level',
+        icon: <FileText size={14} />,
+        checked: current === undefined,
+        disabled: current === undefined,
+        onSelect: () => move(undefined),
+      },
+    ]
+    const walk = (parentId: string | undefined, depth: number) => {
+      for (const folder of childFolders(folders, parentId)) {
+        if (exclude.has(folder.id)) continue
+        items.push({
+          label: `${'\u2003'.repeat(depth)}${folder.name}`,
+          icon: (
+            <span className={`org-${folder.color ?? 'slate'}`}>
+              <FolderOpen size={14} className="org-folder-icon" />
+            </span>
+          ),
+          checked: folder.id === current,
+          disabled: folder.id === current,
+          onSelect: () => move(folder.id),
+        })
+        walk(folder.id, depth + 1)
+      }
+    }
+    walk(undefined, 0)
+    return items
+  }
+  const spaceItems = (
+    current: string,
+    move: (spaceId: string) => void
+  ): MenuItem[] =>
+    spaces.map(space => ({
+      label: space.shared ? `${space.name} (shared)` : space.name,
+      icon: <SpaceAvatar space={space} size="small" />,
+      checked: space.id === current,
+      disabled: space.id === current,
+      onSelect: () => move(space.id),
+    }))
+  const menuItems = (): MenuItem[] => {
+    if (!menu) return []
+    if (menu.kind === 'folder') {
+      const folder = folders.find(item => item.id === menu.id)
+      if (!folder) return []
+      return [
+        {
+          label: 'New note here',
+          icon: <Plus size={14} />,
+          onSelect: () => createNote('', folder.id),
+        },
+        {
+          label: 'New folder inside',
+          icon: <FolderPlus size={14} />,
+          onSelect: () => newFolder(folder.id),
+        },
+        {
+          label: 'Rename',
+          icon: <Pencil size={14} />,
+          onSelect: () => setRenamingFolder(folder.id),
+        },
+        {
+          label: 'Move to…',
+          icon: <FolderInput size={14} />,
+          items: moveItems(
+            parentId =>
+              organize(value => moveFolder(value, folder.id, parentId)),
+            folder.parentId,
+            folderAndDescendants(folders, folder.id)
+          ),
+        },
+        ...(multipleSpaces
+          ? [
+              {
+                label: 'Move to workspace…',
+                icon: <SpaceAvatar space={currentSpace} size="small" />,
+                items: spaceItems(spaceOf(workspace, folder), spaceId =>
+                  moveToWorkspace({ folders: [folder.id] }, spaceId)
+                ),
+              } satisfies MenuItem,
+            ]
+          : []),
+        {
+          kind: 'colors',
+          label: 'Folder colour',
+          value: folder.color,
+          onSelect: (color: OrganizeColor) =>
+            organize(value => setFolderColor(value, folder.id, color)),
+        },
+        { kind: 'separator' },
+        {
+          label: 'Remove folder',
+          hint: 'Notes stay',
+          icon: <Trash2 size={14} />,
+          danger: true,
+          onSelect: () => {
+            organize(value => deleteFolder(value, folder.id))
+            notify(
+              `Removed “${folder.name}”. Its notes moved ${folder.parentId ? 'up a level' : 'to the top level'}.`
+            )
+          },
+        },
+      ]
+    }
+    const target = workspace.notes.find(item => item.id === menu.id)
+    if (!target) return []
+    const move = (folderId: string | undefined) =>
+      organize(value => moveNotes(value, [target.id], folderId))
+    if (menu.kind === 'move') return moveItems(move, target.folderId)
+    return [
+      {
+        label: 'Open',
+        icon: <FileText size={14} />,
+        onSelect: () => selectNote(target),
+      },
+      {
+        label: 'Move to…',
+        icon: <FolderInput size={14} />,
+        items: moveItems(move, target.folderId),
+      },
+      ...(multipleSpaces
+        ? [
+            {
+              label: 'Move to workspace…',
+              icon: <SpaceAvatar space={currentSpace} size="small" />,
+              items: spaceItems(spaceOf(workspace, target), spaceId =>
+                moveToWorkspace({ notes: [target.id] }, spaceId)
+              ),
+            } satisfies MenuItem,
+          ]
+        : []),
+      {
+        label: 'Tags…',
+        icon: <Tags size={14} />,
+        onSelect: () => {
+          selectNote(target)
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => tagStrip.current?.openPicker())
+          )
+        },
+      },
+      { kind: 'separator' },
+      {
+        label: 'Delete note',
+        icon: <Trash2 size={14} />,
+        danger: true,
+        onSelect: () => setDeleteId(target.id),
+      },
+    ]
+  }
+
   const paletteHeadings = useMemo<PaletteHeading[]>(
     () => headings.map(({ level, text, from }) => ({ level, text, from })),
     [headings]
@@ -1721,7 +2285,7 @@ function App() {
 
   return (
     <div
-      className={`app-shell ${!sidebarVisible || focusMode ? 'sidebar-hidden' : ''} ${focusMode ? `focus-mode zen zen-${zenLevel}` : ''} ${revealChrome ? 'zen-reveal' : ''} ${MAC_DESKTOP ? 'platform-mac' : ''}`}
+      className={`app-shell ${!sidebarVisible || focusMode ? 'sidebar-hidden' : ''} ${focusMode ? `focus-mode zen zen-${zenLevel}` : ''} ${revealChrome ? 'zen-reveal' : ''} ${MAC_DESKTOP ? 'platform-mac' : ''} ${switching ? 'is-switching-space' : ''}`}
       onMouseMove={focusMode ? trackEdges : undefined}
     >
       <aside className="note-sidebar" aria-label="Notebook">
@@ -1760,8 +2324,7 @@ function App() {
             <ArrowUpRight size={14} />
           </button>
           <button className="sidebar-open" onClick={() => setLibraryOpen(true)}>
-            <Paperclip size={16} /> Contexts{' '}
-            <span>{workspace.contextPackages?.length ?? 0}</span>
+            <Paperclip size={16} /> Contexts <span>{view.packages.length}</span>
           </button>
         </div>
         <label className="note-search">
@@ -1775,36 +2338,259 @@ function App() {
           />
           <kbd>⌘ / Ctrl P</kbd>
         </label>
-        <div className="notes-section-heading">
-          <span>Your notes</span>
-          <span>{workspace.notes.length}</span>
-        </div>
-        <NoteList
-          notes={visibleNotes}
-          activeId={note?.id ?? null}
-          empty={
-            search
-              ? 'No notes match your search.'
-              : 'Your notes will feel at home here.'
-          }
-          onSelect={selectNote}
-          onDelete={setDeleteId}
-        />
-        <div className="sidebar-bottom">
-          <GitSyncStatus onOpenSettings={() => showPreferences('sync')} />
-          <div className="local-promise">
-            {usingExternal ? <Cloud size={16} /> : <ShieldCheck size={16} />}
-            <span>
-              {usingExternal
-                ? `${PROVIDERS[settings.provider]} active`
-                : 'Local by default'}
-              <small>
-                {usingExternal
-                  ? 'Context is shared for suggestions.'
-                  : 'Your writing stays with you.'}
-              </small>
+        {tags.length > 0 && !tagFilter && (
+          <div
+            className={`org-filters${filtersOpen ? ' is-open' : ''}`}
+            aria-label="Filter by tag"
+          >
+            {[...tags]
+              .sort(
+                (left, right) =>
+                  (organization.tags.get(right.id) ?? 0) -
+                    (organization.tags.get(left.id) ?? 0) ||
+                  left.name.localeCompare(right.name)
+              )
+              .slice(0, filtersOpen ? undefined : 8)
+              .map(tag => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className={`org-filter org-${tag.color}`}
+                  aria-pressed={false}
+                  onClick={() => setTagFilter(tag.id)}
+                >
+                  <span className="org-dot" aria-hidden="true" />
+                  {tag.name}
+                  <small>{organization.tags.get(tag.id) ?? 0}</small>
+                </button>
+              ))}
+            <span className="org-filter-tools">
+              {tags.length > 8 && (
+                <button
+                  type="button"
+                  className="org-filter-more"
+                  onClick={() => setFiltersOpen(value => !value)}
+                >
+                  {filtersOpen ? 'Fewer' : `+${tags.length - 8}`}
+                </button>
+              )}
+              <button
+                type="button"
+                className="org-filter-more"
+                aria-label="Manage tags"
+                title="Manage tags"
+                onClick={() => setTagManagerOpen(true)}
+              >
+                <Tags size={13} />
+              </button>
             </span>
           </div>
+        )}
+        {tagFilter && (
+          <div
+            className={`org-filtering org-${tags.find(tag => tag.id === tagFilter)?.color ?? 'slate'}`}
+          >
+            <span className="org-dot" aria-hidden="true" />
+            <span>
+              Tagged{' '}
+              <strong>{tags.find(tag => tag.id === tagFilter)?.name}</strong>
+            </span>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Show all notes"
+              onClick={() => setTagFilter(null)}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+        <div
+          className={`notes-section-heading${rootDrop ? ' is-drop-target' : ''}`}
+          onDragOver={event => {
+            event.preventDefault()
+            setRootDrop(true)
+          }}
+          onDragLeave={() => setRootDrop(false)}
+          onDrop={event => {
+            event.preventDefault()
+            setRootDrop(false)
+            try {
+              const payload = JSON.parse(
+                event.dataTransfer.getData('application/x-typenext-item')
+              ) as DragPayload
+              if (payload?.id) onDropItem({}, payload)
+            } catch {
+              // Not a note or folder.
+            }
+          }}
+        >
+          <span>{tagFilter || search ? 'Matching notes' : 'Your notes'}</span>
+          <span className="org-heading-tools">
+            <span>{activeNotes.length}</span>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="New folder"
+              title="New folder"
+              onClick={() => newFolder()}
+            >
+              <FolderPlus size={14} />
+            </button>
+          </span>
+        </div>
+        <div className="sidebar-lists">
+          <NoteTree
+            notes={activeNotes}
+            folders={activeFolders}
+            tags={tags}
+            counts={organization}
+            activeId={note?.id ?? null}
+            query={search}
+            tagFilter={tagFilter}
+            renamingFolder={renamingFolder}
+            empty={
+              search || tagFilter
+                ? 'No notes match.'
+                : 'Your notes will feel at home here.'
+            }
+            onSelect={selectNote}
+            onDelete={setDeleteId}
+            onNoteMenu={openNoteMenu}
+            onFolderMenu={openFolderMenu}
+            onToggleFolder={onToggleFolder}
+            onNewNoteIn={folderId => {
+              createNote('', folderId)
+            }}
+            onRenameFolder={onRenameFolder}
+            onDrop={onDropItem}
+          />
+          {sharedSections.map(
+            ({ space, notes: spaceNotes, folders: spaceFolders }) => {
+              const open = !collapsedShared.has(space.id)
+              return (
+                <div className="space-section" key={space.id}>
+                  <div className="space-section-row">
+                    <button
+                      type="button"
+                      className={`space-section-heading org-${space.color}`}
+                      aria-expanded={open}
+                      onClick={() =>
+                        setCollapsedShared(value => {
+                          const next = new Set(value)
+                          if (next.has(space.id)) next.delete(space.id)
+                          else next.add(space.id)
+                          return next
+                        })
+                      }
+                      onDragOver={event => {
+                        event.preventDefault()
+                        event.currentTarget.classList.add('is-drop-target')
+                      }}
+                      onDragLeave={event =>
+                        event.currentTarget.classList.remove('is-drop-target')
+                      }
+                      onDrop={event => {
+                        event.preventDefault()
+                        event.currentTarget.classList.remove('is-drop-target')
+                        try {
+                          const payload = JSON.parse(
+                            event.dataTransfer.getData(
+                              'application/x-typenext-item'
+                            )
+                          ) as DragPayload
+                          if (payload?.id)
+                            moveToWorkspace(
+                              payload.kind === 'note'
+                                ? { notes: [payload.id] }
+                                : { folders: [payload.id] },
+                              space.id
+                            )
+                        } catch {
+                          // Not a note or folder.
+                        }
+                      }}
+                    >
+                      <ChevronRight
+                        size={13}
+                        className="org-chevron"
+                        aria-hidden="true"
+                      />
+                      <SpaceAvatar space={space} size="small" />
+                      <strong>{space.name}</strong>
+                      <span>{spaceNotes.length}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button space-section-add"
+                      aria-label={`New note in ${space.name}`}
+                      title={`New note in ${space.name}`}
+                      onClick={() => {
+                        setCollapsedShared(value => {
+                          const next = new Set(value)
+                          next.delete(space.id)
+                          return next
+                        })
+                        createNote('', undefined, space.id)
+                      }}
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+                  {open && (
+                    <NoteTree
+                      notes={spaceNotes}
+                      folders={spaceFolders}
+                      tags={tags}
+                      counts={organization}
+                      activeId={note?.id ?? null}
+                      query={search}
+                      tagFilter={tagFilter}
+                      renamingFolder={renamingFolder}
+                      empty={
+                        search || tagFilter
+                          ? 'No shared notes match.'
+                          : `Notes in ${space.name} appear in every workspace.`
+                      }
+                      onSelect={selectNote}
+                      onDelete={setDeleteId}
+                      onNoteMenu={openNoteMenu}
+                      onFolderMenu={openFolderMenu}
+                      onToggleFolder={onToggleFolder}
+                      onNewNoteIn={folderId => {
+                        createNote('', folderId)
+                      }}
+                      onRenameFolder={onRenameFolder}
+                      onDrop={onDropItem}
+                    />
+                  )}
+                </div>
+              )
+            }
+          )}
+        </div>
+        <div className="sidebar-bottom">
+          <GitSyncStatus onOpenSettings={() => showPreferences('sync')} />
+          <WorkspaceSwitcher
+            spaces={spaces}
+            activeId={currentSpace.id}
+            counts={counts}
+            gitFolders={gitSpaces}
+            privacy={{
+              external: usingExternal,
+              label: usingExternal
+                ? `${PROVIDERS[settings.provider]} active`
+                : 'Local by default',
+              detail: usingExternal
+                ? `${PROVIDERS[settings.provider]} writes suggestions. Nearby writing and attached context are shared with it.`
+                : 'Local by default. Your writing stays with you.',
+            }}
+            onSwitch={switchWorkspace}
+            onCreate={(name, shared) => {
+              newWorkspace(name, shared)
+            }}
+            onManage={id => setManagerOpen(id ?? '')}
+          />
           <div className="sidebar-utilities">
             <button
               className="utility-button"
@@ -1855,7 +2641,24 @@ function App() {
                 draggable={false}
                 data-tauri-drag-region
               />
-              <span className="breadcrumb-section">Notebook</span>
+              <span className="breadcrumb-section">
+                {multipleSpaces
+                  ? (spaces.find(
+                      space =>
+                        space.id ===
+                        (storedNote
+                          ? spaceOf(workspace, storedNote)
+                          : currentSpace.id)
+                    )?.name ?? currentSpace.name)
+                  : 'Notebook'}
+              </span>
+              {note &&
+                activeFolderPath.map(folder => (
+                  <span key={folder.id} className="breadcrumb-folder">
+                    <ChevronRight size={13} />
+                    <span>{folder.name}</span>
+                  </span>
+                ))}
               <ChevronRight size={13} />
               <span>{note ? displayTitle(note) : 'A fresh start'}</span>
             </div>
@@ -1897,6 +2700,16 @@ function App() {
                 >
                   <Waypoints size={17} />
                 </button>
+                {settings.revisions.enabled && (
+                  <button
+                    className="icon-button"
+                    aria-label="History"
+                    title="History: versions of this note (Ctrl / ⌘ Alt H)"
+                    onClick={() => setHistoryOpen(true)}
+                  >
+                    <History size={17} />
+                  </button>
+                )}
                 <button
                   className="icon-button"
                   aria-label="Save Markdown"
@@ -2051,6 +2864,20 @@ function App() {
                         updateNote(note.id, { title: event.target.value })
                       }
                     />
+                    <TagStrip
+                      key={`tags:${note.id}`}
+                      ref={tagStrip}
+                      tags={tags}
+                      chosen={storedNote?.tags ?? []}
+                      counts={organization.tags}
+                      folderPath={activeFolderPath}
+                      onToggle={(id, on) => toggleNoteTag(note.id, id, on)}
+                      onCreate={name => createTagFor(note.id, name)}
+                      onManage={() => setTagManagerOpen(true)}
+                      onFolder={anchor =>
+                        setMenu({ kind: 'move', id: note.id, anchor })
+                      }
+                    />
                     {note.objective && (
                       <div className="objective-line">
                         <span>Objective</span>
@@ -2061,7 +2888,7 @@ function App() {
                       key={note.id}
                       ref={editorRef}
                       note={note}
-                      notes={workspace.notes}
+                      notes={view.notes}
                       settings={settings}
                       onChange={content => updateNote(note.id, { content })}
                       onStatus={setStatus}
@@ -2075,6 +2902,9 @@ function App() {
                         else if (action === 'graph') setGraphOpen(true)
                       }}
                       zenFull={focusMode && zenLevel === 'full'}
+                      onBeforeAiReplace={label => {
+                        void safetyCopy(note.id, label)
+                      }}
                       onCursorChange={context => {
                         const index = activeHeading(
                           headingsRef.current,
@@ -2094,7 +2924,7 @@ function App() {
                             {settings.autoSuggest
                               ? 'Write a thought. Pause for a suggestion, or press '
                               : 'Write a thought. Press '}
-                            <kbd>Ctrl / ⌘ Space</kbd> to explore a few ways
+                            <kbd>{suggestKeys}</kbd> to explore a few ways
                             forward.
                           </span>
                         ) : (
@@ -2113,8 +2943,8 @@ function App() {
                         >
                           <Keyboard size={14} />
                           <span>
-                            Fictional sample. Try <kbd>Ctrl / ⌘ Space</kbd> for
-                            a suggestion, then <kbd>Tab</kbd> to accept.
+                            Fictional sample. Try <kbd>{suggestKeys}</kbd> for a
+                            suggestion, then <kbd>Tab</kbd> to accept.
                           </span>
                         </p>
                       )}
@@ -2182,7 +3012,11 @@ function App() {
                   >
                     {status.state === 'loading' ? (
                       <>
-                        <LoaderCircle size={13} className="spin" />
+                        {settings.ai.indicator === 'off' ? (
+                          <LoaderCircle size={13} className="spin" />
+                        ) : (
+                          <AiPulse style={settings.ai.indicator} />
+                        )}
                         <span>
                           {status.message ?? 'Finding a continuation…'}
                         </span>
@@ -2201,7 +3035,7 @@ function App() {
                         {!status.menuOpen && (
                           <span className="word-accept-help">
                             {' '}
-                            · <kbd>Ctrl / ⌘ →</kbd> a word
+                            · <kbd>{wordKeys}</kbd> a word
                           </span>
                         )}{' '}
                         · <kbd>Esc</kbd> dismiss
@@ -2231,7 +3065,7 @@ function App() {
                       <button
                         onClick={() => setRequestToken(value => value + 1)}
                       >
-                        Suggest at the cursor <kbd>Ctrl / ⌘ Space</kbd>
+                        Suggest at the cursor <kbd>{suggestKeys}</kbd>
                       </button>
                     )}
                   </div>
@@ -2282,8 +3116,45 @@ function App() {
                 <ContextPanel
                   key={note.id}
                   note={storedNote!}
-                  notes={workspace.notes}
-                  packages={workspace.contextPackages ?? []}
+                  notes={view.notes}
+                  folders={folders}
+                  onAttachFolder={folderId =>
+                    changePackage(value => ({
+                      ...value,
+                      notes: value.notes.map(item =>
+                        item.id === value.activeNoteId &&
+                        !item.contextFolderIds?.includes(folderId)
+                          ? {
+                              ...item,
+                              contextFolderIds: [
+                                ...(item.contextFolderIds ?? []),
+                                folderId,
+                              ],
+                              updatedAt: Date.now(),
+                            }
+                          : item
+                      ),
+                    }))
+                  }
+                  onDetachFolder={folderId =>
+                    changePackage(value => ({
+                      ...value,
+                      notes: value.notes.map(item => {
+                        if (item.id !== value.activeNoteId) return item
+                        const kept = (item.contextFolderIds ?? []).filter(
+                          id => id !== folderId
+                        )
+                        const { contextFolderIds: _old, ...rest } = item
+                        void _old
+                        return {
+                          ...rest,
+                          ...(kept.length ? { contextFolderIds: kept } : {}),
+                          updatedAt: Date.now(),
+                        }
+                      }),
+                    }))
+                  }
+                  packages={view.packages}
                   onDetachPackage={detachPackage}
                   onAttachPackage={attachPackage}
                   onCreatePackage={createPackage}
@@ -2350,11 +3221,11 @@ function App() {
                 <ShieldCheck size={15} />
                 <span>Local by default. Always your voice.</span>
               </div>
-              {workspace.notes.length > 0 && (
+              {view.notes.length > 0 && (
                 <button
                   className="return-to-note"
                   onClick={() => {
-                    const latest = visibleNotes[0] ?? workspace.notes[0]
+                    const latest = latestNote ?? workspace.notes[0]
                     if (latest) selectNote(latest)
                   }}
                 >
@@ -2370,9 +3241,9 @@ function App() {
         open={libraryOpen}
         onOpenChange={setLibraryOpen}
         library={workspace.contextLibrary ?? []}
-        notes={workspace.notes}
+        notes={view.notes}
         activeNote={storedNote ?? null}
-        packages={workspace.contextPackages ?? []}
+        packages={view.packages}
         initialPackageId={libraryPackageId}
         importing={importing}
         demoInstalled={demoInstalled}
@@ -2403,11 +3274,90 @@ function App() {
         onUseNote={useNoteAsContext}
         settings={settings}
         onOpenKnowledgeSettings={() => showPreferences('knowledge')}
+        spaces={spaces}
+        onShareSpaces={(id, spaceIds) =>
+          organize(value => setContextSpaces(value, id, spaceIds))
+        }
       />
+      <Menu
+        anchor={menu?.anchor ?? null}
+        open={Boolean(menu)}
+        onClose={() => setMenu(null)}
+        items={menuItems()}
+        label={
+          menu?.kind === 'folder'
+            ? 'Folder actions'
+            : menu?.kind === 'move'
+              ? 'Move to a folder'
+              : 'Note actions'
+        }
+      />
+      <WorkspaceManager
+        open={managerOpen !== null}
+        onOpenChange={open => {
+          if (!open) setManagerOpen(null)
+        }}
+        spaces={spaces}
+        activeId={currentSpace.id}
+        initialId={
+          managerOpen && managerOpen !== 'new' ? managerOpen : undefined
+        }
+        counts={counts}
+        homeGitFolder={settings.git.folder}
+        gitEnabled={settings.git.enabled}
+        onUpdate={(id, patch) =>
+          organize(value => updateSpace(value, id, patch))
+        }
+        onCreate={shared => newWorkspace('', shared, false)}
+        onDelete={(id, moveTo) => {
+          const removed = spaces.find(space => space.id === id)
+          organize(value => deleteSpace(value, id, moveTo))
+          setSwitching(Date.now())
+          if (removed) notify(`Removed the workspace “${removed.name}”.`)
+        }}
+        onSwitch={switchWorkspace}
+        onOpenSync={() => {
+          setManagerOpen(null)
+          showPreferences('sync')
+        }}
+      />
+      <TagManager
+        open={tagManagerOpen}
+        onOpenChange={setTagManagerOpen}
+        tags={tags}
+        counts={organization.tags}
+        onCreate={name => createTagFor(null, name)}
+        onRename={(id, name) => organize(value => renameTag(value, id, name))}
+        onColor={(id, color) =>
+          organize(value => setTagColor(value, id, color))
+        }
+        onDelete={id => organize(value => deleteTag(value, id))}
+        onFilter={id => {
+          setSearch('')
+          setTagFilter(id)
+          setSidebarVisible(true)
+        }}
+      />
+      {historyLoaded && (
+        <Suspense fallback={null}>
+          <RevisionHistory
+            open={historyOpen}
+            onOpenChange={setHistoryOpen}
+            note={storedNote}
+            enabled={settings.revisions.enabled}
+            onSaveRevision={label => saveRevision(label)}
+            onReplace={replaceFromHistory}
+            onOpenSettings={() => {
+              setHistoryOpen(false)
+              showPreferences('history')
+            }}
+          />
+        </Suspense>
+      )}
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
-        notes={workspace.notes}
+        notes={view.notes}
         activeNoteId={workspace.activeNoteId}
         headings={paletteHeadings}
         actions={paletteActions}
@@ -2418,7 +3368,13 @@ function App() {
         onJumpToHeading={heading => editorRef.current?.jumpTo(heading.from)}
       />
       <UpdateNotice
-        hidden={focusMode || preferencesOpen || libraryOpen || graphOpen}
+        hidden={
+          focusMode ||
+          preferencesOpen ||
+          libraryOpen ||
+          graphOpen ||
+          historyOpen
+        }
         onOpenSettings={() => showPreferences('updates')}
       />
       <HuggingFaceGuide
@@ -2443,9 +3399,9 @@ function App() {
           <NoteGraph
             open={graphOpen}
             onOpenChange={setGraphOpen}
-            notes={workspace.notes}
+            notes={view.notes}
             library={workspace.contextLibrary}
-            packages={workspace.contextPackages}
+            packages={view.packages}
             activeNoteId={workspace.activeNoteId}
             onOpenNote={openNoteById}
             onCreateNote={title => {
@@ -2602,6 +3558,8 @@ function App() {
           <button
             className="button destructive"
             onClick={() => {
+              if (deleteId)
+                void deleteNoteRevisions(deleteId).catch(() => undefined)
               setWorkspace(value => {
                 const closed = closeNote(value, deleteId ?? '')
                 return {

@@ -1,6 +1,37 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { SetStateAction } from 'react'
 import type { Workspace } from '../types/notebook'
+import { spaceGitFolder, spaceList, spaceOf } from './spaces/spaces'
+
+interface SyncTarget {
+  spaceId: string
+  /** Only the first workspace keeps notes without a workspace id. */
+  home: boolean
+  folder: string
+}
+
+/** Each workspace with a repository folder is synced on its own. */
+export function syncTargets(workspace: Workspace): SyncTarget[] {
+  const seen = new Set<string>()
+  return spaceList(workspace)
+    .map((space, index) => ({
+      spaceId: space.id,
+      home: index === 0,
+      folder: spaceGitFolder(workspace, space),
+    }))
+    .filter(target => {
+      // Two workspaces never share one repository.
+      if (!target.folder || seen.has(target.folder)) return false
+      seen.add(target.folder)
+      return true
+    })
+}
+
+function targetNotes(workspace: Workspace, target: SyncTarget) {
+  return workspace.notes.filter(
+    note => spaceOf(workspace, note) === target.spaceId
+  )
+}
 import {
   applyRemoteChanges,
   commitMessage,
@@ -58,8 +89,11 @@ export function useGitSync(
   notify: (message: string) => void
 ) {
   const settings = workspace.settings.git
-  const enabled =
-    gitSyncAvailable() && settings.enabled && Boolean(settings.folder.trim())
+  const targets = syncTargets(workspace)
+  const targetKey = targets
+    .map(target => `${target.spaceId}=${target.folder}`)
+    .join('\n')
+  const enabled = gitSyncAvailable() && settings.enabled && targets.length > 0
   const running = useRef(false)
   const failures = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -73,71 +107,84 @@ export function useGitSync(
       const { getWorkspace, setWorkspace, notify } = callbacks.current
       const current = getWorkspace()
       const git = current.settings.git
-      if (!gitSyncAvailable() || !git.enabled || !git.folder.trim()) return null
+      const all = syncTargets(current)
+      if (!gitSyncAvailable() || !git.enabled || !all.length) return null
       if (running.current) {
         again.current = true
         return null
       }
       running.current = true
-      const folder = git.folder.trim()
-      const synced = loadSyncedVersions(folder)
-      const { changed, deletedIds } = pendingChanges(current.notes, synced)
       publish({ ...state, phase: 'syncing', message: undefined })
       try {
-        const result = await runGitSync({
-          folder,
-          notes: changed,
-          deletedIds,
-          knownIds: current.notes.map(note => note.id),
-          message: commitMessage(changed, deletedIds.length),
-          pull,
-          push: git.push,
-        })
-        if (result.status === 'busy') {
-          again.current = true
-          publish({ ...state, phase: 'waiting' })
-          return result
-        }
-        if (result.status === 'error')
-          throw new Error(result.error ?? 'Git sync failed.')
-        // What was sent is now in the repository, even when offline.
-        const sent = { ...synced }
-        for (const note of changed) sent[note.id] = note.updatedAt
-        for (const id of deletedIds) delete sent[id]
-        let next = sent
-        if (
-          result.remoteChanges.length ||
-          result.remoteDeletedIds.length ||
-          result.conflicts.length
-        ) {
-          let merged: ReturnType<typeof applyRemoteChanges> | null = null
-          setWorkspace(value => {
-            merged = applyRemoteChanges(value, result, sent)
-            return merged.workspace
+        let last: GitSyncResult | null = null
+        let offline: string | undefined
+        for (const target of all) {
+          const latest = callbacks.current.getWorkspace()
+          const folder = target.folder
+          const notes = targetNotes(latest, target)
+          const synced = loadSyncedVersions(folder)
+          const { changed, deletedIds } = pendingChanges(notes, synced)
+          const result = await runGitSync({
+            folder,
+            notes: changed,
+            deletedIds,
+            knownIds: notes.map(note => note.id),
+            message: commitMessage(changed, deletedIds.length),
+            pull,
+            push: git.push,
           })
-          if (merged) {
-            const done = merged as ReturnType<typeof applyRemoteChanges>
-            next = done.synced
-            const parts = [
-              done.added && `${done.added} new`,
-              done.updated && `${done.updated} updated`,
-              done.copies && `${done.copies} kept as a separate copy`,
-            ].filter(Boolean)
-            if (parts.length) notify(`Git sync: ${parts.join(', ')}.`)
+          if (result.status === 'busy') {
+            again.current = true
+            publish({ ...state, phase: 'waiting' })
+            return result
           }
+          if (result.status === 'error')
+            throw new Error(result.error ?? 'Git sync failed.')
+          // What was sent is now in the repository, even when offline.
+          const sent = { ...synced }
+          for (const note of changed) sent[note.id] = note.updatedAt
+          for (const id of deletedIds) delete sent[id]
+          let next = sent
+          if (
+            result.remoteChanges.length ||
+            result.remoteDeletedIds.length ||
+            result.conflicts.length
+          ) {
+            let merged: ReturnType<typeof applyRemoteChanges> | null = null
+            setWorkspace(value => {
+              merged = applyRemoteChanges(
+                value,
+                result,
+                sent,
+                Date.now(),
+                target.home ? undefined : target.spaceId
+              )
+              return merged.workspace
+            })
+            if (merged) {
+              const done = merged as ReturnType<typeof applyRemoteChanges>
+              next = done.synced
+              const parts = [
+                done.added && `${done.added} new`,
+                done.updated && `${done.updated} updated`,
+                done.copies && `${done.copies} kept as a separate copy`,
+              ].filter(Boolean)
+              if (parts.length) notify(`Git sync: ${parts.join(', ')}.`)
+            }
+          }
+          saveSyncedVersions(folder, next)
+          if (result.status === 'offline')
+            offline = result.error ?? 'The remote is not reachable.'
+          last = result
         }
-        saveSyncedVersions(folder, next)
         failures.current = 0
         publish({
-          phase: result.status === 'offline' ? 'offline' : 'synced',
+          phase: offline ? 'offline' : 'synced',
           at: Date.now(),
-          last: result,
-          message:
-            result.status === 'offline'
-              ? `Saved in the repository. ${result.error ?? 'The remote is not reachable.'}`
-              : undefined,
+          ...(last ? { last } : {}),
+          message: offline ? `Saved in the repository. ${offline}` : undefined,
         })
-        return result
+        return last
       } catch (error) {
         failures.current++
         publish({
@@ -177,14 +224,19 @@ export function useGitSync(
       if (document.visibilityState !== 'hidden') void sync(true)
     }, settings.pullMinutes * 60_000)
     return () => clearInterval(interval)
-  }, [enabled, settings.folder, settings.pullMinutes, sync])
+  }, [enabled, targetKey, settings.pullMinutes, sync])
 
   // After writing stops, commit what changed. Errors wait longer each time.
   useEffect(() => {
     if (!enabled || !settings.autoSync) return
-    const synced = loadSyncedVersions(settings.folder.trim())
-    const { changed, deletedIds } = pendingChanges(workspace.notes, synced)
-    if (!changed.length && !deletedIds.length) return
+    const waiting = syncTargets(workspace).some(target => {
+      const { changed, deletedIds } = pendingChanges(
+        targetNotes(workspace, target),
+        loadSyncedVersions(target.folder)
+      )
+      return changed.length > 0 || deletedIds.length > 0
+    })
+    if (!waiting) return
     if (timer.current) clearTimeout(timer.current)
     const backoff = failures.current
       ? Math.min(MAX_BACKOFF_MS, 30_000 * 2 ** (failures.current - 1))
@@ -202,11 +254,11 @@ export function useGitSync(
       if (timer.current) clearTimeout(timer.current)
     }
   }, [
-    workspace.notes,
+    workspace,
     enabled,
     settings.autoSync,
     settings.delaySeconds,
-    settings.folder,
+    targetKey,
     sync,
   ])
 

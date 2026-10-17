@@ -145,7 +145,10 @@ async function setupEmbedded(
     .getByRole('switch', { name: /^Suggest after a pause/ })
     .setChecked(automatic)
   await dialog.getByLabel('Pause before suggesting').fill('650')
-  await dialog.getByLabel('Suggestion length').selectOption('short')
+  await dialog
+      .getByRole('radiogroup', { name: 'Suggestion length' })
+      .getByRole('radio', { name: 'Few words', exact: true })
+      .click()
   await dialog.getByRole('tab', { name: 'Models', exact: true }).click()
   await dialog
     .getByRole('region', { name: 'On this device', exact: true })

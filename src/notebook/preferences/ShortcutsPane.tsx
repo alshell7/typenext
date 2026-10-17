@@ -1,7 +1,10 @@
-import { Section } from './controls'
+import type { ShortcutSettings } from '../../types/notebook'
+import { shortcutText } from '../shortcuts'
+import { Group, Section } from './controls'
+import { ShortcutField } from './ShortcutField'
 import type { PaneProps } from './types'
 
-function groups(trigger: string) {
+function groups(trigger: string, keys: ShortcutSettings) {
   return [
     {
       title: 'Notes',
@@ -22,7 +25,12 @@ function groups(trigger: string) {
         ['Dictate on this device', 'Ctrl / ⌘ Shift D'],
         ['Insert menu', trigger],
         ['Search the web for facts', 'Ctrl / ⌘ Shift K'],
+        ['AI actions for the selection', shortcutText(keys.aiActions)],
+        ['Save a version (History)', 'Ctrl / ⌘ Alt S'],
+        ['Open History', 'Ctrl / ⌘ Alt H'],
         ['Note graph', 'Ctrl / ⌘ Shift G'],
+        ['Find in the note', 'Ctrl / ⌘ F'],
+        ['Find and replace', 'Ctrl / ⌘ Alt F'],
         ['Insert a link', 'Ctrl / ⌘ K'],
         ['Italic', 'Ctrl / ⌘ I'],
         ['Check or uncheck a task', 'Ctrl / ⌘ Enter'],
@@ -33,9 +41,9 @@ function groups(trigger: string) {
     {
       title: 'Suggestions',
       items: [
-        ['Suggest at the cursor', 'Ctrl / ⌘ Space'],
+        ['Suggest at the cursor', shortcutText(keys.suggest)],
         ['Accept', 'Tab'],
-        ['Accept one word', 'Ctrl / ⌘ →'],
+        ['Accept one word', shortcutText(keys.acceptWord)],
         ['Choose another', '↑ ↓'],
         ['Dismiss', 'Esc'],
       ],
@@ -48,11 +56,31 @@ function isMac() {
   return /Mac|iPhone|iPad/u.test(navigator.platform || navigator.userAgent)
 }
 
-export function ShortcutsPane({ settings }: PaneProps) {
+export function ShortcutsPane({ settings, update, latest }: PaneProps) {
   const modifier = isMac() ? '⌘' : 'Ctrl'
+  const keys = settings.shortcuts
   return (
     <>
-      {groups(settings.editor.slashTrigger).map(group => (
+      <Section
+        title="Your keys"
+        description="Choose the keys for suggestions and AI. Click a key, then press the new combination."
+      >
+        <Group>
+          {(['suggest', 'acceptWord', 'aiActions'] as const).map(name => (
+            <ShortcutField
+              key={name}
+              name={name}
+              shortcuts={keys}
+              onChange={binding =>
+                update({
+                  shortcuts: { ...latest().shortcuts, [name]: binding },
+                })
+              }
+            />
+          ))}
+        </Group>
+      </Section>
+      {groups(settings.editor.slashTrigger, keys).map(group => (
         <Section key={group.title} title={group.title}>
           <dl className="pref-shortcuts">
             {group.items.map(([label, keys]) => (

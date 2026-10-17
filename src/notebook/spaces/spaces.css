@@ -1,0 +1,590 @@
+/* Workspaces: the switcher at the foot of the sidebar and its manager. */
+.space-avatar {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--org) 92%, white),
+    color-mix(in srgb, var(--org) 80%, black)
+  );
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 22%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 28%),
+    0 1px 2px rgb(0 0 0 / 18%);
+}
+.space-avatar.is-small {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+.space-avatar.is-large {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 19px;
+}
+.space-avatar-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--sidebar, var(--paper));
+  border-radius: 50%;
+  background: var(--sidebar-ink, var(--ink));
+  color: var(--sidebar, var(--paper));
+}
+.space-switcher {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 2px 0 10px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background-color 140ms ease-out;
+}
+.space-switcher:hover,
+.space-switcher[aria-expanded='true'] {
+  background: var(--sidebar-hover, var(--hover));
+}
+.space-switcher-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.space-switcher-text strong {
+  overflow: hidden;
+  color: var(--sidebar-ink, var(--ink));
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.space-switcher-text small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--sidebar-muted, var(--muted));
+  font-size: 11px;
+}
+.space-switcher-text small span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.space-switcher-chevron {
+  flex: none;
+  color: var(--sidebar-muted, var(--muted));
+}
+
+.popover.space-menu {
+  width: 272px;
+  padding: 6px;
+  transform-origin: bottom left;
+}
+.space-menu-heading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px 4px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.space-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 9px;
+  text-align: left;
+  outline: none;
+}
+.space-option:hover,
+.space-option:focus-visible,
+.space-option:focus {
+  background: var(--hover);
+}
+.space-option-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.space-option-text strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.space-option-text small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.space-option-git {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.space-option-check {
+  flex: none;
+  color: var(--accent);
+}
+.space-option-key {
+  flex: none;
+  font-size: 9.5px;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.space-option:hover .space-option-key,
+.space-option:focus .space-option-key {
+  opacity: 0.8;
+}
+.space-menu-separator {
+  height: 1px;
+  margin: 5px 6px;
+  background: var(--line);
+}
+.space-menu-actions {
+  display: grid;
+}
+.space-menu-action {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: 7px;
+  color: var(--secondary);
+  font-size: 12.5px;
+  text-align: left;
+}
+.space-menu-action:hover,
+.space-menu-action:focus-visible {
+  background: var(--hover);
+  color: var(--ink);
+}
+.space-create {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+}
+.space-create input {
+  min-width: 0;
+  padding: 6px 9px;
+  font-size: 13px;
+}
+.space-menu-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 6px 4px 2px;
+  padding: 8px 8px 4px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.space-menu-privacy svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* A switch fades the notebook out and in, so the change is felt, not jarring. */
+.app-shell.is-switching-space .note-list,
+.app-shell.is-switching-space .workspace-body,
+.app-shell.is-switching-space .note-tabs {
+  animation: space-switch 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes space-switch {
+  from {
+    opacity: 0.35;
+    transform: translateY(3px);
+  }
+}
+
+/* Shared workspaces in the sidebar */
+.space-section {
+  margin-top: 10px;
+}
+.space-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 9px 6px;
+  color: var(--sidebar-muted, var(--muted));
+  font-size: 12px;
+  text-align: left;
+}
+.space-section-heading strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--sidebar-secondary, var(--secondary));
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.space-section-heading .org-chevron {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.space-section-heading[aria-expanded='true'] .org-chevron {
+  transform: rotate(90deg);
+}
+.space-section-heading.is-drop-target {
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--org) 16%, transparent);
+}
+
+/* Manager */
+.dialog-content.space-manager {
+  width: min(760px, calc(100vw - 32px));
+}
+.space-manager-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  min-height: 380px;
+  margin-top: 16px;
+}
+.space-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 14px;
+  border-right: 1px solid var(--line);
+}
+.space-manager-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  text-align: left;
+}
+.space-manager-item:hover {
+  background: var(--hover);
+}
+.space-manager-item[aria-selected='true'] {
+  background: var(--accent-soft);
+}
+.space-manager-item span:last-child {
+  display: grid;
+  min-width: 0;
+}
+.space-manager-item strong {
+  overflow: hidden;
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.space-manager-item small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.space-manager-add {
+  display: grid;
+  margin-top: auto;
+  padding-top: 10px;
+}
+.space-manager-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.space-manager-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.space-manager-name {
+  padding: 6px 8px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.space-manager-name:hover {
+  border-color: var(--line);
+}
+.space-manager-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.space-manager-colors {
+  display: flex;
+  gap: 8px;
+}
+.space-manager-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.space-manager-row > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.space-manager-row strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.space-manager-row small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.space-manager-folder {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--secondary);
+  font:
+    11px 'JetBrains Mono',
+    monospace;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.space-manager-git-actions {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+.space-manager-danger {
+  margin-top: auto;
+}
+.space-manager-remove {
+  color: var(--error);
+}
+.space-manager-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--error) 35%, var(--line));
+  border-radius: 11px;
+  animation: popover-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.space-manager-confirm p {
+  margin: 0;
+  font-size: 13px;
+}
+.space-manager-confirm select {
+  padding: 7px 9px;
+  font-size: 13px;
+}
+.space-manager-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+@media (max-width: 640px) {
+  .space-manager-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .space-manager-list {
+    padding-right: 0;
+    padding-bottom: 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.is-switching-space .note-list,
+  .app-shell.is-switching-space .workspace-body,
+  .app-shell.is-switching-space .note-tabs {
+    animation: none;
+  }
+}
+
+/* One scroll area for the open workspace and the shared ones below it. */
+.sidebar-lists {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+.sidebar-lists > .note-list,
+.sidebar-lists .space-section > .note-list {
+  flex: none;
+  overflow: visible;
+  min-height: 0;
+  padding-bottom: 4px;
+}
+.space-section-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.space-section-add {
+  position: absolute;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.space-section-row:hover .space-section-add,
+.space-section-add:focus-visible {
+  opacity: 1;
+}
+.space-section-row:hover .space-section-heading > span:last-child {
+  visibility: hidden;
+}
+
+/* Icons */
+.space-avatar svg {
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 20%));
+}
+.space-manager-avatar {
+  position: relative;
+  border-radius: 13px;
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.space-manager-avatar:hover {
+  transform: scale(1.05);
+}
+.space-manager-avatar::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 1.5px dashed transparent;
+  border-radius: 15px;
+  transition: border-color 140ms ease-out;
+}
+.space-manager-avatar:hover::after,
+.space-manager-avatar[aria-expanded='true']::after {
+  border-color: var(--line);
+}
+.popover.space-icon-picker {
+  width: 300px;
+  padding: 0;
+  overflow: hidden;
+}
+.space-icon-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+.space-icon-search input {
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+}
+.space-icon-search input:focus {
+  box-shadow: none;
+}
+.space-icon-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px 10px 12px;
+}
+.space-icon-scroll h4 {
+  margin: 10px 2px 6px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.space-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.space-icon-option {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 9px;
+  color: var(--secondary);
+  transition:
+    background-color 110ms ease-out,
+    color 110ms ease-out,
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.space-icon-option:hover {
+  background: color-mix(in srgb, var(--org) 14%, transparent);
+  color: var(--org);
+  transform: scale(1.08);
+}
+.space-icon-option[aria-pressed='true'] {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--org) 92%, white),
+    color-mix(in srgb, var(--org) 80%, black)
+  );
+  color: #fff;
+}
+.space-icon-letter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  text-align: left;
+}
+.space-icon-letter:hover {
+  background: var(--hover);
+}
+.space-icon-letter svg {
+  margin-left: auto;
+  color: var(--accent);
+}
+.space-icon-letter-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--org);
+  color: #fff;
+  font-weight: 700;
+}
+.space-icon-empty {
+  margin: 16px 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}

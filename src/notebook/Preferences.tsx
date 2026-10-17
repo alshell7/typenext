@@ -11,6 +11,7 @@ import {
   GitBranch,
   Mic,
   ArrowUpCircle,
+  History,
 } from 'lucide-react'
 import type { NotebookSettings } from '../types/notebook'
 import { Modal } from './Modal'
@@ -29,6 +30,7 @@ import { WebFactsPane } from './preferences/WebFactsPane'
 import { SyncPane } from './preferences/SyncPane'
 import { DictationPane } from './preferences/DictationPane'
 import { UpdatesPane } from './preferences/UpdatesPane'
+import { HistoryPane } from './preferences/HistoryPane'
 import { WritingPane } from './preferences/WritingPane'
 import './preferences.css'
 
@@ -81,6 +83,12 @@ export const PREFERENCE_PANES: {
     label: 'Dictation',
     description: 'Speech engine, microphone and voice commands.',
     icon: Mic,
+  },
+  {
+    id: 'history',
+    label: 'History',
+    description: 'Versions of every note, with or without Git.',
+    icon: History,
   },
   {
     id: 'sync',
@@ -229,6 +237,7 @@ export function Preferences({
             {active === 'knowledge' && <KnowledgePane {...props} />}
             {active === 'web' && <WebFactsPane {...props} />}
             {active === 'sync' && <SyncPane {...props} />}
+            {active === 'history' && <HistoryPane {...props} />}
             {active === 'dictation' && <DictationPane {...props} />}
             {active === 'updates' && <UpdatesPane {...props} />}
             {active === 'shortcuts' && <ShortcutsPane {...props} />}

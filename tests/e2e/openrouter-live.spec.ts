@@ -190,7 +190,10 @@ test('live free model returns three fresh manual choices in one consented reques
     await page.getByRole('button', { name: 'Preferences', exact: true }).click()
     await page.getByRole('tab', { name: 'Suggestions' }).click()
     await page.getByRole('switch', { name: /^Suggest after a pause/ }).uncheck()
-    await page.getByLabel('Suggestion length').selectOption('adaptive')
+    await page
+      .getByRole('radiogroup', { name: 'Suggestion length' })
+      .getByRole('radio', { name: 'Adapt', exact: true })
+      .click()
     await page.getByRole('button', { name: 'Done', exact: true }).click()
     await openExternalSettings(page)
     const external = page.getByRole('region', {

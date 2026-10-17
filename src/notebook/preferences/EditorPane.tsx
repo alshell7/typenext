@@ -339,6 +339,12 @@ export function EditorPane({ settings, update, latest }: PaneProps) {
             checked={editor.livePreview}
             onChange={livePreview => patch({ livePreview })}
           />
+          <SwitchRow
+            label="Show links as their text"
+            description="[A guide](https://…) reads as A guide, and [[Note|label]] as label. The full link returns when the cursor enters it."
+            checked={editor.foldLinks}
+            onChange={foldLinks => patch({ foldLinks })}
+          />
           <Row
             label="Link previews"
             description={

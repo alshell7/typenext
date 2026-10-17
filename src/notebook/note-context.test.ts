@@ -236,3 +236,47 @@ describe('live linked-note context', () => {
     expect(linkNoteSource(reference)).toEqual(linkNoteSource(reference))
   })
 })
+
+describe('folders as context', () => {
+  it('links every note in a folder and its subfolders, live', async () => {
+    const { resolveNoteContext } = await import('./note-context')
+    const { newNote } = await import('./model')
+    const writing = { ...newNote('Draft'), contextFolderIds: ['research'] }
+    const folders = [
+      { id: 'research', name: 'Research', createdAt: 1 },
+      {
+        id: 'interviews',
+        name: 'Interviews',
+        parentId: 'research',
+        createdAt: 1,
+      },
+    ]
+    const a = {
+      ...newNote('Survey'),
+      content: 'Survey notes',
+      folderId: 'research',
+    }
+    const b = {
+      ...newNote('Sam'),
+      content: 'Interview with Sam',
+      folderId: 'interviews',
+    }
+    const c = { ...newNote('Elsewhere'), content: 'Not included' }
+    const resolved = resolveNoteContext(
+      writing,
+      [writing, a, b, c],
+      [],
+      [],
+      folders
+    )
+    expect(resolved.sources.map(source => source.text).sort()).toEqual([
+      'Interview with Sam',
+      'Survey notes',
+    ])
+    expect(resolved.sources.every(source => source.enabled)).toBe(true)
+    // A folder that no longer exists brings nothing.
+    expect(
+      resolveNoteContext(writing, [writing, a], [], [], []).sources
+    ).toEqual([])
+  })
+})
