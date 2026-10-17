@@ -1,5 +1,6 @@
-use serde::ser::SerializeStruct;
+use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
@@ -10,7 +11,60 @@ use tauri_plugin_fs::FsExt;
 
 const MAX_WORKSPACE_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_MARKDOWN_BYTES: usize = 8 * 1024 * 1024;
-const PROVIDERS: [&str; 5] = ["openrouter", "openai", "anthropic", "local", "custom"];
+const PROVIDERS: [&str; 6] = [
+    "openrouter",
+    "openai",
+    "anthropic",
+    "cloudflare",
+    "local",
+    "custom",
+];
+/// Notebooks saved before a provider existed lack its profile; the app adds
+/// the default when it loads them.
+const REQUIRED_PROVIDERS: [&str; 5] = ["openrouter", "openai", "anthropic", "local", "custom"];
+const SOURCE_KINDS: [&str; 9] = [
+    "text", "markdown", "pdf", "docx", "website", "note", "image", "audio", "video",
+];
+/// Fields this crate does not model (newer settings, media details) are kept
+/// as they are, so a save never drops what the app wrote.
+type Extra = Map<String, Value>;
+
+/// Keys never belong in the notebook file. The app does not write them; this
+/// is a second guard for the fields that pass through unmodelled.
+fn is_secret_name(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.ends_with("key")
+        || name.ends_with("token")
+        || name.contains("secret")
+        || name.contains("password")
+}
+
+fn strip_secrets(fields: &mut Extra) {
+    fields.retain(|name, _| !is_secret_name(name));
+    for value in fields.values_mut() {
+        strip_secret_values(value);
+    }
+}
+
+fn strip_secret_values(value: &mut Value) {
+    match value {
+        Value::Object(fields) => strip_secrets(fields),
+        Value::Array(items) => items.iter_mut().for_each(strip_secret_values),
+        _ => {}
+    }
+}
+
+impl Workspace {
+    /// Remove load metadata and anything shaped like a credential before a save.
+    fn prepare_for_save(&mut self) {
+        self.extra.remove("recovered");
+        strip_secrets(&mut self.extra);
+        strip_secrets(&mut self.settings.extra);
+        for profile in self.settings.profiles.values_mut() {
+            strip_secrets(&mut profile.extra);
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct WorkspaceState {
@@ -29,6 +83,8 @@ pub struct Workspace {
     open_note_ids: Vec<String>,
     active_note_id: Option<String>,
     settings: Settings,
+    #[serde(flatten)]
+    extra: Extra,
 }
 
 #[derive(Serialize)]
@@ -56,6 +112,8 @@ struct Note {
     file_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     exported_at: Option<u64>,
+    #[serde(flatten)]
+    extra: Extra,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -85,20 +143,17 @@ struct ContextSource {
     folder: Option<String>,
     enabled: bool,
     added_at: u64,
+    #[serde(flatten)]
+    extra: Extra,
 }
 
 impl Serialize for ContextSource {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let fields = 6
-            + usize::from(self.origin.is_some())
-            + usize::from(self.linked_note_id.is_some())
-            + usize::from(self.library_id.is_some())
-            + usize::from(self.folder.is_some());
-        let mut source = serializer.serialize_struct("ContextSource", fields)?;
-        source.serialize_field("id", &self.id)?;
-        source.serialize_field("name", &self.name)?;
-        source.serialize_field("kind", &self.kind)?;
-        source.serialize_field(
+        let mut source = serializer.serialize_map(None)?;
+        source.serialize_entry("id", &self.id)?;
+        source.serialize_entry("name", &self.name)?;
+        source.serialize_entry("kind", &self.kind)?;
+        source.serialize_entry(
             "text",
             if self.kind == "note" || self.library_id.is_some() {
                 ""
@@ -107,19 +162,22 @@ impl Serialize for ContextSource {
             },
         )?;
         if let Some(origin) = &self.origin {
-            source.serialize_field("origin", origin)?;
+            source.serialize_entry("origin", origin)?;
         }
         if let Some(linked_note_id) = &self.linked_note_id {
-            source.serialize_field("linkedNoteId", linked_note_id)?;
+            source.serialize_entry("linkedNoteId", linked_note_id)?;
         }
         if let Some(library_id) = &self.library_id {
-            source.serialize_field("libraryId", library_id)?;
+            source.serialize_entry("libraryId", library_id)?;
         }
         if let Some(folder) = &self.folder {
-            source.serialize_field("folder", folder)?;
+            source.serialize_entry("folder", folder)?;
         }
-        source.serialize_field("enabled", &self.enabled)?;
-        source.serialize_field("addedAt", &self.added_at)?;
+        source.serialize_entry("enabled", &self.enabled)?;
+        source.serialize_entry("addedAt", &self.added_at)?;
+        for (key, value) in &self.extra {
+            source.serialize_entry(key, value)?;
+        }
         source.end()
     }
 }
@@ -151,6 +209,8 @@ struct Settings {
     external_provider: String,
     profiles: HashMap<String, ProviderProfile>,
     website_importer: String,
+    #[serde(flatten)]
+    extra: Extra,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -160,6 +220,8 @@ struct ProviderProfile {
     endpoint: String,
     model: String,
     protocol: String,
+    #[serde(flatten)]
+    extra: Extra,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -285,10 +347,7 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
             if !source_ids.insert(&source.id) {
                 return Err("A note contains duplicate context sources".into());
             }
-            if !matches!(
-                source.kind.as_str(),
-                "text" | "markdown" | "pdf" | "docx" | "website" | "note"
-            ) {
+            if !SOURCE_KINDS.contains(&source.kind.as_str()) {
                 return Err("A context source has an unsupported format".into());
             }
             if source.kind == "note" {
@@ -325,10 +384,7 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
         if !library_ids.insert(&source.id) || source.library_id.is_some() {
             return Err("The library contains duplicate or nested references".into());
         }
-        if !matches!(
-            source.kind.as_str(),
-            "text" | "markdown" | "pdf" | "docx" | "website" | "note"
-        ) {
+        if !SOURCE_KINDS.contains(&source.kind.as_str()) {
             return Err("A library reference has an unsupported format".into());
         }
         if source.kind == "note" {
@@ -402,7 +458,7 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
         )
         || !matches!(
             settings.external_provider.as_str(),
-            "openrouter" | "openai" | "anthropic" | "custom"
+            "openrouter" | "openai" | "anthropic" | "cloudflare" | "custom"
         )
         || !matches!(settings.website_importer.as_str(), "direct" | "firecrawl")
         || !(8.0..=72.0).contains(&settings.font_size)
@@ -424,14 +480,16 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
         "Suggestion instructions",
     )?;
     bounded_text(&settings.font_family, 256, "Font preference")?;
-    if settings.profiles.len() != PROVIDERS.len() {
+    if REQUIRED_PROVIDERS
+        .iter()
+        .any(|provider| !settings.profiles.contains_key(*provider))
+    {
         return Err("Provider preferences are incomplete".into());
     }
-    for provider in PROVIDERS {
-        let profile = settings
-            .profiles
-            .get(provider)
-            .ok_or("Provider preferences are incomplete")?;
+    for (provider, profile) in &settings.profiles {
+        if !PROVIDERS.contains(&provider.as_str()) {
+            return Err("The notebook contains an unknown provider".into());
+        }
         if profile.saved_models.len() > 32 {
             return Err("Too many saved models".into());
         }
@@ -835,6 +893,7 @@ pub async fn persist_workspace(
     if !workspace.settings.external_auto_enabled {
         workspace.settings.provider = "local".into();
     }
+    workspace.prepare_for_save();
     let directory = app
         .path()
         .app_data_dir()
@@ -925,6 +984,83 @@ mod tests {
                 }
             }
         })).unwrap()
+    }
+
+    #[test]
+    fn current_app_fields_validate_and_survive_a_save_while_old_notebooks_still_load() {
+        let mut value = serde_json::to_value(example("Kept")).unwrap();
+        value["settings"]["profiles"]["cloudflare"] = json!({
+            "endpoint": "", "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+            "protocol": "chat", "accountId": "0123456789abcdef0123456789abcdef"
+        });
+        value["settings"]["externalProvider"] = json!("cloudflare");
+        value["settings"]["editor"] = json!({ "slashMenu": true, "dailyGoal": 500 });
+        value["settings"]["git"] =
+            json!({ "enabled": true, "remote": "git@github.com:writer/notes.git" });
+        value["settings"]["dictation"] = json!({ "engine": "fluid", "silenceStopSeconds": 4 });
+        value["settings"]["zenLevel"] = json!("full");
+        value["notes"][0]["autoTitle"] = json!(true);
+        value["notes"][0]["sources"] = json!([{
+            "id": "photo", "name": "whiteboard.jpg", "kind": "image",
+            "text": "Whiteboard from the design review", "enabled": true, "addedAt": 3,
+            "media": { "mime": "image/jpeg", "bytes": 52_000, "vector": "AAAA", "vectorModel": "embeddinggemma-2" }
+        }]);
+        let workspace: Workspace = serde_json::from_value(value.clone()).unwrap();
+        validate_workspace(&workspace).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        persist_at_path(directory.path(), &workspace).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(paths(directory.path()).0).unwrap()).unwrap();
+        for pointer in [
+            "/settings/profiles/cloudflare/accountId",
+            "/settings/externalProvider",
+            "/settings/editor/dailyGoal",
+            "/settings/git/remote",
+            "/settings/dictation/engine",
+            "/settings/zenLevel",
+            "/notes/0/autoTitle",
+            "/notes/0/sources/0/kind",
+            "/notes/0/sources/0/media/vectorModel",
+        ] {
+            assert_eq!(saved.pointer(pointer), value.pointer(pointer), "{pointer}");
+        }
+        assert_eq!(saved.pointer("/notes/0/content"), Some(&json!("Kept")));
+        // A 0.1.3 notebook has no Cloudflare profile; it still loads.
+        assert!(validate_workspace(&example("Old")).is_ok());
+        let mut leaky = value.clone();
+        leaky["recovered"] = json!(true);
+        leaky["settings"]["profiles"]["openai"]["apiKey"] = json!("sk-never-saved");
+        leaky["settings"]["git"]["accessToken"] = json!("ghp-never-saved");
+        leaky["settings"]["webFacts"] = json!({ "enabled": true, "clientSecret": "x" });
+        let mut leaky: Workspace = serde_json::from_value(leaky).unwrap();
+        leaky.prepare_for_save();
+        let cleaned = serde_json::to_value(&leaky).unwrap();
+        assert!(cleaned.get("recovered").is_none());
+        assert!(cleaned
+            .pointer("/settings/profiles/openai/apiKey")
+            .is_none());
+        assert!(cleaned.pointer("/settings/git/accessToken").is_none());
+        assert_eq!(
+            cleaned.pointer("/settings/git/remote"),
+            value.pointer("/settings/git/remote")
+        );
+        assert!(cleaned.pointer("/settings/webFacts/clientSecret").is_none());
+        assert_eq!(
+            cleaned.pointer("/settings/profiles/cloudflare/accountId"),
+            value.pointer("/settings/profiles/cloudflare/accountId")
+        );
+        let mut unknown = value.clone();
+        unknown["settings"]["profiles"]["mystery"] =
+            json!({ "endpoint": "", "model": "", "protocol": "chat" });
+        let unknown: Workspace = serde_json::from_value(unknown).unwrap();
+        assert!(validate_workspace(&unknown).is_err());
+        let mut missing = value;
+        missing["settings"]["profiles"]
+            .as_object_mut()
+            .unwrap()
+            .remove("openai");
+        let missing: Workspace = serde_json::from_value(missing).unwrap();
+        assert!(validate_workspace(&missing).is_err());
     }
 
     #[test]
@@ -1041,6 +1177,7 @@ mod tests {
             folder: None,
             enabled: true,
             added_at: 1,
+            extra: Default::default(),
         }
     }
 
@@ -1374,6 +1511,7 @@ mod tests {
             folder: None,
             enabled: true,
             added_at: 1,
+            extra: Default::default(),
         });
         assert!(persist_at_path(directory.path(), &oversized)
             .unwrap_err()
@@ -1581,6 +1719,7 @@ mod tests {
             folder: None,
             enabled: true,
             added_at: 1,
+            extra: Default::default(),
         });
         persist_at_path(directory.path(), &workspace).unwrap();
         let primary = paths(directory.path()).0;
