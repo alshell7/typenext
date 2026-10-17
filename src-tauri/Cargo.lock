@@ -5248,7 +5248,7 @@ checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
 
 [[package]]
 name = "typenext"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "flate2",
  "getrandom 0.3.3",
