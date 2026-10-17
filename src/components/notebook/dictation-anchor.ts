@@ -1,4 +1,5 @@
 import {
+  Annotation,
   type ChangeDesc,
   EditorSelection,
   MapMode,
@@ -147,11 +148,20 @@ export const dictationAnchorDecoration = EditorView.decorations.compute(
   }
 )
 
+/**
+ * Marks the transaction that ends a dictation which inserted words, so the
+ * editor can offer a suggestion as it does after typing.
+ */
+export const dictationFinished = Annotation.define<true>()
+
 export interface DictationCapture {
   /** Insert final text and end the session (the original single-clip API). */
   commit(text: string): void
-  /** End the session. Text inserted earlier stays and can be undone. */
-  cancel(): void
+  /**
+   * End the session. Text inserted earlier stays and can be undone.
+   * `finished` is true when the dictation ended normally with words.
+   */
+  cancel(finished?: boolean): void
   transcribing(): void
   /** Back to listening after `transcribing`. */
   listening?(): void
@@ -205,9 +215,12 @@ export function startDictationCapture(
       })
   }
   return {
-    cancel() {
+    cancel(finished = false) {
       if (alive() && view.state.field(dictationAnchorField)?.id === id)
-        view.dispatch({ effects: setDictationAnchor.of(null) })
+        view.dispatch({
+          effects: setDictationAnchor.of(null),
+          ...(finished ? { annotations: dictationFinished.of(true) } : {}),
+        })
     },
     // Finish recognition even if typing removed the insertion point. A later
     // commit failure keeps the transcript available for recovery.

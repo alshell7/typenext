@@ -574,7 +574,8 @@ export class DictationSession {
         this.held = []
       }
     }
-    capture.cancel()
+    // Ending with words lets the editor suggest, as it does after typing.
+    capture.cancel(this.words > 0)
     const recovery = this.recovery.length ? plainDictation(this.recovery) : ''
     if (recovery)
       this.failure ||= 'Place the cursor and insert your transcript below.'
