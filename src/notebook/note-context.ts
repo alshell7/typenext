@@ -1,4 +1,43 @@
-import type { ContextPackage, ContextSource, Note } from '../types/notebook'
+import type {
+  ContextPackage,
+  ContextSource,
+  Note,
+  NoteFolder,
+} from '../types/notebook'
+
+/** At most this many notes from one attached folder, the newest first. */
+export const MAX_FOLDER_CONTEXT_NOTES = 64
+
+/** The notes a folder link brings in: the folder and its subfolders. */
+export function folderContextNotes(
+  folderId: string,
+  notes: readonly Note[],
+  folders: readonly NoteFolder[],
+  except?: string
+): Note[] {
+  const inside = new Set([folderId])
+  for (let grew = true; grew;) {
+    grew = false
+    for (const folder of folders)
+      if (
+        folder.parentId &&
+        inside.has(folder.parentId) &&
+        !inside.has(folder.id)
+      ) {
+        inside.add(folder.id)
+        grew = true
+      }
+  }
+  return notes
+    .filter(
+      candidate =>
+        candidate.id !== except &&
+        candidate.folderId !== undefined &&
+        inside.has(candidate.folderId)
+    )
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .slice(0, MAX_FOLDER_CONTEXT_NOTES)
+}
 
 const EMPTY_LIBRARY: ContextSource[] = []
 const EMPTY_PACKAGES: ContextPackage[] = []
@@ -31,11 +70,14 @@ export function resolveNoteContext(
   note: Note,
   notes: Note[],
   library: ContextSource[] = EMPTY_LIBRARY,
-  packages: ContextPackage[] = EMPTY_PACKAGES
+  packages: ContextPackage[] = EMPTY_PACKAGES,
+  folders: readonly NoteFolder[] = []
 ): Note {
   const hasPackages = !!note.contextPackageIds?.length
+  const hasFolders = !!note.contextFolderIds?.length
   if (
     !hasPackages &&
+    !hasFolders &&
     !note.sources.some(source => source.kind === 'note' || source.libraryId)
   )
     return note
@@ -140,6 +182,24 @@ export function resolveNoteContext(
       }
     }
   }
+  // An attached folder links each of its notes, as "Use a note" would.
+  if (hasFolders) {
+    for (const folderId of new Set(note.contextFolderIds)) {
+      if (!folders.some(folder => folder.id === folderId)) continue
+      for (const linked of folderContextNotes(
+        folderId,
+        notes,
+        folders,
+        note.id
+      ))
+        include(
+          resolveSource({
+            ...linkNoteSource(linked),
+            id: `folder-${folderId}-${linked.id}`,
+          })
+        )
+    }
+  }
   return { ...note, sources }
 }
 
@@ -148,9 +208,10 @@ export function resolvedContextBudget(
   note: Note,
   notes: Note[],
   library: ContextSource[] = EMPTY_LIBRARY,
-  packages: ContextPackage[] = EMPTY_PACKAGES
+  packages: ContextPackage[] = EMPTY_PACKAGES,
+  folders: readonly NoteFolder[] = []
 ): { sources: number; characters: number } {
-  const resolved = resolveNoteContext(note, notes, library, packages)
+  const resolved = resolveNoteContext(note, notes, library, packages, folders)
   return {
     sources: resolved.sources.length,
     characters: resolved.sources.reduce(

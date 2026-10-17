@@ -1,5 +1,13 @@
-import { useEffect, useId, useMemo, useState, type CSSProperties } from 'react'
-import { Check } from 'lucide-react'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
+import { Check, ChevronDown } from 'lucide-react'
+import { ColorPicker } from './ColorPicker'
 import type { NotebookSettings, PaletteColors } from '../types/notebook'
 import {
   DARK_PALETTES,
@@ -55,6 +63,73 @@ function PalettePreview({ colors }: { colors: PaletteColors }) {
   )
 }
 
+const PRESETS: Record<Appearance, Record<ColorRole, readonly string[]>> = {
+  light: {
+    page: [
+      '#ffffff',
+      '#fbf9f4',
+      '#f7f4ec',
+      '#f4f7fa',
+      '#f6f4fb',
+      '#f2f6f1',
+      '#fff8f1',
+      '#f7f2f2',
+    ],
+    sidebar: [
+      '#f3f4f1',
+      '#eee7db',
+      '#e7edf3',
+      '#e6e8eb',
+      '#ece9f6',
+      '#e9efe7',
+      '#f4ebe0',
+      '#efe5e5',
+    ],
+    accent: [
+      '#42644d',
+      '#805f44',
+      '#426482',
+      '#123d77',
+      '#5b4b8a',
+      '#8a3b5c',
+      '#9a5b13',
+      '#2f6f6a',
+    ],
+  },
+  dark: {
+    page: [
+      '#212121',
+      '#151c28',
+      '#202921',
+      '#000000',
+      '#0b0b0e',
+      '#1d1a24',
+      '#24201c',
+      '#1b1f23',
+    ],
+    sidebar: [
+      '#17191c',
+      '#111722',
+      '#172019',
+      '#101114',
+      '#22252d',
+      '#16131c',
+      '#1b1815',
+      '#14181c',
+    ],
+    accent: [
+      '#a6b6c8',
+      '#91acce',
+      '#a8bf9d',
+      '#c3d9ff',
+      '#c4b5fd',
+      '#f0a6c0',
+      '#e6c07b',
+      '#8fd3c7',
+    ],
+  },
+}
+
 function HexField({
   appearance,
   role,
@@ -69,6 +144,9 @@ function HexField({
   const id = useId()
   const [draft, setDraft] = useState(value)
   const [showError, setShowError] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const swatch = useRef<HTMLButtonElement>(null)
+  const name = `${appearance === 'light' ? 'Light' : 'Dark'} ${role}`
   useEffect(() => {
     setDraft(value)
     setShowError(false)
@@ -79,11 +157,18 @@ function HexField({
     <div className="palette-color-field">
       <label htmlFor={id}>{title}</label>
       <div className="palette-hex-input">
-        <span
+        <button
+          ref={swatch}
+          type="button"
           className="palette-color-swatch"
           style={{ backgroundColor: valid ? draft : value }}
-          aria-hidden="true"
-        />
+          aria-label={`Choose the ${name.toLocaleLowerCase()} colour`}
+          aria-haspopup="dialog"
+          aria-expanded={picking}
+          onClick={() => setPicking(open => !open)}
+        >
+          <ChevronDown size={11} strokeWidth={2.6} aria-hidden="true" />
+        </button>
         <input
           id={id}
           type="text"
@@ -119,6 +204,15 @@ function HexField({
           Use # and six hex digits.
         </p>
       )}
+      <ColorPicker
+        anchor={swatch.current}
+        open={picking}
+        onClose={() => setPicking(false)}
+        value={value}
+        onChange={next => onChange(next)}
+        label={`${name} colour`}
+        presets={PRESETS[appearance][role]}
+      />
     </div>
   )
 }

@@ -100,7 +100,9 @@ test('[[links]] complete note titles, preview on hover and open with a modifier 
   await expect(menu.getByRole('option', { name: /Garden plan/ })).toBeVisible()
   await page.keyboard.press('Enter')
   await page.keyboard.type(' and [[Seed list]] later.')
-  await expect(editor).toContainText('[[Garden plan]]')
+  // The Markdown keeps the links; the page shows only their text.
+  await savedMarkdown(page, 'Read [[Garden plan]] and [[Seed list]] later.')
+  await expect(editor).toContainText('Read Garden plan and Seed list later.')
   const link = page.locator('.cm-wikilink', { hasText: 'Garden plan' })
   await link.hover()
   const card = page.locator('.cm-link-card')

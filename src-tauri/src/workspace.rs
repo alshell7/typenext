@@ -987,6 +987,54 @@ mod tests {
     }
 
     #[test]
+    fn folders_tags_workspaces_and_new_settings_survive_a_save() {
+        let mut value = serde_json::to_value(example("Kept")).unwrap();
+        value["folders"] = json!([{ "id": "f1", "name": "Clients", "color": "sky", "createdAt": 1, "spaceId": "work" }]);
+        value["tags"] = json!([{ "id": "t1", "name": "draft", "color": "rose", "createdAt": 1 }]);
+        value["spaces"] = json!([
+            { "id": "personal", "name": "Personal", "color": "sage", "createdAt": 0 },
+            { "id": "work", "name": "Work", "color": "sky", "createdAt": 2, "gitFolder": "/notes/work", "openNoteIds": [] },
+            { "id": "team", "name": "Team", "color": "plum", "createdAt": 3, "shared": true }
+        ]);
+        value["activeSpaceId"] = json!("work");
+        value["notes"][0]["folderId"] = json!("f1");
+        value["notes"][0]["tags"] = json!(["t1"]);
+        value["notes"][0]["spaceId"] = json!("work");
+        value["notes"][0]["contextFolderIds"] = json!(["f1"]);
+        value["settings"]["shortcuts"] =
+            json!({ "suggest": "Alt-Space", "acceptWord": "Mod-ArrowRight", "aiActions": "Mod-j" });
+        value["settings"]["ai"] = json!({ "selectionActions": true, "indicator": "orb" });
+        value["settings"]["revisions"] =
+            json!({ "enabled": true, "mode": "automatic", "minChanges": 240 });
+        value["settings"]["suggestionWords"] = json!(12);
+        let workspace: Workspace = serde_json::from_value(value.clone()).unwrap();
+        validate_workspace(&workspace).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        persist_at_path(directory.path(), &workspace).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(paths(directory.path()).0).unwrap()).unwrap();
+        for pointer in [
+            "/folders/0/spaceId",
+            "/tags/0/name",
+            "/spaces/1/gitFolder",
+            "/spaces/2/shared",
+            "/activeSpaceId",
+            "/notes/0/folderId",
+            "/notes/0/tags/0",
+            "/notes/0/spaceId",
+            "/notes/0/contextFolderIds/0",
+            // Shortcut names must not look like credentials, or a save drops them.
+            "/settings/shortcuts/suggest",
+            "/settings/shortcuts/aiActions",
+            "/settings/ai/indicator",
+            "/settings/revisions/minChanges",
+            "/settings/suggestionWords",
+        ] {
+            assert_eq!(saved.pointer(pointer), value.pointer(pointer), "{pointer}");
+        }
+    }
+
+    #[test]
     fn current_app_fields_validate_and_survive_a_save_while_old_notebooks_still_load() {
         let mut value = serde_json::to_value(example("Kept")).unwrap();
         value["settings"]["profiles"]["cloudflare"] = json!({

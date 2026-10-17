@@ -14,6 +14,9 @@ The note editor is a CodeMirror 6 view in `src/components/notebook/MarkdownEdito
 | `editor-extensions.ts`         | Inline suggestion field, acceptance, history bounds, the 8 MiB note limit and the writing theme.         |
 | `suggestion-menu.ts`           | The Ctrl/⌘ Space choice menu (at most `MAX_MENU_CHOICES = 5` choices).                                   |
 | `dictation-anchor.ts`          | The marker that follows the dictation position.                                                          |
+| `ai-actions.ts`                | The AI panel for selected text, its word-level preview, and the pulse at the cursor while a model works. |
+| `ai-pulse.ts`                  | The model-at-work animations as plain DOM (`src/notebook/ai-pulse.css`). React uses `AiPulse.tsx`.       |
+| `src/services/text-actions.ts` | Polish, grammar, rewrite, paraphrase, shorter, longer and custom requests through `requestModelText`.   |
 | `src/services/link-preview.ts` | Fetches website titles for hover cards.                                                                  |
 | `src/notebook/note-links.ts`   | Parses `[[links]]`, resolves titles and builds the note graph data.                                      |
 
@@ -30,9 +33,12 @@ The editor uses `markdown({ base: markdownLanguage, addKeymap: false })`. `markd
 | Mod-k          | `insertLink`.                                                                                      |
 | Mod-i          | `wrapSelection(view, '*')`.                                                                        |
 | Mod-Shift-k    | Web facts.                                                                                         |
-| Mod-ArrowRight | Accept one word of the inline suggestion.                                                          |
-| Mod-Space      | Request suggestion choices.                                                                        |
+| Mod-ArrowRight | Accept one word of the inline suggestion. Writer-chosen (`settings.shortcuts.acceptWord`).          |
+| Mod-Space      | Request suggestion choices. Writer-chosen (`settings.shortcuts.suggest`).                           |
+| Mod-j          | Open the AI actions for the selection. Writer-chosen (`settings.shortcuts.aiActions`).             |
 | Alt-Enter      | Open the link at the cursor (`link-tools.ts`).                                                     |
+
+The three writer-chosen keys live in `shortcutCompartment` and are rebuilt with `StateEffect.reconfigure` when `settings.shortcuts` changes, without a new editor. `src/notebook/shortcuts.ts` formats bindings for display (`shortcutText`, `shortcutSpeech`), turns a key press into a binding (`bindingFromEvent`) and refuses keys the app already uses (`shortcutProblem`, `RESERVED_SHORTCUTS`). When you add an app shortcut, add it to `RESERVED_SHORTCUTS` too. Shortcut field names must not end in "key" or "token": the desktop save removes such unmodelled fields as possible credentials.
 
 The completion keymap in `editor-completions.ts` has `Prec.highest`. It acts only while the insert menu or the `[[` menu is open. When no menu is open, Tab stays available for ghost text.
 
@@ -82,6 +88,18 @@ Keep the `name` short and unique. The name is also the key for a custom-command 
 
 `link-tools.ts` styles resolved links as `.cm-wikilink` and unresolved links as `.cm-wikilink-missing`. Ctrl/⌘-click and Alt+Enter call `followLink`. A resolved link opens its note. An unresolved link creates the note through the `createNote` host callback.
 
+## Find and replace
+
+`find.ts` keeps the query in `findField` and finds matches once per edit while the bar is open (at most `MAX_MATCHES`); `findDecorations` marks only the visible ones. `findNext`, `revealFirst`, `replaceNext` and `replaceAll` act on the view; `replaceAll` is one transaction with `isolateHistory`, so one undo restores everything. A pattern replacement expands `$1` and the like per match.
+
+`FindBar.tsx` is the floating bar. `MarkdownEditor` renders it through a portal into a `.find-host` that it prepends to `.document-scroll`: a zero-height sticky row, so the bar floats over the page and takes no room. Opening uses `flushSync`, so the field has focus before the next key, never the note. The format bar stays hidden while a query is set. ⌘ F and ⌘ ⌥ F are in the editor keymap and in the app's global keys (for focus outside the editor), and in `RESERVED_SHORTCUTS`.
+
+## Link folding
+
+With **Show links as their text** (`settings.editor.foldLinks`, on by default) and live preview on, `linkDecorations` in `link-tools.ts` hides the Markdown around a link's text with `Decoration.replace`: `[` and `](url)` of a Markdown link, `[[target|` and `]]` of a note link. The text stays real document text, so selection, spellcheck and hover keep working. A bare address longer than 48 characters becomes a `ShortUrlWidget` (`host/…/last`); a click selects the whole address.
+
+A link opens up when a selection reaches inside it; its ends do not count, so typing right after a link keeps it folded. While the pointer is down, decorations do not follow the selection, so a click or drag never makes the line jump; they update on release. Reference links (`[text][ref]`) and images keep their Markdown.
+
 ## Hover cards
 
 `linkHover` uses `hoverTooltip` with a 320 ms delay. `settings.editor.linkPreviews` controls it:
@@ -93,6 +111,24 @@ Keep the `name` short and unique. The name is also the key for a custom-command 
 | `all`   | **Notes & web** | Also cards for web links. The default.                                    |
 
 For `all`, `fetchLinkPreview` requests the page with `publicOnly: true`. It reads `og:title`, `twitter:title` or `<title>`, and a description, from at most 400,000 characters of HTML. It runs no page code and sends no note text. Results stay in memory for 30 minutes, with at most 128 entries.
+
+Cards also offer **Unlink** (`unlink(view, link)` keeps the visible text), and website cards **Copy** and **Edit** (selects the address).
+
+## Edit with AI
+
+`aiTools(host)` adds the AI panel. `openAiActions(view, host, action?)` selects the edit range (the selection, or the paragraph at the cursor) and opens the panel as a CodeMirror tooltip below it. The panel has four phases in `aiSessionField`: `menu`, `running`, `result` and `error`. Any document change or selection change ends the session and aborts its request. Focus moves into the panel synchronously, never on the next frame, so a fast key never types over the selection.
+
+The result phase shows `wordDiff(original, result)` from `src/notebook/revisions/diff.ts`. **Replace** dispatches one change with `userEvent: 'input.ai'` and `isolateHistory`, so one undo restores the original, and calls `host.beforeReplace(label)` first; the app keeps a safety revision there.
+
+`aiEngine(settings)` decides whether the actions are offered: the activated provider must be a chat model (an external provider, or a local server with the chat protocol). `runTextAction` sends the passage, up to 600 characters before it, 300 after it and the note title as JSON data, and `cleanRewrite` removes labels, fences and wrapping quotes while keeping the selection's outer whitespace.
+
+## The pulse while a model works
+
+`aiPendingField` holds a position; `pendingDecorations` draws `PulseWidget` there. `MarkdownEditor` sets it when a suggestion or a web search starts and clears it when the request ends. It also clears on any edit or cursor move. The style comes from `settings.ai.indicator` (`orb`, the default, `spark`, `bloom`, `firefly`, `ink`, `scribble`, `orbit`, `dots` or `off`). Orb, Spark and Bloom use fixed saturated colours with a light rim, so they read on any palette; the others use `--accent`, which the palette keeps readable. In the Preferences gallery only the host span becomes a block: an animation's own `display` must stay, or flex-based styles such as Dots collapse. Each style fades in after 140 ms so a fast answer never flickers, uses the accent colour, and stays still with reduced motion. To add a style, add it to `PULSE_STYLES` and `pulseElement`, add its CSS to `ai-pulse.css`, and add the id to `AiIndicatorStyle` and `parseAi`.
+
+## Selection colours
+
+CodeMirror's base theme styles the focused selection with `.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground` (five classes). `writingSurface` matches that selector exactly so `--editor-selection` wins. The format bar is itself the tooltip element, so its styles in `app-shell.css` need `.markdown-editor .cm-editor .cm-tooltip.cm-format-bar` to beat the base `.cm-tooltip` background. Editor tooltips are hidden while a dialog is open (`body:has(.dialog-content)`).
 
 ## Live preview
 

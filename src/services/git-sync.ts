@@ -160,7 +160,9 @@ export function applyRemoteChanges(
     'remoteChanges' | 'remoteDeletedIds' | 'conflicts'
   >,
   synced: SyncedVersions,
-  now = Date.now()
+  now = Date.now(),
+  /** The workspace that a repository's new notes join. */
+  spaceId?: string
 ): {
   workspace: Workspace
   synced: SyncedVersions
@@ -179,6 +181,7 @@ export function applyRemoteChanges(
     const id = crypto.randomUUID()
     created.push({
       id,
+      ...(spaceId ? { spaceId } : {}),
       title: copyTitle(remote.title, label),
       objective: '',
       context: '',
@@ -195,6 +198,7 @@ export function applyRemoteChanges(
       added++
       const note: Note = {
         id: remote.id,
+        ...(spaceId ? { spaceId } : {}),
         title: remote.title,
         objective: '',
         context: '',

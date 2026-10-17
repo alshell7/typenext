@@ -365,10 +365,31 @@ function budgetFor(
         'Complete only this list item, in the style of the items around it. Do not start another item.',
       singleLine: true,
     }
+  // A chosen word limit replaces the length the setting would pick, except in
+  // a table cell or heading, which stay short whatever the limit.
+  const chosen = Math.round(Number(settings.suggestionWords) || 0)
+  if (chosen > 0 && structure !== 'table cell' && structure !== 'heading') {
+    const words = Math.min(60, Math.max(1, chosen))
+    budget = {
+      ...budget,
+      words,
+      characters: Math.max(40, words * 14),
+      tokens: Math.max(8, Math.ceil(words * 2.2) + 6),
+      // The prompt adds "Use at most N words" from this budget.
+      instruction:
+        words <= 8
+          ? 'Complete one brief phrase.'
+          : words <= 30
+            ? budget.instruction
+            : 'Continue naturally; one or two sentences are fine.',
+    }
+  }
   const ceiling = Number.isFinite(settings.maxTokens)
     ? Math.max(1, Math.floor(settings.maxTokens))
     : 64
-  return { ...budget, tokens: Math.min(128, ceiling, budget.tokens) }
+  // The word limit can ask for more room than the ordinary token ceiling.
+  const limit = chosen > 0 ? Math.max(ceiling, budget.tokens) : ceiling
+  return { ...budget, tokens: Math.min(160, limit, budget.tokens) }
 }
 
 function stripSuffixOverlap(text: string, suffix: string): string {
@@ -974,6 +995,144 @@ export function openAiParameters(
 }
 
 /**
+ * Send one model request. Newer OpenAI models can require reasoning or reject
+ * temperature, and OpenRouter's free router may pick a model that must
+ * reason: the same request is adjusted from the error and sent again, at most
+ * twice. The provider is never changed.
+ */
+async function postModelRequest(
+  url: string,
+  requestHeaders: Record<string, string>,
+  body: Record<string, unknown>,
+  provider: ProviderId,
+  outputTokens: number,
+  signal?: AbortSignal
+): Promise<unknown> {
+  try {
+    return await requestJson(url, {
+      method: 'POST',
+      headers: requestHeaders,
+      body,
+      signal,
+    })
+  } catch (error) {
+    checkAbort(signal)
+    if (provider === 'openai' && openAiAdjustment(error, body)) {
+      let attempt = openAiAdjustment(error, body)!
+      for (let tries = 0; ; tries++) {
+        try {
+          return await requestJson(url, {
+            method: 'POST',
+            headers: requestHeaders,
+            body: attempt,
+            signal,
+          })
+        } catch (next) {
+          checkAbort(signal)
+          const adjusted = tries < 1 ? openAiAdjustment(next, attempt) : null
+          if (!adjusted) throw next
+          attempt = adjusted
+        }
+      }
+    }
+    if (
+      provider === 'openrouter' &&
+      /reasoning is mandatory|cannot be disabled/iu.test(String(error))
+    )
+      return requestJson(url, {
+        method: 'POST',
+        headers: requestHeaders,
+        body: {
+          ...body,
+          max_tokens: Number(body.max_tokens ?? outputTokens) + 512,
+          reasoning: { effort: 'low', exclude: true },
+        },
+        signal,
+      })
+    throw error
+  }
+}
+
+export interface ModelTextRequest {
+  /** Instructions for the model. */
+  system: string
+  /** The writer's data, usually JSON. */
+  user: string
+  maxTokens: number
+  temperature: number
+  signal?: AbortSignal
+}
+
+/**
+ * One chat request to the provider the writer activated, for tasks other
+ * than inline suggestions (editing selected text). Native FIM servers and the
+ * small built-in model cannot follow editing instructions and are refused.
+ */
+export async function requestModelText(
+  settings: NotebookSettings,
+  provider: ProviderId,
+  request: ModelTextRequest
+): Promise<string> {
+  const { signal } = request
+  checkAbort(signal)
+  const profile = settings.profiles[provider]
+  if (!profile.model.trim())
+    throw new Error('Choose a model in Preferences → Models first.')
+  if (profile.model.length > 512)
+    throw new Error(
+      'The model identifier is too long. Use at most 512 characters.'
+    )
+  if (profile.protocol === 'fim')
+    throw new Error(
+      'This model uses native FIM, which cannot edit text. Choose a chat model in Preferences → Models.'
+    )
+  const base = providerEndpoint(provider, profile)
+  const model = profile.model.trim()
+  const temperature = Math.min(2, Math.max(0, request.temperature))
+  const tokens = Math.max(16, Math.min(4096, Math.floor(request.maxTokens)))
+  const requestHeaders = await headers(provider, signal)
+  checkAbort(signal)
+  const anthropic = provider === 'anthropic'
+  const body: Record<string, unknown> = anthropic
+    ? {
+        model,
+        system: request.system,
+        messages: [{ role: 'user', content: request.user }],
+        ...anthropicParameters(model, tokens, temperature),
+        stream: false,
+      }
+    : {
+        model,
+        messages: [
+          { role: 'system', content: request.system },
+          { role: 'user', content: request.user },
+        ],
+        ...(provider === 'openai'
+          ? openAiParameters(model, tokens, temperature)
+          : { max_tokens: tokens, temperature }),
+        stream: false,
+        ...(provider === 'openrouter'
+          ? { reasoning: { enabled: false, exclude: true } }
+          : {}),
+      }
+  const response = await postModelRequest(
+    requestUrl(base, anthropic ? 'messages' : 'chat/completions'),
+    requestHeaders,
+    body,
+    provider,
+    tokens,
+    signal
+  )
+  checkAbort(signal)
+  const text = responseText(response, provider, false)
+  if (text.length > MAX_MODEL_OUTPUT_CHARACTERS * 4)
+    throw new Error(
+      'The model returned too much text. Try a shorter selection.'
+    )
+  return text
+}
+
+/**
  * The editor supplies the deliberately activated provider, or a one-off
  * provider requested by the writer. This service never switches providers or
  * retries against a different endpoint when generation fails.
@@ -1276,55 +1435,14 @@ export async function suggest(
           : {}),
       }
     }
-    let response: unknown
-    try {
-      response = await requestJson(requestUrl(base, action), {
-        method: 'POST',
-        headers: requestHeaders,
-        body,
-        signal,
-      })
-    } catch (error) {
-      checkAbort(signal)
-      const retry = body as Record<string, unknown>
-      if (settings.provider === 'openai' && openAiAdjustment(error, retry)) {
-        // Newer OpenAI models can require reasoning or reject temperature.
-        // Adjust the same request from the error, at most twice.
-        let attempt = openAiAdjustment(error, retry)!
-        for (let tries = 0; ; tries++) {
-          try {
-            response = await requestJson(requestUrl(base, action), {
-              method: 'POST',
-              headers: requestHeaders,
-              body: attempt,
-              signal,
-            })
-            break
-          } catch (next) {
-            checkAbort(signal)
-            const adjusted = tries < 1 ? openAiAdjustment(next, attempt) : null
-            if (!adjusted) throw next
-            attempt = adjusted
-          }
-        }
-      } else if (
-        // OpenRouter's free router may pick a model that must reason. Retry
-        // the same request once with hidden reasoning and room for it.
-        settings.provider === 'openrouter' &&
-        /reasoning is mandatory|cannot be disabled/iu.test(String(error))
-      ) {
-        response = await requestJson(requestUrl(base, action), {
-          method: 'POST',
-          headers: requestHeaders,
-          body: {
-            ...retry,
-            max_tokens: Number(retry.max_tokens ?? outputTokens) + 512,
-            reasoning: { effort: 'low', exclude: true },
-          },
-          signal,
-        })
-      } else throw error
-    }
+    const response = await postModelRequest(
+      requestUrl(base, action),
+      requestHeaders,
+      body as Record<string, unknown>,
+      settings.provider,
+      outputTokens,
+      signal
+    )
     checkAbort(signal)
     if (freshChoices) {
       const result = modelChoices(

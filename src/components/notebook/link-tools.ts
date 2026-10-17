@@ -10,6 +10,7 @@ import {
   hoverTooltip,
   keymap,
   ViewPlugin,
+  WidgetType,
   type DecorationSet,
   type Tooltip,
   type ViewUpdate,
@@ -33,6 +34,8 @@ export interface LinkHost {
   openNote(id: string): void
   createNote(title: string): void
   openUrl(url: string): void
+  /** Show only link text until the cursor enters the link. */
+  foldLinks?(): boolean
 }
 
 export type FoundLink =
@@ -95,32 +98,161 @@ export function linkAt(state: EditorState, pos: number): FoundLink | null {
   return null
 }
 
+/** Bare addresses longer than this read as host/…/end when folded. */
+const LONG_URL = 48
+
+/** Whether a selection range reaches inside a link (its ends do not count). */
+function inside(state: EditorState, from: number, to: number) {
+  return state.selection.ranges.some(range =>
+    range.empty
+      ? range.head > from && range.head < to
+      : range.from < to && range.to > from
+  )
+}
+
+export function shortUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    const host = parsed.host.replace(/^www\./u, '')
+    const parts = parsed.pathname.split('/').filter(Boolean)
+    if (!parts.length) return host
+    const name = decodeURIComponent(parts.at(-1)!)
+    const last = name.length > 28 ? `${name.slice(0, 26)}…` : name
+    return parts.length === 1 ? `${host}/${last}` : `${host}/…/${last}`
+  } catch {
+    return `${url.slice(0, 30)}…`
+  }
+}
+
+class ShortUrlWidget extends WidgetType {
+  constructor(
+    readonly text: string,
+    readonly url: string,
+    readonly from: number,
+    readonly to: number
+  ) {
+    super()
+  }
+  override eq(other: ShortUrlWidget) {
+    return (
+      other.text === this.text &&
+      other.url === this.url &&
+      other.from === this.from &&
+      other.to === this.to
+    )
+  }
+  toDOM(view: EditorView) {
+    const element = document.createElement('span')
+    element.className = 'cm-link-text cm-link-short'
+    element.textContent = this.text
+    element.title = this.url
+    element.addEventListener('mousedown', event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey) return
+      // A click selects the whole address, which shows it in full.
+      event.preventDefault()
+      view.dispatch({ selection: { anchor: this.from, head: this.to } })
+      view.focus()
+    })
+    return element
+  }
+  override ignoreEvent(event: Event) {
+    return event.type !== 'mousedown'
+  }
+}
+
+const hidden = Decoration.replace({})
+const linkText = Decoration.mark({ class: 'cm-link-text' })
+
 function linkDecorations(view: EditorView, host: LinkHost): DecorationSet {
   const decorations: Range<Decoration>[] = []
   const notes = host.notes()
+  const { state } = view
+  const fold = host.foldLinks?.() === true
   for (const { from, to } of view.visibleRanges) {
-    const first = view.state.doc.lineAt(from).number
-    const last = view.state.doc.lineAt(to).number
+    const first = state.doc.lineAt(from).number
+    const last = state.doc.lineAt(to).number
     for (let number = first; number <= last; number++) {
-      const line = view.state.doc.line(number)
+      const line = state.doc.line(number)
       if (!line.text.includes('[[')) continue
       for (const link of parseWikiLinks(line.text)) {
         const start = line.from + link.from
         const end = line.from + link.to
         const resolved = resolveNoteLink(link.target, notes)
+        const linkClass = Decoration.mark({
+          class: resolved ? 'cm-wikilink' : 'cm-wikilink cm-wikilink-missing',
+          attributes: { 'data-link-target': link.target },
+        })
+        if (fold && !inside(state, start, end)) {
+          const body = line.text.slice(link.from + 2, link.to - 2)
+          const pipe = body.indexOf('|')
+          let labelStart = start + 2
+          if (pipe >= 0) {
+            labelStart = start + 2 + pipe + 1
+            while (
+              labelStart < end - 2 &&
+              /\s/u.test(state.sliceDoc(labelStart, labelStart + 1))
+            )
+              labelStart++
+          }
+          if (labelStart < end - 2) {
+            decorations.push(
+              hidden.range(start, labelStart),
+              linkClass.range(labelStart, end - 2),
+              hidden.range(end - 2, end)
+            )
+            continue
+          }
+        }
         decorations.push(
           Decoration.mark({ class: 'cm-wikilink-bracket' }).range(
             start,
             start + 2
           ),
-          Decoration.mark({
-            class: resolved ? 'cm-wikilink' : 'cm-wikilink cm-wikilink-missing',
-            attributes: { 'data-link-target': link.target },
-          }).range(start + 2, end - 2),
+          linkClass.range(start + 2, end - 2),
           Decoration.mark({ class: 'cm-wikilink-bracket' }).range(end - 2, end)
         )
       }
     }
+    if (!fold) continue
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter(node) {
+        if (node.name === 'Link') {
+          if (inside(state, node.from, node.to)) return false
+          const marks = node.node.getChildren('LinkMark')
+          const url = node.node.getChild('URL')
+          // Reference links ([text][ref]) keep their source.
+          if (marks.length < 4 || !url) return false
+          const open = marks[0]!
+          const close = marks[1]!
+          if (close.from <= open.to) return false
+          decorations.push(
+            hidden.range(node.from, open.to),
+            linkText.range(open.to, close.from),
+            hidden.range(close.from, node.to)
+          )
+          return false
+        }
+        if (node.name === 'Image' || node.name === 'Autolink') return false
+        if (node.name === 'URL' && node.to - node.from > LONG_URL) {
+          if (inside(state, node.from, node.to)) return
+          const raw = state.sliceDoc(node.from, node.to)
+          const url = normalizeUrl(raw)
+          if (!url) return
+          decorations.push(
+            Decoration.replace({
+              widget: new ShortUrlWidget(
+                shortUrl(url),
+                url,
+                node.from,
+                node.to
+              ),
+            }).range(node.from, node.to)
+          )
+        }
+      },
+    })
   }
   return Decoration.set(decorations, true)
 }
@@ -129,21 +261,45 @@ function linkStyles(host: LinkHost) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
-      constructor(view: EditorView) {
+      pointer = false
+      constructor(readonly view: EditorView) {
         this.decorations = linkDecorations(view, host)
       }
       update(update: ViewUpdate) {
-        if (
-          update.docChanged ||
-          update.viewportChanged ||
-          update.transactions.some(transaction =>
-            transaction.effects.some(effect => effect.is(refreshLinks))
-          )
+        const refreshed = update.transactions.some(transaction =>
+          transaction.effects.some(effect => effect.is(refreshLinks))
+        )
+        if (update.docChanged || update.viewportChanged || refreshed)
+          this.decorations = linkDecorations(update.view, host)
+        else if (update.selectionSet) {
+          // While the pointer is down, keep the layout still so a drag does
+          // not jump when a link opens. It opens on release.
+          if (!this.pointer)
+            this.decorations = linkDecorations(update.view, host)
+        } else if (
+          syntaxTree(update.startState) !== syntaxTree(update.state) &&
+          host.foldLinks?.()
         )
           this.decorations = linkDecorations(update.view, host)
       }
     },
-    { decorations: plugin => plugin.decorations }
+    {
+      decorations: plugin => plugin.decorations,
+      eventHandlers: {
+        mousedown(event) {
+          if (event.button !== 0) return false
+          this.pointer = true
+          const release = () => {
+            window.removeEventListener('mouseup', release)
+            this.pointer = false
+            if (this.view.dom.isConnected)
+              this.view.dispatch({ effects: refreshLinks.of(null) })
+          }
+          window.addEventListener('mouseup', release)
+          return false
+        },
+      },
+    }
   )
 }
 
@@ -151,6 +307,7 @@ function button(label: string, onClick: () => void, primary = false) {
   const element = document.createElement('button')
   element.type = 'button'
   element.className = `cm-link-card-button${primary ? ' primary' : ''}`
+  element.tabIndex = -1
   element.textContent = label
   element.addEventListener('mousedown', event => event.preventDefault())
   element.addEventListener('click', event => {
@@ -182,9 +339,39 @@ export function openShortcut() {
     : 'Ctrl-click'
 }
 
+/** Replace a link with its text, keeping what the reader sees. */
+export function unlink(view: EditorView, link: FoundLink) {
+  const text =
+    link.kind === 'note'
+      ? (link.label ?? link.target)
+      : (link.label ?? link.url)
+  view.dispatch({
+    changes: { from: link.from, to: link.to, insert: text },
+    selection: { anchor: link.from + text.length },
+    userEvent: 'input.format',
+  })
+  view.focus()
+}
+
+function hintFor() {
+  const hint = document.createElement('span')
+  hint.className = 'cm-link-card-hint'
+  hint.textContent = `${openShortcut()} to open`
+  return hint
+}
+
+function quietButton(label: string, title: string, onClick: () => void) {
+  const element = button(label, onClick)
+  element.classList.add('quiet')
+  element.title = title
+  element.setAttribute('aria-label', title)
+  return element
+}
+
 function noteCard(
   link: Extract<FoundLink, { kind: 'note' }>,
-  host: LinkHost
+  host: LinkHost,
+  view: EditorView
 ): HTMLElement {
   const dom = document.createElement('div')
   dom.className = 'cm-link-card'
@@ -221,20 +408,25 @@ function noteCard(
         true
       )
     )
-  const hint = actions.appendChild(document.createElement('span'))
-  hint.className = 'cm-link-card-hint'
-  hint.textContent = target ? `${openShortcut()} to open` : ''
+  actions.append(
+    quietButton('Unlink', 'Keep the text and remove the link', () =>
+      unlink(view, link)
+    )
+  )
+  if (target) kind.append(hintFor())
   return dom
 }
 
 function urlCard(
   link: Extract<FoundLink, { kind: 'url' }>,
-  host: LinkHost
+  host: LinkHost,
+  view: EditorView
 ): HTMLElement {
   const dom = document.createElement('div')
   dom.className = 'cm-link-card'
-  const kind = dom.appendChild(document.createElement('div'))
-  kind.className = 'cm-link-card-kind'
+  const kindRow = dom.appendChild(document.createElement('div'))
+  kindRow.className = 'cm-link-card-kind'
+  const kind = kindRow.appendChild(document.createElement('span'))
   kind.textContent = link.url.startsWith('mailto:')
     ? 'Email'
     : linkHost(link.url)
@@ -264,9 +456,35 @@ function urlCard(
   const actions = dom.appendChild(document.createElement('div'))
   actions.className = 'cm-link-card-actions'
   actions.append(button('Open link', () => host.openUrl(link.url), true))
-  const hint = actions.appendChild(document.createElement('span'))
-  hint.className = 'cm-link-card-hint'
-  hint.textContent = `${openShortcut()} to open`
+  const copy = quietButton('Copy', 'Copy the address', () => {
+    void navigator.clipboard?.writeText(link.url).then(() => {
+      copy.textContent = 'Copied'
+    })
+  })
+  actions.append(copy)
+  const raw = view.state.sliceDoc(link.from, link.to)
+  const urlAt = raw.lastIndexOf('](')
+  if (urlAt >= 0)
+    actions.append(
+      quietButton('Edit', 'Edit the address', () => {
+        const start = link.from + urlAt + 2
+        const close = raw.indexOf(')', urlAt)
+        const end = close > urlAt ? link.from + close : link.to
+        const url = view.state.sliceDoc(start, end).replace(/\s+"[^"]*"$/u, '')
+        view.dispatch({
+          selection: { anchor: start, head: start + url.length },
+          scrollIntoView: true,
+        })
+        view.focus()
+      })
+    )
+  if (link.label)
+    actions.append(
+      quietButton('Unlink', 'Keep the text and remove the link', () =>
+        unlink(view, link)
+      )
+    )
+  kindRow.append(hintFor())
   return dom
 }
 
@@ -282,9 +500,11 @@ function linkHover(host: LinkHost) {
         pos: link.from,
         end: link.to,
         above: true,
-        create: () => ({
+        create: tooltipView => ({
           dom:
-            link.kind === 'note' ? noteCard(link, host) : urlCard(link, host),
+            link.kind === 'note'
+              ? noteCard(link, host, tooltipView)
+              : urlCard(link, host, tooltipView),
         }),
       }
     },
@@ -347,6 +567,15 @@ export function linkTools(host: LinkHost): Extension {
         color: 'var(--muted-foreground, #92958d)',
         opacity: '0.6',
       },
+      '.cm-link-text': {
+        color: 'var(--accent, #42644d)',
+        textDecoration: 'underline',
+        textDecorationColor:
+          'color-mix(in srgb, currentColor 40%, transparent)',
+        textUnderlineOffset: '3px',
+        cursor: 'pointer',
+      },
+      '.cm-link-short': { borderRadius: '3px' },
     }),
   ]
 }

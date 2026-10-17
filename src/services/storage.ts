@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import type {
+  AiSettings,
   ContextPackage,
   ContextSource,
   DictationSettings,
@@ -8,16 +9,23 @@ import type {
   GitSyncSettings,
   MediaInfo,
   Note,
+  NoteFolder,
+  NoteSpace,
+  NoteTag,
   NotebookSettings,
+  OrganizeColor,
   ProviderId,
   ProviderProfile,
+  RevisionSettings,
   SemanticSettings,
+  ShortcutSettings,
   TimingSettings,
   WebFactSettings,
   Workspace,
 } from '@/types/notebook'
 import { asError, isDesktop } from './native'
 import { stripLinkedText } from '../notebook/note-context'
+import { SPACE_ICON_IDS } from '../notebook/spaces/space-icons'
 import { defaultSettings } from '../notebook/model'
 
 const WORKSPACE_KEY = 'typenext.workspace.v1'
@@ -263,7 +271,162 @@ function parseNote(value: unknown): Note {
         ? undefined
         : numeric(note.exportedAt),
     ...(note.autoTitle === true ? { autoTitle: true } : {}),
+    ...(typeof note.folderId === 'string' && note.folderId
+      ? { folderId: id(note.folderId) }
+      : {}),
+    ...(Array.isArray(note.tags) && note.tags.length
+      ? { tags: [...new Set(array(note.tags, 64).map(id))] }
+      : {}),
+    ...(Array.isArray(note.contextFolderIds) && note.contextFolderIds.length
+      ? {
+          contextFolderIds: [
+            ...new Set(array(note.contextFolderIds, 64).map(id)),
+          ],
+        }
+      : {}),
+    ...spaceField(note.spaceId),
   }
+}
+
+function spaceField(value: unknown): { spaceId?: string } {
+  return typeof value === 'string' && value ? { spaceId: id(value) } : {}
+}
+
+function parseSpace(value: unknown): NoteSpace {
+  const space = record(value)
+  const name = string(space.name, 256)
+  if (!name.trim()) return invalid()
+  return {
+    id: id(space.id),
+    name,
+    color: choice(space.color ?? 'sage', ORGANIZE_COLORS),
+    // An icon this release does not know falls back to the initial.
+    ...(typeof space.icon === 'string' && SPACE_ICON_IDS.includes(space.icon)
+      ? { icon: space.icon }
+      : {}),
+    ...(space.shared === true ? { shared: true } : {}),
+    ...(typeof space.gitFolder === 'string' && space.gitFolder.trim()
+      ? { gitFolder: string(space.gitFolder, 4096) }
+      : {}),
+    createdAt: numeric(space.createdAt),
+    ...(Array.isArray(space.openNoteIds)
+      ? {
+          openNoteIds: [
+            ...new Set(array(space.openNoteIds, STORAGE_LIMITS.notes).map(id)),
+          ],
+        }
+      : {}),
+    ...(typeof space.activeNoteId === 'string'
+      ? { activeNoteId: id(space.activeNoteId) }
+      : {}),
+  }
+}
+
+/** Drop a workspace id that names no workspace; the item joins the first. */
+function knownSpace<T extends { spaceId?: string }>(
+  item: T,
+  spaces: Set<string>
+): T {
+  if (!item.spaceId || spaces.has(item.spaceId)) return item
+  const { spaceId: _removed, ...rest } = item
+  void _removed
+  return rest as T
+}
+
+const ORGANIZE_COLORS: readonly OrganizeColor[] = [
+  'sage',
+  'sky',
+  'iris',
+  'plum',
+  'rose',
+  'amber',
+  'sand',
+  'slate',
+]
+
+function parseFolder(value: unknown): NoteFolder {
+  const folder = record(value)
+  const name = string(folder.name, 512)
+  if (!name.trim()) return invalid()
+  return {
+    id: id(folder.id),
+    name,
+    ...(typeof folder.parentId === 'string' && folder.parentId
+      ? { parentId: id(folder.parentId) }
+      : {}),
+    ...(folder.color === undefined || folder.color === null
+      ? {}
+      : { color: choice(folder.color, ORGANIZE_COLORS) }),
+    createdAt: numeric(folder.createdAt),
+    ...spaceField(folder.spaceId),
+    ...(folder.collapsed === true ? { collapsed: true } : {}),
+  }
+}
+
+function parseTag(value: unknown): NoteTag {
+  const tag = record(value)
+  const name = string(tag.name, 256)
+  if (!name.trim()) return invalid()
+  return {
+    id: id(tag.id),
+    name,
+    color: choice(tag.color ?? 'slate', ORGANIZE_COLORS),
+    createdAt: numeric(tag.createdAt),
+    ...spaceField(tag.spaceId),
+  }
+}
+
+/**
+ * Folders form a tree. A parent that is missing or that would make a cycle
+ * moves the folder to the top level; notes in a missing folder move to the
+ * root, and unknown tags fall away. Nothing is rejected for this.
+ */
+function repairOrganization(
+  notes: Note[],
+  folders: NoteFolder[],
+  tags: NoteTag[]
+) {
+  const folderIds = new Set(folders.map(folder => folder.id))
+  const byId = new Map(folders.map(folder => [folder.id, folder]))
+  const repaired = folders.map(folder => {
+    if (!folder.parentId) return folder
+    const seen = new Set([folder.id])
+    let parent = folder.parentId
+    for (;;) {
+      if (!folderIds.has(parent) || seen.has(parent)) {
+        const { parentId: _removed, ...rest } = folder
+        void _removed
+        return rest
+      }
+      seen.add(parent)
+      const next = byId.get(parent)?.parentId
+      if (!next) return folder
+      parent = next
+    }
+  })
+  const tagIds = new Set(tags.map(tag => tag.id))
+  const repairedNotes = notes.map(note => {
+    let next = note
+    if (note.folderId && !folderIds.has(note.folderId)) {
+      const { folderId: _removed, ...rest } = next
+      void _removed
+      next = rest
+    }
+    if (note.contextFolderIds?.some(folder => !folderIds.has(folder))) {
+      const kept = note.contextFolderIds.filter(folder => folderIds.has(folder))
+      const { contextFolderIds: _removed, ...rest } = next
+      void _removed
+      next = kept.length ? { ...rest, contextFolderIds: kept } : rest
+    }
+    if (note.tags?.some(tag => !tagIds.has(tag))) {
+      const kept = note.tags.filter(tag => tagIds.has(tag))
+      const { tags: _removed, ...rest } = next
+      void _removed
+      next = kept.length ? { ...rest, tags: kept } : rest
+    }
+    return next
+  })
+  return { notes: repairedNotes, folders: repaired }
 }
 
 function parseContextPackage(value: unknown): ContextPackage {
@@ -281,6 +444,9 @@ function parseContextPackage(value: unknown): ContextPackage {
     sourceIds,
     createdAt: numeric(context.createdAt),
     updatedAt: numeric(context.updatedAt),
+    ...(Array.isArray(context.spaceIds) && context.spaceIds.length
+      ? { spaceIds: [...new Set(array(context.spaceIds, 64).map(id))] }
+      : {}),
   }
 }
 
@@ -409,6 +575,63 @@ function parseSettings(value: unknown): NotebookSettings {
     dictation: parseDictation(settings.dictation),
     updates: parseUpdates(settings.updates),
     timing: parseTiming(settings.timing),
+    suggestionWords: numeric(settings.suggestionWords ?? 0, 0, 60),
+    ai: parseAi(settings.ai),
+    shortcuts: parseShortcuts(settings.shortcuts),
+    revisions: parseRevisions(settings.revisions),
+  }
+}
+
+function parseAi(value: unknown): AiSettings {
+  const defaults = defaultSettings().ai
+  if (value === undefined || value === null) return defaults
+  const ai = record(value)
+  return {
+    selectionActions: boolean(ai.selectionActions ?? defaults.selectionActions),
+    indicator: choice(ai.indicator ?? defaults.indicator, [
+      'orb',
+      'spark',
+      'bloom',
+      'firefly',
+      'ink',
+      'dots',
+      'orbit',
+      'scribble',
+      'off',
+    ]),
+  }
+}
+
+/** CodeMirror key names: modifiers, then one key, joined by "-". */
+const KEY_BINDING =
+  /^(?:(?:Mod|Ctrl|Alt|Shift|Meta)-){0,4}(?:[A-Za-z0-9]|F\d{1,2}|Space|Enter|Tab|Backspace|Delete|Escape|Arrow(?:Up|Down|Left|Right)|Home|End|PageUp|PageDown|[.,;'/\\[\]`=-])$/u
+
+function parseShortcuts(value: unknown): ShortcutSettings {
+  const defaults = defaultSettings().shortcuts
+  if (value === undefined || value === null) return defaults
+  const shortcuts = record(value)
+  const binding = (raw: unknown, fallback: string) =>
+    typeof raw === 'string' && raw.length <= 48 && KEY_BINDING.test(raw)
+      ? raw
+      : fallback
+  return {
+    suggest: binding(shortcuts.suggest, defaults.suggest),
+    acceptWord: binding(shortcuts.acceptWord, defaults.acceptWord),
+    aiActions: binding(shortcuts.aiActions, defaults.aiActions),
+  }
+}
+
+function parseRevisions(value: unknown): RevisionSettings {
+  const defaults = defaultSettings().revisions
+  if (value === undefined || value === null) return defaults
+  const revisions = record(value)
+  return {
+    enabled: boolean(revisions.enabled ?? defaults.enabled),
+    mode: choice(revisions.mode ?? defaults.mode, ['automatic', 'manual']),
+    minChanges: numeric(revisions.minChanges ?? defaults.minChanges, 1, 100_000),
+    minMinutes: numeric(revisions.minMinutes ?? defaults.minMinutes, 0, 1440),
+    keep: numeric(revisions.keep ?? defaults.keep, 5, 1000),
+    safetyNet: boolean(revisions.safetyNet ?? defaults.safetyNet),
   }
 }
 
@@ -544,6 +767,7 @@ function parseEditor(value: unknown): EditorSettings {
     zenFocus: boolean(editor.zenFocus ?? defaults.zenFocus),
     smartTypography: boolean(editor.smartTypography ?? defaults.smartTypography),
     dailyGoal: numeric(editor.dailyGoal ?? defaults.dailyGoal, 0, 100_000),
+    foldLinks: boolean(editor.foldLinks ?? defaults.foldLinks),
   }
 }
 
@@ -560,12 +784,48 @@ export function validateWorkspace(value: unknown): Workspace {
     contextLibrary.some(source => source.libraryId)
   )
     return invalid()
-  const notes = array(workspace.notes, STORAGE_LIMITS.notes).map(parseNote)
+  const parsedNotes = array(workspace.notes, STORAGE_LIMITS.notes).map(
+    parseNote
+  )
+  const parsedFolders = array(workspace.folders ?? [], 4096).map(parseFolder)
+  const tags = array(workspace.tags ?? [], 4096).map(parseTag)
+  if (
+    new Set(parsedFolders.map(folder => folder.id)).size !==
+      parsedFolders.length ||
+    new Set(tags.map(tag => tag.id)).size !== tags.length
+  )
+    return invalid()
+  const spaces = array(workspace.spaces ?? [], 64).map(parseSpace)
+  if (new Set(spaces.map(space => space.id)).size !== spaces.length)
+    return invalid()
+  const spaceIds = new Set(spaces.map(space => space.id))
+  const repaired = repairOrganization(
+    parsedNotes.map(note => knownSpace(note, spaceIds)),
+    parsedFolders.map(folder => knownSpace(folder, spaceIds)),
+    tags
+  )
+  const notes = repaired.notes
+  const folders = repaired.folders
+  const spaceTags = tags.map(tag => knownSpace(tag, spaceIds))
+  const activeSpaceId =
+    typeof workspace.activeSpaceId === 'string' &&
+    spaceIds.has(workspace.activeSpaceId)
+      ? workspace.activeSpaceId
+      : undefined
   const contextPackages =
     workspace.contextPackages == null
       ? undefined
       : array(workspace.contextPackages, STORAGE_LIMITS.contextPackages).map(
           parseContextPackage
+        ).map(context =>
+          context.spaceIds?.some(space => !spaceIds.has(space))
+            ? (() => {
+                const kept = context.spaceIds.filter(space => spaceIds.has(space))
+                const { spaceIds: _removed, ...rest } = context
+                void _removed
+                return kept.length ? { ...rest, spaceIds: kept } : rest
+              })()
+            : context
         )
   if (
     contextPackages &&
@@ -589,6 +849,10 @@ export function validateWorkspace(value: unknown): Workspace {
     version: 1,
     contextLibrary,
     ...(contextPackages ? { contextPackages } : {}),
+    ...(folders.length ? { folders } : {}),
+    ...(spaceTags.length ? { tags: spaceTags } : {}),
+    ...(spaces.length ? { spaces } : {}),
+    ...(activeSpaceId ? { activeSpaceId } : {}),
     notes,
     openNoteIds,
     activeNoteId,
@@ -658,6 +922,12 @@ function measuredNote(note: Note, original: Note): number {
     note.updatedAt,
     note.filePath,
     note.exportedAt,
+    note.folderId,
+    note.spaceId,
+    note.contextFolderIds?.length,
+    ...(note.contextFolderIds ?? []),
+    note.tags?.length,
+    ...(note.tags ?? []),
     note.contextPackageIds?.length,
     ...(note.contextPackageIds ?? []),
     note.sources.length,

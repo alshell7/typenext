@@ -53,7 +53,18 @@ export function Modal({
         <Dialog.Overlay className="dialog-overlay" />
         <Dialog.Content
           className={`dialog-content ${className}`}
-          onEscapeKeyDown={onEscapeKeyDown}
+          onEscapeKeyDown={event => {
+            // A popover, menu or recorder inside the dialog closes first.
+            const target = event.target
+            if (
+              target instanceof HTMLElement &&
+              target.closest('[data-escape-local="true"]')
+            ) {
+              event.preventDefault()
+              return
+            }
+            onEscapeKeyDown?.(event)
+          }}
           onCloseAutoFocus={event => {
             onCloseAutoFocus?.(event)
             if (event.defaultPrevented) return

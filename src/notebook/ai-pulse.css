@@ -1,0 +1,488 @@
+/* The "a model is working" animations. Each one is drawn in the accent
+   colour, fits beside a line of text and fades in after 140 ms so a fast
+   answer never flickers. */
+.ai-pulse {
+  --pulse-color: var(--accent);
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 26px;
+  height: 14px;
+  color: var(--pulse-color);
+  vertical-align: -2px;
+  pointer-events: none;
+  opacity: 0;
+  animation: ai-pulse-in 260ms ease-out 140ms forwards;
+}
+.ai-pulse.is-instant {
+  animation-delay: 0ms;
+}
+.cm-ai-pulse-widget {
+  display: inline-block;
+  margin-left: 4px;
+  line-height: 0;
+  vertical-align: middle;
+}
+@keyframes ai-pulse-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------ Orb */
+/* Colourful styles use their own colours, so they read on any page colour:
+   saturated hues, with a thin inner edge for very light or dark pages. */
+.ai-pulse.is-orb {
+  width: 18px;
+  height: 18px;
+  vertical-align: -4px;
+}
+.ai-pulse.is-orb .ai-pulse-orb,
+.ai-pulse.is-orb .ai-pulse-orb-glow {
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    #ff4fa3,
+    #8b5cff,
+    #2fb8ff,
+    #3ee8b5,
+    #ffc24a,
+    #ff4fa3
+  );
+  animation:
+    ai-orb-spin 2.6s linear infinite,
+    ai-orb-breathe 2.2s ease-in-out infinite;
+}
+.ai-pulse.is-orb .ai-pulse-orb {
+  box-shadow:
+    inset 0 0 0 0.5px rgb(255 255 255 / 35%),
+    inset 0 0 0 1px rgb(0 0 0 / 10%);
+}
+/* Glass: a soft highlight and a deeper lower edge. */
+.ai-pulse.is-orb .ai-pulse-orb::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at 32% 28%,
+      rgb(255 255 255 / 85%) 0 12%,
+      rgb(255 255 255 / 0%) 42%
+    ),
+    radial-gradient(circle at 60% 78%, rgb(20 0 60 / 28%), transparent 60%);
+  animation: ai-orb-spin 2.6s linear infinite reverse;
+}
+.ai-pulse.is-orb .ai-pulse-orb-glow {
+  inset: 0;
+  filter: blur(4px) saturate(1.3);
+  opacity: 0.55;
+}
+@keyframes ai-orb-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes ai-orb-breathe {
+  0%,
+  100% {
+    scale: 0.86;
+  }
+  50% {
+    scale: 1.04;
+  }
+}
+
+/* ------------------------------------------------------------ Spark */
+.ai-pulse.is-spark {
+  width: 20px;
+  height: 18px;
+  vertical-align: -4px;
+}
+.ai-pulse.is-spark svg {
+  position: absolute;
+  inset: 0 1px;
+  overflow: visible;
+  /* A faint light rim keeps the star clear on mid-tone pages. */
+  filter: drop-shadow(0 0 0.7px rgb(255 255 255 / 75%))
+    drop-shadow(0 0 2.5px rgb(139 92 255 / 45%));
+}
+.ai-pulse.is-spark .ai-pulse-star {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ai-spark 1.9s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+.ai-pulse.is-spark .ai-pulse-star-small {
+  transform-box: fill-box;
+  transform-origin: center;
+  translate: 9px -7px;
+  scale: 0.32;
+  animation: ai-spark-small 1.9s ease-in-out infinite;
+}
+@keyframes ai-spark {
+  0% {
+    scale: 0.55;
+    rotate: 0deg;
+  }
+  50% {
+    scale: 1;
+    rotate: 90deg;
+  }
+  100% {
+    scale: 0.55;
+    rotate: 180deg;
+  }
+}
+@keyframes ai-spark-small {
+  0%,
+  35%,
+  100% {
+    opacity: 0;
+    scale: 0.1;
+  }
+  60% {
+    opacity: 1;
+    scale: 0.34;
+  }
+}
+
+/* ------------------------------------------------------------ Bloom */
+.ai-pulse.is-bloom {
+  width: 20px;
+  height: 16px;
+  vertical-align: -3px;
+}
+.ai-pulse.is-bloom .ai-pulse-light {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  opacity: 0.85;
+  filter: blur(0.6px);
+  animation: ai-bloom 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+.ai-pulse.is-bloom .ai-pulse-light-0 {
+  background: radial-gradient(circle at 35% 35%, #7fe7ff, #1e9bff);
+}
+.ai-pulse.is-bloom .ai-pulse-light-1 {
+  background: radial-gradient(circle at 35% 35%, #ffb3dc, #ff3d9a);
+  animation-delay: -0.8s;
+}
+.ai-pulse.is-bloom .ai-pulse-light-2 {
+  background: radial-gradient(circle at 35% 35%, #ffe59a, #ff9f1c);
+  animation-delay: -1.6s;
+}
+@keyframes ai-bloom {
+  0% {
+    translate: -5px 1px;
+    scale: 0.8;
+  }
+  33% {
+    translate: 4px -3px;
+    scale: 1.05;
+  }
+  66% {
+    translate: 3px 3px;
+    scale: 0.7;
+  }
+  100% {
+    translate: -5px 1px;
+    scale: 0.8;
+  }
+}
+
+/* ------------------------------------------------------------ Firefly */
+.ai-pulse.is-firefly .ai-pulse-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  offset-path: path(
+    'M13 7 C 16 1.6, 23.5 1.6, 23.5 7 C 23.5 12.4, 16 12.4, 13 7 C 10 1.6, 2.5 1.6, 2.5 7 C 2.5 12.4, 10 12.4, 13 7 Z'
+  );
+  offset-rotate: 0deg;
+  offset-anchor: center;
+  animation: ai-firefly 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+.ai-pulse.is-firefly .ai-pulse-dot-0 {
+  box-shadow:
+    0 0 4px 1px color-mix(in srgb, currentColor 75%, transparent),
+    0 0 10px 2px color-mix(in srgb, currentColor 30%, transparent);
+  animation:
+    ai-firefly 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite,
+    ai-twinkle 1.2s ease-in-out infinite;
+}
+.ai-pulse.is-firefly .ai-pulse-dot-1 {
+  width: 3.2px;
+  height: 3.2px;
+  opacity: 0.5;
+  animation-delay: -0.1s;
+}
+.ai-pulse.is-firefly .ai-pulse-dot-2 {
+  width: 2.6px;
+  height: 2.6px;
+  opacity: 0.3;
+  animation-delay: -0.2s;
+}
+.ai-pulse.is-firefly .ai-pulse-dot-3 {
+  width: 2px;
+  height: 2px;
+  opacity: 0.16;
+  animation-delay: -0.3s;
+}
+@keyframes ai-firefly {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+@keyframes ai-twinkle {
+  0%,
+  100% {
+    filter: brightness(1);
+    scale: 1;
+  }
+  50% {
+    filter: brightness(1.35);
+    scale: 1.25;
+  }
+}
+
+/* ------------------------------------------------------------ Ink */
+.ai-pulse.is-ink {
+  width: 16px;
+}
+.ai-pulse.is-ink .ai-pulse-drop,
+.ai-pulse.is-ink .ai-pulse-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  translate: -50% -50%;
+}
+.ai-pulse.is-ink .ai-pulse-drop {
+  width: 5px;
+  height: 5px;
+  background: currentColor;
+  animation: ai-ink-drop 1.8s ease-in-out infinite;
+}
+.ai-pulse.is-ink .ai-pulse-ring {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  opacity: 0;
+  animation: ai-ink-ring 1.8s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+.ai-pulse.is-ink .ai-pulse-ring-late {
+  animation-delay: 0.9s;
+}
+@keyframes ai-ink-drop {
+  0%,
+  100% {
+    scale: 0.75;
+  }
+  45% {
+    scale: 1.15;
+  }
+}
+@keyframes ai-ink-ring {
+  0% {
+    scale: 0.2;
+    opacity: 0.85;
+  }
+  100% {
+    scale: 1.15;
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------ Orbit */
+.ai-pulse.is-orbit {
+  width: 20px;
+}
+.ai-pulse.is-orbit .ai-pulse-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  translate: -50% -50%;
+}
+.ai-pulse.is-orbit .ai-pulse-spin {
+  position: absolute;
+  inset: 0;
+  /* A tilted orbit: the circle is seen at an angle. */
+  scale: 1 0.55;
+  animation: ai-orbit 1.7s linear infinite;
+}
+.ai-pulse.is-orbit .ai-pulse-moon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4.5px;
+  height: 4.5px;
+  margin: -2.25px 0 0 -2.25px;
+  border-radius: 50%;
+  background: currentColor;
+  translate: 7px 0;
+  box-shadow: 0 0 5px color-mix(in srgb, currentColor 55%, transparent);
+}
+.ai-pulse.is-orbit .ai-pulse-moon-small {
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  translate: -7px 0;
+  opacity: 0.6;
+}
+@keyframes ai-orbit {
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* ------------------------------------------------------------ Dots */
+.ai-pulse.is-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3.5px;
+  width: 24px;
+}
+.ai-pulse.is-dots .ai-pulse-bead {
+  display: block;
+  flex: none;
+  width: 4.5px;
+  height: 4.5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ai-bead 1.15s ease-in-out infinite;
+}
+.ai-pulse.is-dots .ai-pulse-bead:nth-child(2) {
+  animation-delay: 0.14s;
+}
+.ai-pulse.is-dots .ai-pulse-bead:nth-child(3) {
+  animation-delay: 0.28s;
+}
+@keyframes ai-bead {
+  0%,
+  70%,
+  100% {
+    translate: 0 0;
+    opacity: 0.35;
+  }
+  30% {
+    translate: 0 -3px;
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------ Scribble */
+.ai-pulse.is-scribble {
+  width: 30px;
+}
+.ai-pulse.is-scribble svg {
+  display: block;
+  overflow: visible;
+}
+.ai-pulse.is-scribble path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: ai-scribble 2.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes ai-scribble {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  55% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  85%,
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0.2;
+  }
+}
+
+/* ------------------------------------------------------------ Working text */
+/* Selected text that a model is rewriting: a slow sweep of light. */
+.cm-ai-working {
+  border-radius: 3px;
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--accent) 22%, transparent) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: ai-sweep 1.7s ease-in-out infinite;
+}
+@keyframes ai-sweep {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-pulse,
+  .ai-pulse *,
+  .cm-ai-working {
+    animation: none !important;
+  }
+  .ai-pulse {
+    opacity: 1;
+  }
+  .ai-pulse.is-firefly .ai-pulse-dot {
+    offset-distance: 12%;
+  }
+  .ai-pulse.is-firefly .ai-pulse-dot-1 {
+    offset-distance: 8%;
+  }
+  .ai-pulse.is-firefly .ai-pulse-dot-2 {
+    offset-distance: 4%;
+  }
+  .ai-pulse.is-firefly .ai-pulse-dot-3 {
+    offset-distance: 0%;
+  }
+  .ai-pulse.is-scribble path {
+    stroke-dashoffset: 0;
+  }
+  .ai-pulse.is-spark .ai-pulse-star-small {
+    opacity: 0;
+  }
+  .ai-pulse.is-bloom .ai-pulse-light-1 {
+    translate: 4px -2px;
+  }
+  .ai-pulse.is-bloom .ai-pulse-light-2 {
+    translate: -4px 2px;
+  }
+  .ai-pulse.is-ink .ai-pulse-ring {
+    opacity: 0.4;
+    scale: 0.8;
+  }
+  .cm-ai-working {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+}

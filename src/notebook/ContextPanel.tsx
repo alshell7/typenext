@@ -7,13 +7,17 @@ import {
   ShieldCheck,
   Upload,
   X,
+  Folder,
 } from 'lucide-react'
 import type {
   ContextPackage,
   ContextSource,
   Note,
+  NoteFolder,
   NotebookSettings,
 } from '../types/notebook'
+import { folderContextNotes, MAX_FOLDER_CONTEXT_NOTES } from './note-context'
+import { folderPath } from './organize/organize'
 import { relativeDate } from './model'
 import { Modal } from './Modal'
 import { resolveNoteContext } from './note-context'
@@ -42,6 +46,7 @@ import './context/context-panel.css'
 const EMPTY_LIBRARY: ContextSource[] = []
 const EMPTY_PACKAGES: ContextPackage[] = []
 const EMPTY_NOTE_IDS = new Set<string>()
+const EMPTY_FOLDERS: NoteFolder[] = []
 
 export interface ContextPanelProps {
   note: Note
@@ -55,6 +60,10 @@ export interface ContextPanelProps {
   onFiles(files: FileList | null, packageId?: string): Promise<void>
   onWebsite(): void
   onUseNote(id: string): void
+  /** Notebook folders, for live folder context. */
+  folders?: NoteFolder[]
+  onAttachFolder?(id: string): void
+  onDetachFolder?(id: string): void
   onLibrary?(packageId?: string): void
   onDetachPackage?(id: string): void
   /** Attach a named context. Falls back to updating the note directly. */
@@ -77,6 +86,9 @@ export function ContextPanel({
   onFiles,
   onWebsite,
   onUseNote,
+  folders = EMPTY_FOLDERS,
+  onAttachFolder,
+  onDetachFolder,
   onLibrary,
   onDetachPackage,
   onAttachPackage,
@@ -89,6 +101,7 @@ export function ContextPanel({
   const dragDepth = useRef(0)
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [choosingNote, setChoosingNote] = useState(false)
+  const [choosingFolder, setChoosingFolder] = useState(false)
   const [noteQuery, setNoteQuery] = useState('')
   const [mediaHint, setMediaHint] = useState(false)
   const [announcement, setAnnouncement] = useState('')
@@ -116,8 +129,22 @@ export function ContextPanel({
     )
   }
   const resolved = useMemo(
-    () => resolveNoteContext(note, notes, library, packages),
-    [note, notes, library, packages]
+    () => resolveNoteContext(note, notes, library, packages, folders),
+    [note, notes, library, packages, folders]
+  )
+  const attachedFolders = useMemo(
+    () =>
+      (note.contextFolderIds ?? [])
+        .map(id => folders.find(folder => folder.id === id))
+        .filter((folder): folder is NoteFolder => Boolean(folder))
+        .map(folder => ({
+          folder,
+          path: folderPath(folders, folder.id)
+            .map(item => item.name)
+            .join(' › '),
+          count: folderContextNotes(folder.id, notes, folders, note.id).length,
+        })),
+    [note.contextFolderIds, note.id, folders, notes]
   )
   const directSources = useMemo(() => {
     if (!note.sources.length) return EMPTY_LIBRARY
@@ -311,6 +338,41 @@ export function ContextPanel({
                   : 'Just for this note'}
               </span>
             </div>
+            {attachedFolders.length > 0 && (
+              <ul className="context-folders" aria-label="Attached folders">
+                {attachedFolders.map(({ folder, path, count }) => (
+                  <li
+                    key={folder.id}
+                    className={`context-folder org-${folder.color ?? 'slate'}`}
+                  >
+                    <Folder
+                      size={15}
+                      className="org-folder-icon"
+                      aria-hidden="true"
+                    />
+                    <span className="context-folder-copy">
+                      <strong title={path}>{folder.name}</strong>
+                      <small>
+                        {count
+                          ? `${count}${count === MAX_FOLDER_CONTEXT_NOTES ? ' newest' : ''} ${count === 1 ? 'note' : 'notes'} · stays up to date`
+                          : 'No notes yet · new notes join automatically'}
+                      </small>
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Detach folder ${folder.name}`}
+                      onClick={() => {
+                        onDetachFolder?.(folder.id)
+                        announce(`${folder.name} detached`)
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {note.sources.length > 0 && (
               <ReferenceList
                 sources={directSources}
@@ -365,6 +427,16 @@ export function ContextPanel({
                 <Notebook size={14} />
                 <span>Use a note</span>
               </button>
+              {onAttachFolder && folders.length > 0 && (
+                <button
+                  className="context-action"
+                  disabled={importing}
+                  onClick={() => setChoosingFolder(true)}
+                >
+                  <Folder size={14} />
+                  <span>Use a folder</span>
+                </button>
+              )}
             </div>
             <p className="field-help context-formats">
               {note.sources.length
@@ -554,6 +626,64 @@ export function ContextPanel({
               : notes.length > 1
                 ? 'Your other notes are already attached.'
                 : 'Create another note to use its writing as context.'}
+          </p>
+        )}
+      </Modal>
+      <Modal
+        open={choosingFolder}
+        onOpenChange={setChoosingFolder}
+        title="Use a folder as context"
+        description="Every note in the folder and its subfolders becomes a live reference, including notes you add later."
+        className="note-context-picker"
+      >
+        <ul className="note-context-list" aria-label="Folders">
+          {folders
+            .filter(folder => !note.contextFolderIds?.includes(folder.id))
+            .map(folder => ({
+              folder,
+              path: folderPath(folders, folder.id),
+              count: folderContextNotes(folder.id, notes, folders, note.id)
+                .length,
+            }))
+            .sort((left, right) =>
+              left.path
+                .map(item => item.name)
+                .join('/')
+                .localeCompare(right.path.map(item => item.name).join('/'))
+            )
+            .map(({ folder, path, count }) => (
+              <li key={folder.id}>
+                <button
+                  type="button"
+                  className={`note-context-option org-${folder.color ?? 'slate'}`}
+                  aria-label={`Use folder ${folder.name} as context`}
+                  onClick={() => {
+                    onAttachFolder?.(folder.id)
+                    setChoosingFolder(false)
+                    announce(`${folder.name} linked`)
+                  }}
+                >
+                  <Folder
+                    size={18}
+                    strokeWidth={1.5}
+                    className="org-folder-icon"
+                  />
+                  <span className="note-context-option-copy">
+                    <strong>{path.map(item => item.name).join(' › ')}</strong>
+                    <small>
+                      {count} {count === 1 ? 'note' : 'notes'}
+                    </small>
+                  </span>
+                  <ArrowUpRight size={14} />
+                </button>
+              </li>
+            ))}
+        </ul>
+        {folders.every(folder =>
+          note.contextFolderIds?.includes(folder.id)
+        ) && (
+          <p className="note-context-empty" role="status">
+            Every folder is already attached.
           </p>
         )}
       </Modal>

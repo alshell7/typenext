@@ -507,7 +507,10 @@ export const writingSurface = EditorView.theme({
   '.cm-cursor, .cm-dropCursor': {
     borderLeftColor: 'var(--editor-caret, currentColor)',
   },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection':
+  // CodeMirror's base themes style the focused selection with a selector of
+  // five classes. Match it exactly so the palette's colour wins in light and
+  // dark appearances; a weaker selector shows the base theme's lavender.
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, & > .cm-scroller > .cm-selectionLayer .cm-selectionBackground':
     {
       backgroundColor: 'var(--editor-selection, rgba(126, 136, 113, 0.22))',
     },

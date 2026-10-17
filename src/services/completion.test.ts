@@ -43,6 +43,10 @@ function settings(): NotebookSettings {
     dictation: defaultSettings().dictation,
     timing: defaultSettings().timing,
     updates: defaultSettings().updates,
+    ai: defaultSettings().ai,
+    shortcuts: defaultSettings().shortcuts,
+    revisions: defaultSettings().revisions,
+    suggestionWords: 0,
     profiles: {
       local: {
         endpoint: 'http://localhost:1234/v1',
@@ -484,6 +488,44 @@ describe('private inline suggestions', () => {
     )
     const text = (await suggest(note(), cursor('The river waits'), config)).text
     expect(text.trim().split(/\s+/u)).toHaveLength(8)
+  })
+
+  it('honors a chosen word limit in the prompt, the token budget and the clipped text', async () => {
+    const long =
+      ' flows through the old town where people gather to watch the sunset every evening'
+    vi.mocked(requestJson).mockResolvedValue(completion(long))
+    const config = settings()
+    config.suggestionWords = 4
+    const short = (await suggest(note(), cursor('The river waits'), config))
+      .text
+    expect(short.trim().split(/\s+/u)).toHaveLength(4)
+    const system = String(
+      (requestBody().messages as { content: string }[])[0]?.content
+    )
+    expect(system).toContain('Use at most 4 words')
+
+    const generous = settings()
+    generous.suggestionWords = 40
+    vi.mocked(requestJson).mockResolvedValue(
+      completion(' flows through the old town where people gather at dusk')
+    )
+    await suggest(note('Later'), cursor('Later'), generous)
+    // Forty words need more room than the 64-token default ceiling allows.
+    expect(Number(requestBody().max_tokens)).toBeGreaterThan(64)
+    expect(String((requestBody().messages as { content: string }[])[0]?.content)).toContain(
+      'Use at most 40 words'
+    )
+  })
+
+  it('keeps table cells short whatever word limit is chosen', async () => {
+    vi.mocked(requestJson).mockResolvedValue(
+      completion(' a long answer that goes on and on for many words')
+    )
+    const config = settings()
+    config.suggestionWords = 30
+    const table = '| Name | Role |\n| --- | --- |\n| Ada | '
+    const text = (await suggest(note(table), cursor(table), config)).text
+    expect(text.trim().split(/\s+/u).length).toBeLessThanOrEqual(6)
   })
 
   it('uses cached completions without extra requests while still checking an aborted signal', async () => {

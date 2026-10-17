@@ -81,6 +81,8 @@ export interface EditorSettings {
   smartTypography: boolean
   /** Words to write each day. 0 hides the goal. */
   dailyGoal: number
+  /** Show only a link's text until the cursor enters it. */
+  foldLinks: boolean
 }
 
 /** Synchronize notes as Markdown files in a Git repository (desktop). */
@@ -114,6 +116,56 @@ export interface UpdateSettings {
   autoDownload: boolean
 }
 
+/** The small animation shown while a model works. */
+export type AiIndicatorStyle =
+  | 'orb'
+  | 'spark'
+  | 'bloom'
+  | 'firefly'
+  | 'ink'
+  | 'dots'
+  | 'orbit'
+  | 'scribble'
+  | 'off'
+
+export type AiActionId =
+  'polish' | 'grammar' | 'rewrite' | 'paraphrase' | 'shorter' | 'longer'
+
+export interface AiSettings {
+  /** Polish, fix grammar, rewrite and more for selected text. */
+  selectionActions: boolean
+  indicator: AiIndicatorStyle
+}
+
+/**
+ * Writer-chosen keys in CodeMirror notation (for example "Mod-Space").
+ * Field names must not end in "key": the desktop save drops such fields as
+ * possible credentials.
+ */
+export interface ShortcutSettings {
+  /** Ask for suggestion choices at the cursor. */
+  suggest: string
+  /** Accept one word of the inline suggestion. */
+  acceptWord: string
+  /** Open the AI actions for the selected text. */
+  aiActions: string
+}
+
+/** Local revisions of each note, kept beside the notebook. */
+export interface RevisionSettings {
+  enabled: boolean
+  /** automatic: after writing pauses. manual: only when asked. */
+  mode: 'automatic' | 'manual'
+  /** Characters added or removed before a pause becomes a revision. */
+  minChanges: number
+  /** At least this many minutes between automatic revisions. */
+  minMinutes: number
+  /** Revisions kept per note. Named and pinned revisions are always kept. */
+  keep: number
+  /** Keep the text before an AI edit, a restore or a large deletion. */
+  safetyNet: boolean
+}
+
 export interface TimingSettings {
   /** Wait longer while typing quickly, and less after a pause or accept. */
   adaptiveDelay: boolean
@@ -137,6 +189,8 @@ export interface NotebookSettings {
   suggestionDelay: number
   maxTokens: number
   suggestionLength: 'adaptive' | 'short' | 'sentence'
+  /** Most words in one suggestion. 0 lets the length setting decide. */
+  suggestionWords: number
   externalAutoEnabled: boolean
   suggestionInstructions: string
   localEngine: 'recall' | 'embedded' | 'server'
@@ -152,6 +206,9 @@ export interface NotebookSettings {
   dictation: DictationSettings
   timing: TimingSettings
   updates: UpdateSettings
+  ai: AiSettings
+  shortcuts: ShortcutSettings
+  revisions: RevisionSettings
 }
 
 export type MediaKind = 'image' | 'audio' | 'video'
@@ -189,6 +246,8 @@ export interface ContextSource {
 export interface ContextPackage {
   id: string
   name: string
+  /** Workspaces that can use this context. Absent: every workspace. */
+  spaceIds?: string[]
   sourceIds: string[]
   createdAt: number
   updatedAt: number
@@ -208,12 +267,69 @@ export interface Note {
   exportedAt?: number
   /** The title follows the first line until the writer names the note. */
   autoTitle?: boolean
+  /** The folder that holds the note. Absent: the notebook root. */
+  folderId?: string
+  /** Tag ids from the workspace tag list. */
+  tags?: string[]
+  /** Folders whose notes are live context for this note. */
+  contextFolderIds?: string[]
+  /** The workspace that holds the note. Absent: the first workspace. */
+  spaceId?: string
+}
+
+/** Named colours that adapt to light and dark appearances. */
+export type OrganizeColor =
+  'sage' | 'sky' | 'iris' | 'plum' | 'rose' | 'amber' | 'sand' | 'slate'
+
+export interface NoteFolder {
+  id: string
+  name: string
+  /** Absent: a top-level folder. */
+  parentId?: string
+  color?: OrganizeColor
+  createdAt: number
+  /** Collapsed in the sidebar. */
+  collapsed?: boolean
+  spaceId?: string
+}
+
+export interface NoteTag {
+  id: string
+  name: string
+  color: OrganizeColor
+  createdAt: number
+  spaceId?: string
+}
+
+/**
+ * A workspace: its own notes, folders, tags and contexts, like a browser
+ * profile. A shared workspace's items also appear in every other workspace.
+ */
+export interface NoteSpace {
+  id: string
+  name: string
+  color: OrganizeColor
+  /** An icon id from space-icons.ts; absent shows the first letter. */
+  icon?: string
+  /** Also show this workspace's notes, folders and tags everywhere. */
+  shared?: boolean
+  /** This workspace's Git repository folder (desktop). The first workspace
+   * uses the folder in Preferences → Sync. */
+  gitFolder?: string
+  createdAt: number
+  /** Tabs and the open note when the writer last left the workspace. */
+  openNoteIds?: string[]
+  activeNoteId?: string | null
 }
 
 export interface Workspace {
   version: 1
   contextLibrary?: ContextSource[]
   contextPackages?: ContextPackage[]
+  folders?: NoteFolder[]
+  tags?: NoteTag[]
+  spaces?: NoteSpace[]
+  activeSpaceId?: string
   notes: Note[]
   openNoteIds: string[]
   activeNoteId: string | null

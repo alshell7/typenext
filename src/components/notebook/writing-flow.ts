@@ -17,6 +17,8 @@ import {
 } from '@codemirror/view'
 import { syntaxTree } from '@codemirror/language'
 import { insertLink, wrapSelection } from './markdown-editing'
+import { aiSessionField } from './ai-actions'
+import { findField } from './find'
 
 /**
  * Small writing aids that stay out of the way: a format bar for a selection,
@@ -29,6 +31,9 @@ export interface FlowHost {
   smartTypography(): boolean
   webFacts(): boolean
   runWebFacts(): void
+  /** A chat model can edit the selection. */
+  aiAvailable?(): boolean
+  openAi?(): void
   /** A page title for a pasted address, or null. */
   linkTitle?(url: string): Promise<string | null>
 }
@@ -63,10 +68,21 @@ interface BarAction {
   label: string
   title: string
   run(view: EditorView): void
+  className?: string
 }
 
 function barActions(host: FlowHost): BarAction[] {
   const actions: BarAction[] = [
+    ...(host.aiAvailable?.()
+      ? [
+          {
+            label: '✦ AI',
+            title: 'AI actions: polish, fix grammar, rewrite',
+            className: 'cm-format-ai',
+            run: () => host.openAi?.(),
+          },
+        ]
+      : []),
     { label: 'B', title: 'Bold', run: view => wrapSelection(view, '**') },
     { label: 'I', title: 'Italic', run: view => wrapSelection(view, '*') },
     { label: 'S', title: 'Strikethrough', run: view => wrapSelection(view, '~~') },
@@ -106,6 +122,9 @@ function formatBarTooltip(state: EditorState, host: FlowHost): Tooltip | null {
     state.selection.ranges.length !== 1 ||
     range.empty ||
     state.field(pointerDown) ||
+    state.field(aiSessionField, false) ||
+    // A selected search match is not text to format.
+    state.field(findField, false)?.query ||
     inCode(state, range.from)
   )
     return null
@@ -125,6 +144,7 @@ function formatBarTooltip(state: EditorState, host: FlowHost): Tooltip | null {
         button.type = 'button'
         button.textContent = action.label
         button.title = action.title
+        if (action.className) button.className = action.className
         button.setAttribute('aria-label', action.title)
         button.tabIndex = -1
         button.addEventListener('mousedown', event => event.preventDefault())
@@ -143,7 +163,17 @@ function formatBar(host: FlowHost): Extension {
   const field = StateField.define<Tooltip | null>({
     create: state => formatBarTooltip(state, host),
     update(tooltip, transaction) {
-      if (!transaction.docChanged && !transaction.selection && !transaction.effects.some(effect => effect.is(setPointerDown)))
+      const sessionChanged =
+        transaction.startState.field(aiSessionField, false) !==
+          transaction.state.field(aiSessionField, false) ||
+        transaction.startState.field(findField, false)?.query !==
+          transaction.state.field(findField, false)?.query
+      if (
+        !transaction.docChanged &&
+        !transaction.selection &&
+        !sessionChanged &&
+        !transaction.effects.some(effect => effect.is(setPointerDown))
+      )
         return tooltip
       const next = formatBarTooltip(transaction.state, host)
       // Keep one tooltip object while the selection only moves, so the bar

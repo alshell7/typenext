@@ -119,7 +119,10 @@ test('the captured demo provider response stays a preview, accepts with a separa
   let dialog = await preferences(page, 'Suggestions')
   await dialog.getByRole('switch', { name: /^Suggest after a pause/ }).uncheck()
   await dialog.getByLabel('Pause before suggesting').fill('1800')
-  await dialog.getByLabel('Suggestion length').selectOption('short')
+  await dialog
+      .getByRole('radiogroup', { name: 'Suggestion length' })
+      .getByRole('radio', { name: 'Few words', exact: true })
+      .click()
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
   await editor.fill(original.slice(0, -fragment.length))
 
