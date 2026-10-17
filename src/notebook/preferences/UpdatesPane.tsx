@@ -1,5 +1,13 @@
-import { useEffect, useState } from 'react'
-import { ArrowUpCircle, RefreshCw, ShieldCheck } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import {
+  ArrowUpCircle,
+  Check,
+  CircleAlert,
+  ExternalLink,
+  LoaderCircle,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react'
 import type { UpdateSettings } from '../../types/notebook'
 import {
   checkForUpdates,
@@ -10,18 +18,24 @@ import {
   type UpdateState,
 } from '../../services/updater'
 import { relativeDate } from '../model'
-import {
-  Callout,
-  Group,
-  Row,
-  Section,
-  StatusLine,
-  SwitchRow,
-  type Tone,
-} from './controls'
+import { Callout, Group, Row, Section, SwitchRow, type Tone } from './controls'
 import type { PaneProps } from './types'
 
 const RELEASES = 'https://github.com/alshell7/typenext/releases'
+
+/** A live status that sits in a row description like any other text. */
+function RowStatus({ tone, children }: { tone: Tone; children: ReactNode }) {
+  return (
+    <span className={`pref-row-status tone-${tone}`} role="status">
+      {tone === 'busy' && (
+        <LoaderCircle size={12} className="spin" aria-hidden="true" />
+      )}
+      {tone === 'error' && <CircleAlert size={12} aria-hidden="true" />}
+      {tone === 'ok' && <Check size={12} aria-hidden="true" />}
+      <span>{children}</span>
+    </span>
+  )
+}
 
 function when(time: number) {
   const minutes = Math.round((Date.now() - time) / 60_000)
@@ -120,12 +134,22 @@ export function UpdatesPane({ settings, update, latest }: PaneProps) {
       <Section
         title="This version"
         description="New versions come from the TypeNext releases on GitHub."
+        aside={
+          <a
+            className="pref-aside-link"
+            href={RELEASES}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Release notes <ExternalLink size={13} aria-hidden="true" />
+          </a>
+        }
       >
         <Group>
           <Row
             label={version ? `TypeNext ${version}` : 'TypeNext'}
             description={
-              <StatusLine tone={status.tone}>{status.text}</StatusLine>
+              <RowStatus tone={status.tone}>{status.text}</RowStatus>
             }
           >
             {state.phase === 'ready' ? (
@@ -165,11 +189,6 @@ export function UpdatesPane({ settings, update, latest }: PaneProps) {
             )}
           </Row>
         </Group>
-        <p className="pref-help">
-          <a href={RELEASES} target="_blank" rel="noreferrer">
-            Release notes
-          </a>
-        </p>
       </Section>
       <Section
         title="Automatic updates"
