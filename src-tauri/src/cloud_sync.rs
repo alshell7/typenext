@@ -45,7 +45,9 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(result, vec![true, false, false, false]);
-        assert!(cloud_paths_exist(vec![String::new(); MAX_PATHS + 1]).await.is_err());
+        assert!(cloud_paths_exist(vec![String::new(); MAX_PATHS + 1])
+            .await
+            .is_err());
         std::fs::remove_dir_all(&folder).unwrap();
     }
 }
