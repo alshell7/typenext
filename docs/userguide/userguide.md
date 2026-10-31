@@ -28,12 +28,13 @@ This guide tells you how to use each feature. It applies to the desktop app on m
 11. [Dictation](#dictation)
 12. [Zen mode](#zen-mode)
 13. [Model downloads and Hugging Face](#model-downloads-and-hugging-face)
-14. [Git sync](#git-sync)
-15. [History](#history)
-16. [Preferences](#preferences)
-17. [Keyboard shortcuts](#keyboard-shortcuts)
-18. [Privacy summary](#privacy-summary)
-19. [Troubleshooting](#troubleshooting)
+14. [Cloud sync](#cloud-sync)
+15. [Git sync](#git-sync)
+16. [History](#history)
+17. [Preferences](#preferences)
+18. [Keyboard shortcuts](#keyboard-shortcuts)
+19. [Privacy summary](#privacy-summary)
+20. [Troubleshooting](#troubleshooting)
 
 ## Get started
 
@@ -109,7 +110,7 @@ A workspace is a separate set of notes, folders, tags and contexts, like a profi
 
 **Contexts.** A context belongs to the workspace where you created it. To use it in other workspaces too, open **Contexts**, choose the context and select the workspaces under **Available in**.
 
-**Git.** Each workspace can sync to its own repository. In **Manage workspaces**, select a workspace and **Choose folder**. The first workspace uses the folder in **Preferences → Sync**. Git sync must be on.
+**Git.** Each workspace can sync to its own repository. In **Manage workspaces**, select a workspace and **Choose folder**. The first workspace uses the folder in **Preferences → Git sync**. Git sync must be on.
 
 **Manage workspaces** (from the switcher or the command palette) also renames and recolours a workspace, and removes one. When you remove a workspace, you choose whether its notes move to another workspace or are deleted with it. Your last workspace cannot be removed.
 
@@ -803,13 +804,77 @@ When this occurs, TypeNext opens **Hugging Face asks you to sign in** or **Huggi
 
 TypeNext checks the token with Hugging Face before it saves it. You can also add or remove the token in **Preferences → Models → Model downloads**. TypeNext sends the token only to huggingface.co, and only for model downloads.
 
+## Cloud sync
+
+Cloud sync keeps your notebook the same on every device: notes, folders, tags, workspaces, contexts and preferences. It uses a database in your own account, **Neon Postgres** or **Cloudflare D1**, or both at once. Everything is encrypted on your device before it leaves, with a sync key that only you know. The database stores only random identifiers, times and encrypted data. It never sees a title, a word of a note or a device name.
+
+### Set up the first device
+
+1. Go to **Preferences → Cloud sync**.
+2. Select **Neon Postgres** or **Cloudflare D1**.
+   - **Neon:** paste the connection string from the Neon console (**Connect**). For **Live updates**, also paste the **Realtime URL** and **Realtime secret** from the **Realtime** page of the Neon console.
+   - **Cloudflare D1:** type your **Account ID**, paste an API token with the **D1 Edit** permission, and select **Choose a database**. Select a database, or keep **New database: typenext-sync**. Cloudflare D1 needs the desktop app.
+3. Select **Connect**.
+4. Choose a **sync key**: at least 10 characters. **Suggest one** makes a strong key of words and a number. Type it again, then select **Encrypt and create**.
+5. TypeNext shows three **recovery keys**. Copy them or save them as a file, and keep them somewhere safe, apart from your devices. Each one can open your notebook if you forget the sync key. Select **I have stored my recovery keys**, then **Start syncing**.
+
+TypeNext adds three tables to the database, whose names start with `typenext_`. It does not change other tables.
+
+### Add another device
+
+1. Install TypeNext on the other device.
+2. In **Preferences → Cloud sync**, add the same database with the same credentials.
+3. Type your sync key (or a recovery key) and select **Open and sync**.
+
+Your notes arrive in a moment. The device remembers the key, so you type it only once.
+
+### Use two databases
+
+Add a second database in **Preferences → Cloud sync**. When this device already has the key, the new database gets the same encrypted notebook and the same keys. Devices that use different databases still meet: a device that uses both carries changes between them.
+
+### When to sync
+
+- **Live**: moments after you pause, and at once when another device changes something. With Neon Realtime, changes arrive within a second. Without it, TypeNext checks every 20 seconds, or every few seconds while another device has the same note open.
+- **On a schedule**: on start and every 1 minute to 4 hours.
+- **Only when I ask**: only with **Sync now**, in the pane or in the sidebar. The sidebar line shows how many changes wait.
+
+To pause one database, turn off its switch. To stop sync on this device, turn off **Sync this device**.
+
+### What syncs
+
+Turn each part on or off in **What to sync**: **Notes**, **Folders, tags and workspaces**, **Contexts** and **Preferences**. With more than one workspace, choose **All** or only some workspaces.
+
+These always stay on the device: API keys, file paths, Git folders, local model servers and the cloud sync setup.
+
+### Files on other devices
+
+A note can be linked to a Markdown file on one computer. That path means nothing on another device, so it is not synced. When another device has linked notes, **Files on your other devices** offers to map them. Select **Map to a folder…** and choose the folder that holds the same files here. TypeNext links each note whose file it finds.
+
+### Devices and writing on two devices
+
+**Devices** lists every device of the notebook. A device that was seen in the last minute shows as active, with the note that it has open. Name this device in **This device’s name**.
+
+When another device has the note open, the toolbar shows it, for example **Open on Travel laptop** or **Travel laptop is editing**. You can keep writing: changes to different words merge, word by word. When two devices change the same words at the same time, this device keeps its text and the other version arrives as a separate note, for example "Trip plan (Travel laptop)". Nothing is lost.
+
+To share less, turn off **Share where I am**. To remove a lost or old device, select its remove button in **Devices**. It stops syncing and forgets the key at its next sync.
+
+### Keys and security
+
+- **Change sync key**: type the current sync key or a recovery key, then the new key. Your other devices keep syncing.
+- **New recovery keys**: makes three new keys. The old ones stop working.
+- **Lock this device**: this device forgets the key. Type it again to sync.
+
+If you forget the sync key, add the database on any device and type a recovery key, then set a new sync key under **Security**.
+
+Encryption uses AES-256-GCM. The sync key protects the data key with PBKDF2-SHA256 (600,000 rounds), and each recovery key with HKDF-SHA256. Credentials are stored in the device credential vault on the desktop. In the browser preview, they last for the session only.
+
 ## Git sync
 
 Git sync keeps every note as a Markdown file in a Git repository. Use it to keep a history of your notes, and to use the same notes on more than one computer. Git sync needs the desktop app and Git.
 
 ### Set up Git sync
 
-1. Go to **Preferences → Sync**.
+1. Go to **Preferences → Git sync**.
 2. If TypeNext shows **Git is not installed**, install Git with the command or the link in the pane. Then restart TypeNext.
 3. Select **Choose** and select a folder for your notes.
 4. If the folder is not a Git repository, type a **Remote address** (optional), then select **Set up repository**. Use an empty private repository.
@@ -979,6 +1044,7 @@ To change the keys for **Suggest at the cursor**, **Accept one word** and **AI a
 | History                                                     | Nothing. Versions stay on this device.                                         |
 | Web facts (on request)                                      | Selected text, nearby writing, note title and objective, to OpenAI.            |
 | Link previews (**Notes & web**)                             | A request to the linked website. No note text.                                 |
+| Cloud sync                                                  | Encrypted notes, organization, contexts and preferences, to your database. The database cannot read them. |
 | Git sync                                                    | Notes as Markdown files, to the Git remote that you choose.                    |
 | Hugging Face token                                          | The token, to huggingface.co, only for model downloads.                        |
 | Website import                                              | A request to the website. With Firecrawl, the address goes to Firecrawl.       |
@@ -994,7 +1060,10 @@ On the desktop, keys stay in memory unless you select **Remember in the device c
 | ⌘ Space opens Spotlight on macOS.                                    | macOS uses ⌘ Space for Spotlight by default. Choose another key in **Preferences → Shortcuts → Your keys**, change the Spotlight shortcut in macOS System Settings, or use **Suggest a continuation** in the insert menu. |
 | **✦ AI** is missing from the format bar.                             | Activate a chat model in **Preferences → Models**, and turn on **AI actions for selected text** in **Preferences → Suggestions**.                     |
 | Hugging Face refuses a model download.                               | Add a read token. See [Model downloads and Hugging Face](#model-downloads-and-hugging-face).                                                                |
-| Git sync shows **Git sync needs attention**.                         | Select the sync line in the sidebar to open **Preferences → Sync**. Make sure that Git is installed, the folder exists, and your Git sign-in works.          |
+| Git sync shows **Git sync needs attention**.                         | Select the sync line in the sidebar to open **Preferences → Git sync**. Make sure that Git is installed, the folder exists, and your Git sign-in works.          |
+| Cloud sync shows **Sync needs your key**.                            | This device does not have the key yet, or another device locked it. Open **Preferences → Cloud sync** and type the sync key or a recovery key.                 |
+| A database shows **Needs credentials**.                              | In the browser preview, credentials last for the session. Paste them again in **Preferences → Cloud sync**.                                                    |
+| A note appears twice, with a device name in the title.               | Two devices changed the same words at the same time. Keep the text you want and delete the other note.                                                         |
 | Cloudflare returns no models.                                        | Make sure that **Account ID** is correct and that the token has the **Workers AI** permission.                                                              |
 | The insert menu does not open.                                       | Type the trigger at the start of a word, not in code. Make sure that **Insert menu** is on in **Preferences → Editor**.                                    |
 | The insert menu opens when I want a slash.                           | Press Escape after the slash. Or change the **Trigger character**.                                                                                         |

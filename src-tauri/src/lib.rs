@@ -1,3 +1,4 @@
+mod cloud_sync;
 mod credentials;
 mod embedding;
 mod git_sync;
@@ -199,6 +200,7 @@ pub fn run() {
             workspace::persist_workspace,
             workspace::write_markdown_file,
             workspace::open_workspace_folder,
+            cloud_sync::cloud_paths_exist,
             credentials::get_secret,
             credentials::set_secret,
             http::http_request,

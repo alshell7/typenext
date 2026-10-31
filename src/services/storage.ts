@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import type {
   AiSettings,
+  CloudSyncSettings,
+  CloudTarget,
   ContextPackage,
   ContextSource,
   DictationSettings,
@@ -572,6 +574,7 @@ function parseSettings(value: unknown): NotebookSettings {
     ]),
     editor: parseEditor(settings.editor),
     git: parseGit(settings.git),
+    cloud: parseCloud(settings.cloud),
     dictation: parseDictation(settings.dictation),
     updates: parseUpdates(settings.updates),
     timing: parseTiming(settings.timing),
@@ -628,7 +631,11 @@ function parseRevisions(value: unknown): RevisionSettings {
   return {
     enabled: boolean(revisions.enabled ?? defaults.enabled),
     mode: choice(revisions.mode ?? defaults.mode, ['automatic', 'manual']),
-    minChanges: numeric(revisions.minChanges ?? defaults.minChanges, 1, 100_000),
+    minChanges: numeric(
+      revisions.minChanges ?? defaults.minChanges,
+      1,
+      100_000
+    ),
     minMinutes: numeric(revisions.minMinutes ?? defaults.minMinutes, 0, 1440),
     keep: numeric(revisions.keep ?? defaults.keep, 5, 1000),
     safetyNet: boolean(revisions.safetyNet ?? defaults.safetyNet),
@@ -652,6 +659,79 @@ function parseGit(value: unknown): GitSyncSettings {
     delaySeconds: numeric(git.delaySeconds ?? defaults.delaySeconds, 10, 3600),
     pullMinutes: numeric(git.pullMinutes ?? defaults.pullMinutes, 0, 1440),
     push: boolean(git.push ?? defaults.push),
+  }
+}
+
+function parseCloudTarget(value: unknown): CloudTarget | null {
+  try {
+    const target = record(value)
+    const kind = choice(target.kind, ['neon', 'd1'])
+    const realtimeUrl = optionalString(target.realtimeUrl, 2048)
+    return {
+      id: id(target.id),
+      kind,
+      label: string(target.label ?? '', 256),
+      enabled: boolean(target.enabled ?? true),
+      ...(realtimeUrl && /^https:\/\//u.test(realtimeUrl)
+        ? { realtimeUrl }
+        : {}),
+      ...(kind === 'd1'
+        ? {
+            accountId: accountId(target.accountId),
+            databaseId: id(target.databaseId),
+          }
+        : {}),
+      ...(typeof target.vaultId === 'string' && target.vaultId
+        ? { vaultId: id(target.vaultId) }
+        : {}),
+      addedAt: numeric(target.addedAt ?? 0),
+    }
+  } catch {
+    // One unreadable database entry never blocks the notebook.
+    return null
+  }
+}
+
+function parseCloud(value: unknown): CloudSyncSettings {
+  const defaults = defaultSettings().cloud
+  if (value === undefined || value === null) return defaults
+  const cloud = record(value)
+  const include = record(cloud.include ?? defaults.include)
+  const targets = (Array.isArray(cloud.targets) ? cloud.targets : [])
+    .slice(0, 8)
+    .map(parseCloudTarget)
+    .filter((target): target is CloudTarget => target !== null)
+  return {
+    enabled: boolean(cloud.enabled ?? defaults.enabled),
+    cadence: choice(cloud.cadence ?? defaults.cadence, [
+      'live',
+      'interval',
+      'manual',
+    ]),
+    intervalMinutes: numeric(
+      cloud.intervalMinutes ?? defaults.intervalMinutes,
+      1,
+      1440
+    ),
+    include: {
+      notes: boolean(include.notes ?? true),
+      organize: boolean(include.organize ?? true),
+      contexts: boolean(include.contexts ?? true),
+      settings: boolean(include.settings ?? true),
+    },
+    spaceIds: [
+      ...new Set(
+        (Array.isArray(cloud.spaceIds) ? cloud.spaceIds : [])
+          .slice(0, 256)
+          .map(id)
+      ),
+    ],
+    deviceName: string(cloud.deviceName ?? '', 128),
+    presence: boolean(cloud.presence ?? defaults.presence),
+    targets: targets.filter(
+      (target, index) =>
+        targets.findIndex(other => other.id === target.id) === index
+    ),
   }
 }
 
@@ -761,11 +841,19 @@ function parseEditor(value: unknown): EditorSettings {
       'notes',
       'all',
     ]),
-    selectionToolbar: boolean(editor.selectionToolbar ?? defaults.selectionToolbar),
+    selectionToolbar: boolean(
+      editor.selectionToolbar ?? defaults.selectionToolbar
+    ),
     typewriter: boolean(editor.typewriter ?? defaults.typewriter),
-    focus: choice(editor.focus ?? defaults.focus, ['off', 'paragraph', 'sentence']),
+    focus: choice(editor.focus ?? defaults.focus, [
+      'off',
+      'paragraph',
+      'sentence',
+    ]),
     zenFocus: boolean(editor.zenFocus ?? defaults.zenFocus),
-    smartTypography: boolean(editor.smartTypography ?? defaults.smartTypography),
+    smartTypography: boolean(
+      editor.smartTypography ?? defaults.smartTypography
+    ),
     dailyGoal: numeric(editor.dailyGoal ?? defaults.dailyGoal, 0, 100_000),
     foldLinks: boolean(editor.foldLinks ?? defaults.foldLinks),
   }
@@ -815,18 +903,20 @@ export function validateWorkspace(value: unknown): Workspace {
   const contextPackages =
     workspace.contextPackages == null
       ? undefined
-      : array(workspace.contextPackages, STORAGE_LIMITS.contextPackages).map(
-          parseContextPackage
-        ).map(context =>
-          context.spaceIds?.some(space => !spaceIds.has(space))
-            ? (() => {
-                const kept = context.spaceIds.filter(space => spaceIds.has(space))
-                const { spaceIds: _removed, ...rest } = context
-                void _removed
-                return kept.length ? { ...rest, spaceIds: kept } : rest
-              })()
-            : context
-        )
+      : array(workspace.contextPackages, STORAGE_LIMITS.contextPackages)
+          .map(parseContextPackage)
+          .map(context =>
+            context.spaceIds?.some(space => !spaceIds.has(space))
+              ? (() => {
+                  const kept = context.spaceIds.filter(space =>
+                    spaceIds.has(space)
+                  )
+                  const { spaceIds: _removed, ...rest } = context
+                  void _removed
+                  return kept.length ? { ...rest, spaceIds: kept } : rest
+                })()
+              : context
+          )
   if (
     contextPackages &&
     new Set(contextPackages.map(context => context.id)).size !==
@@ -1265,4 +1355,18 @@ export async function saveMarkdownFile(
   } catch (error) {
     throw asError(error)
   }
+}
+
+/**
+ * Validators for items that arrive from another device through cloud sync.
+ * Each throws on data this version cannot read.
+ */
+export const syncParsers = {
+  note: parseNote,
+  folder: parseFolder,
+  tag: parseTag,
+  space: parseSpace,
+  source: parseSource,
+  contextPackage: parseContextPackage,
+  settings: parseSettings,
 }

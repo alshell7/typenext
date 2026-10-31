@@ -7,6 +7,7 @@ export type PreferencePane =
   | 'models'
   | 'knowledge'
   | 'web'
+  | 'cloud'
   | 'sync'
   | 'history'
   | 'dictation'

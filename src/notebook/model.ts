@@ -1,4 +1,5 @@
 import type {
+  CloudSyncSettings,
   EditorSettings,
   Note,
   NotebookSettings,
@@ -73,6 +74,19 @@ export const DEFAULT_SHORTCUTS = {
   aiActions: 'Mod-j',
 } as const
 
+export function defaultCloudSettings(): CloudSyncSettings {
+  return {
+    enabled: false,
+    cadence: 'live',
+    intervalMinutes: 15,
+    include: { notes: true, organize: true, contexts: true, settings: true },
+    spaceIds: [],
+    deviceName: '',
+    presence: true,
+    targets: [],
+  }
+}
+
 export function defaultSettings(): NotebookSettings {
   return {
     theme: 'system',
@@ -110,6 +124,7 @@ export function defaultSettings(): NotebookSettings {
       pullMinutes: 10,
       push: true,
     },
+    cloud: defaultCloudSettings(),
     dictation: {
       engine: 'whistle',
       silenceStopSeconds: 4,
@@ -193,6 +208,11 @@ export function normalizeWorkspace(value: Workspace): Workspace {
     webFacts: { ...defaults.webFacts, ...value.settings?.webFacts },
     editor: { ...defaults.editor, ...value.settings?.editor },
     git: { ...defaults.git, ...value.settings?.git },
+    cloud: {
+      ...defaults.cloud,
+      ...value.settings?.cloud,
+      include: { ...defaults.cloud.include, ...value.settings?.cloud?.include },
+    },
     dictation: { ...defaults.dictation, ...value.settings?.dictation },
     timing: { ...defaults.timing, ...value.settings?.timing },
     updates: { ...defaults.updates, ...value.settings?.updates },

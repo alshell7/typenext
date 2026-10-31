@@ -1590,15 +1590,25 @@ export const MarkdownEditor = forwardRef<
     const view = viewRef.current
     if (!view || documentText(view.state.doc) === props.note.content) return
     const content = normalizedDocument(props.note.content)
-    if (documentText(view.state.doc) === content) return
-    const cursor = Math.min(view.state.selection.main.head, content.length)
+    const current = documentText(view.state.doc)
+    if (current === content) return
+    // Replace only the changed span. Edits merged in from another device
+    // then leave the cursor and selection where the writer is working.
+    let start = 0
+    const limit = Math.min(current.length, content.length)
+    while (start < limit && current[start] === content[start]) start++
+    let end = 0
+    while (
+      end < limit - start &&
+      current[current.length - 1 - end] === content[content.length - 1 - end]
+    )
+      end++
     view.dispatch({
       changes: {
-        from: 0,
-        to: view.state.doc.length,
-        insert: content,
+        from: start,
+        to: current.length - end,
+        insert: content.slice(start, content.length - end),
       },
-      selection: EditorSelection.cursor(cursor),
       annotations: [
         externalDocumentUpdate.of(true),
         Transaction.addToHistory.of(false),

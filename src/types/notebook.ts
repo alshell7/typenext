@@ -98,6 +98,56 @@ export interface GitSyncSettings {
   push: boolean
 }
 
+export type CloudBackend = 'neon' | 'd1'
+
+/**
+ * One database that holds the encrypted notebook. Credentials live in the
+ * credential vault, never here. Field names must not end in "key" or
+ * "token": the desktop save drops such fields as possible credentials.
+ */
+export interface CloudTarget {
+  id: string
+  kind: CloudBackend
+  /** Shown in Preferences: the database name or host. */
+  label: string
+  enabled: boolean
+  /** Neon: Live updates through Neon Realtime. */
+  realtimeUrl?: string
+  /** Cloudflare D1: the account and database. */
+  accountId?: string
+  databaseId?: string
+  /** The encrypted notebook this database holds. */
+  vaultId?: string
+  addedAt: number
+}
+
+export interface CloudSyncInclude {
+  notes: boolean
+  /** Folders, tags and workspaces. */
+  organize: boolean
+  /** The context library and its contexts. */
+  contexts: boolean
+  /** Appearance, editor, suggestion and shortcut preferences. */
+  settings: boolean
+}
+
+/** End-to-end encrypted sync between devices. This device only. */
+export interface CloudSyncSettings {
+  enabled: boolean
+  /** live: moments after writing, and at once from other devices. */
+  cadence: 'live' | 'interval' | 'manual'
+  /** For interval: sync this often (1 to 1440). */
+  intervalMinutes: number
+  include: CloudSyncInclude
+  /** Workspaces to sync. Empty: every workspace. */
+  spaceIds: string[]
+  /** How this device appears to the others. Empty: a name from the platform. */
+  deviceName: string
+  /** Show which devices are open on the same note. */
+  presence: boolean
+  targets: CloudTarget[]
+}
+
 export interface DictationSettings {
   /** whistle: small in-app model. fluid: Fluid Speech Mini (desktop). */
   engine: 'whistle' | 'fluid'
@@ -203,6 +253,7 @@ export interface NotebookSettings {
   zenLevel: ZenLevel
   editor: EditorSettings
   git: GitSyncSettings
+  cloud: CloudSyncSettings
   dictation: DictationSettings
   timing: TimingSettings
   updates: UpdateSettings

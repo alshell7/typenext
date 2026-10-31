@@ -40,6 +40,7 @@ function settings(): NotebookSettings {
     zenLevel: 'chrome',
     editor: defaultSettings().editor,
     git: defaultSettings().git,
+    cloud: defaultSettings().cloud,
     dictation: defaultSettings().dictation,
     timing: defaultSettings().timing,
     updates: defaultSettings().updates,

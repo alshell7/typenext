@@ -12,8 +12,9 @@ import {
   Mic,
   ArrowUpCircle,
   History,
+  Cloud,
 } from 'lucide-react'
-import type { NotebookSettings } from '../types/notebook'
+import type { Note, NoteSpace, NotebookSettings } from '../types/notebook'
 import { Modal } from './Modal'
 import { EditorPane } from './preferences/EditorPane'
 import { KnowledgePane } from './preferences/KnowledgePane'
@@ -28,6 +29,7 @@ import {
 } from './preferences/types'
 import { WebFactsPane } from './preferences/WebFactsPane'
 import { SyncPane } from './preferences/SyncPane'
+import { CloudPane } from './preferences/CloudPane'
 import { DictationPane } from './preferences/DictationPane'
 import { UpdatesPane } from './preferences/UpdatesPane'
 import { HistoryPane } from './preferences/HistoryPane'
@@ -91,8 +93,14 @@ export const PREFERENCE_PANES: {
     icon: History,
   },
   {
+    id: 'cloud',
+    label: 'Cloud sync',
+    description: 'Your notebook on every device, end-to-end encrypted.',
+    icon: Cloud,
+  },
+  {
     id: 'sync',
-    label: 'Sync',
+    label: 'Git sync',
     description: 'Keep notes in a Git repository.',
     icon: GitBranch,
   },
@@ -117,6 +125,7 @@ export function Preferences({
   onPaneChange,
   settings,
   onChange,
+  cloud,
 }: {
   open: boolean
   onOpenChange(open: boolean): void
@@ -124,6 +133,12 @@ export function Preferences({
   onPaneChange(pane: PreferencePane): void
   settings: NotebookSettings
   onChange(settings: NotebookSettings): void
+  /** What Cloud sync shows beside its settings. */
+  cloud?: {
+    notes: Note[]
+    spaces: NoteSpace[]
+    onLinkFiles(paths: Record<string, string>): void
+  }
 }) {
   const tabs = useRef<Partial<Record<MainPane, HTMLButtonElement | null>>>({})
   const latest = useRef(settings)
@@ -236,6 +251,14 @@ export function Preferences({
             )}
             {active === 'knowledge' && <KnowledgePane {...props} />}
             {active === 'web' && <WebFactsPane {...props} />}
+            {active === 'cloud' && (
+              <CloudPane
+                {...props}
+                notes={cloud?.notes ?? []}
+                spaces={cloud?.spaces ?? []}
+                onLinkFiles={paths => cloud?.onLinkFiles(paths)}
+              />
+            )}
             {active === 'sync' && <SyncPane {...props} />}
             {active === 'history' && <HistoryPane {...props} />}
             {active === 'dictation' && <DictationPane {...props} />}
