@@ -1,0 +1,479 @@
+/* Cloud sync: the status line, presence on a note and the preferences pane.
+   Colours come from the theme tokens, so every palette works. */
+
+/* ------------------------------------------------------------ Status line */
+.cloud-sync-status .cloud-sync-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cloud-device-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: auto;
+}
+.cloud-device-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.85;
+}
+.cloud-device-dot.is-editing {
+  animation: cloud-breathe 1.6s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------- Note presence */
+.note-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px 0 4px;
+  margin-right: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  animation: cloud-arrive 220ms ease-out both;
+}
+.note-presence.is-editing {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--ink);
+}
+.note-presence-avatars {
+  display: inline-flex;
+}
+.note-presence-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.note-presence-avatar + .note-presence-avatar {
+  margin-left: -6px;
+}
+.note-presence.is-editing .note-presence-avatar {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: cloud-ring 1.8s ease-out infinite;
+}
+@media (max-width: 720px) {
+  .note-presence-text {
+    display: none;
+  }
+  .note-presence {
+    padding-right: 4px;
+  }
+}
+
+@keyframes cloud-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes cloud-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+@keyframes cloud-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cloud-device-dot.is-editing,
+  .note-presence.is-editing .note-presence-avatar,
+  .note-presence {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------- Databases */
+.cloud-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.cloud-choices.is-compact {
+  margin-top: 10px;
+}
+.cloud-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  transition:
+    border-color 140ms ease-out,
+    background-color 140ms ease-out,
+    transform 140ms ease-out;
+}
+.cloud-choices.is-compact .cloud-choice {
+  padding: 10px 12px;
+  border-style: dashed;
+  background: transparent;
+}
+.cloud-choice:hover {
+  border-color: var(--secondary);
+  background: var(--surface);
+}
+.cloud-choice:active {
+  transform: scale(0.99);
+}
+.cloud-choice > svg {
+  flex-shrink: 0;
+  color: var(--secondary);
+}
+.cloud-choice-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cloud-choice-text strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.cloud-choice-text small {
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.cloud-choice-icon,
+.cloud-target-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: #fff;
+}
+.cloud-target-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+/* Fixed brand-like hues read on any background. */
+.cloud-choice-icon.is-neon,
+.cloud-target-icon.is-neon {
+  background: linear-gradient(135deg, #12c49a, #0c8f9c);
+}
+.cloud-choice-icon.is-d1,
+.cloud-target-icon.is-d1 {
+  background: linear-gradient(135deg, #f8a440, #e5682a);
+}
+@media (max-width: 640px) {
+  .cloud-choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cloud-target {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.cloud-target-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cloud-target-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.cloud-target-text strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cloud-target-text small {
+  overflow: hidden;
+  color: var(--secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cloud-target-switch {
+  display: inline-flex;
+}
+.cloud-target-fix {
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.cloud-confirm {
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.cloud-confirm p {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------ Add wizard */
+.cloud-add {
+  margin-bottom: 8px;
+}
+.cloud-steps {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 0;
+  margin: 2px 0 0;
+  list-style: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.cloud-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cloud-steps li + li::before {
+  content: '';
+  width: 12px;
+  height: 1px;
+  background: var(--line);
+}
+.cloud-steps li.is-current {
+  color: var(--accent);
+}
+.cloud-steps li.is-done {
+  color: var(--secondary);
+}
+.cloud-live-fields {
+  margin-top: 4px;
+}
+.cloud-key-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+.cloud-strength {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.cloud-strength-bars {
+  display: inline-flex;
+  gap: 3px;
+}
+.cloud-strength-bars span {
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  transition: background-color 180ms ease-out;
+}
+.cloud-strength[data-strength='1'] .is-on {
+  background: var(--error);
+}
+.cloud-strength[data-strength='2'] .is-on {
+  background: #d79a2b;
+}
+.cloud-strength[data-strength='3'] .is-on,
+.cloud-strength[data-strength='4'] .is-on {
+  background: var(--accent);
+}
+.cloud-recovery-list {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  margin: 12px 0;
+  list-style: none;
+  counter-reset: recovery;
+}
+.cloud-recovery-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  counter-increment: recovery;
+}
+.cloud-recovery-list li::before {
+  content: counter(recovery);
+  width: 18px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+.cloud-recovery-list code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------- Cadence, scope */
+.cloud-cadence-help {
+  margin-top: 10px;
+}
+.cloud-spaces {
+  margin-top: 14px;
+}
+
+/* --------------------------------------------------------------- Devices */
+.cloud-devices {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+}
+.cloud-device {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+.cloud-device:hover {
+  background: var(--surface);
+}
+.cloud-device.is-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+.cloud-device-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--secondary);
+}
+.cloud-device.is-active .cloud-device-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.cloud-device-state {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--paper);
+  border-radius: 50%;
+  background: var(--line);
+}
+.cloud-device-state.is-active {
+  background: #3fb27f;
+}
+.cloud-device-state.is-editing {
+  background: #3fb27f;
+  animation: cloud-breathe 1.6s ease-in-out infinite;
+}
+.cloud-device-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.cloud-device-text strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cloud-device-text small {
+  overflow: hidden;
+  color: var(--secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cloud-device-confirm {
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* ----------------------------------------------------------------- Files */
+.cloud-link-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--secondary);
+}
+.cloud-link-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.cloud-link-text strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.cloud-link-text small {
+  overflow: hidden;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cloud-security-card {
+  margin-top: 12px;
+}
+.cloud-security-card .cloud-key-form {
+  margin-top: 12px;
+}
+.cloud-device-switch {
+  margin-top: 12px;
+}
+.cloud-live-switch {
+  margin-top: 14px;
+}

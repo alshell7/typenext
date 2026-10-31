@@ -70,6 +70,8 @@ import {
 import { backlinks } from './notebook/note-links'
 import { HuggingFaceGuide } from './notebook/HuggingFaceGuide'
 import { GitSyncStatus } from './notebook/GitSyncStatus'
+import { CloudStatus, NotePresence } from './notebook/cloud/CloudStatus'
+import { cloudSyncNow, useCloudSync } from './notebook/cloud/useCloudSync'
 import {
   CommandPalette,
   type PaletteAction,
@@ -763,6 +765,13 @@ function App() {
   }, [note?.id, note])
 
   useGitSync(workspace, getWorkspace, setWorkspace, notify)
+  useCloudSync(
+    workspace,
+    getWorkspace,
+    setWorkspace,
+    notify,
+    !loading && !loadError
+  )
   useAutoUpdates(settings.updates)
   const noteById = useCallback(
     (id: string) => getWorkspace().notes.find(item => item.id === id),
@@ -1738,6 +1747,8 @@ function App() {
     switchWorkspace,
   }
   const gitEnabled = settings.git.enabled
+  const cloudEnabled =
+    settings.cloud.enabled && settings.cloud.targets.some(item => item.enabled)
   const webFactsOn = settings.webFacts.enabled
   const revisionsOn = settings.revisions.enabled
   const aiOn = aiEngine(settings) !== null
@@ -1983,6 +1994,14 @@ function App() {
         run: () => void syncNow(),
       },
       {
+        id: 'cloud-sync',
+        title: 'Sync devices now',
+        section: 'Actions',
+        keywords: ['cloud', 'sync', 'devices', 'neon', 'd1'],
+        disabled: !cloudEnabled,
+        run: () => void cloudSyncNow(),
+      },
+      {
         id: 'updates',
         title: 'Check for updates',
         section: 'Actions',
@@ -2055,12 +2074,21 @@ function App() {
       pane('web', 'Web facts', ['search', 'openai']),
       pane('dictation', 'Dictation', ['voice', 'whistle', 'fluid']),
       pane('history', 'History', ['revisions', 'versions']),
-      pane('sync', 'Sync', ['git']),
+      pane('cloud', 'Cloud sync', [
+        'sync',
+        'devices',
+        'encrypted',
+        'neon',
+        'd1',
+        'cloudflare',
+      ]),
+      pane('sync', 'Git sync', ['git']),
       pane('shortcuts', 'Shortcuts', ['keys', 'keyboard', 'shortcut']),
     ]
     return actions
   }, [
     gitEnabled,
+    cloudEnabled,
     webFactsOn,
     revisionsOn,
     aiOn,
@@ -2570,6 +2598,7 @@ function App() {
           )}
         </div>
         <div className="sidebar-bottom">
+          <CloudStatus onOpenSettings={() => showPreferences('cloud')} />
           <GitSyncStatus onOpenSettings={() => showPreferences('sync')} />
           <WorkspaceSwitcher
             spaces={spaces}
@@ -2664,6 +2693,7 @@ function App() {
             </div>
           </div>
           <div className="toolbar-actions">
+            {note && <NotePresence noteId={note.id} />}
             {note && (
               <>
                 <button
@@ -3424,6 +3454,19 @@ function App() {
                 settings: next,
               }))
             }
+            cloud={{
+              notes: workspace.notes,
+              spaces,
+              onLinkFiles: paths =>
+                setWorkspace(value => ({
+                  ...value,
+                  notes: value.notes.map(item =>
+                    paths[item.id] && !item.filePath
+                      ? { ...item, filePath: paths[item.id] }
+                      : item
+                  ),
+                })),
+            }}
           />
         </Suspense>
       )}

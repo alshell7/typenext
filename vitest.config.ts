@@ -7,7 +7,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/notebook/test-setup.ts'],
-    include: ['src/notebook/**/*.test.{ts,tsx}', 'src/services/*.test.ts', 'src/components/notebook/*.test.{ts,tsx}'],
+    include: ['src/notebook/**/*.test.{ts,tsx}', 'src/services/*.test.ts', 'src/services/cloud-sync/*.test.ts', 'src/components/notebook/*.test.{ts,tsx}'],
     exclude: [
       'node_modules',
       'dist',

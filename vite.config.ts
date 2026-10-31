@@ -28,6 +28,16 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    // The Cloudflare API refuses browser requests from other origins. The
+    // desktop app calls it from Rust; in development the browser build goes
+    // through this proxy (cloud sync with D1).
+    proxy: {
+      '/__cloudflare': {
+        target: 'https://api.cloudflare.com',
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/__cloudflare/, ''),
+      },
+    },
     hmr: host
       ? {
           protocol: 'ws',
