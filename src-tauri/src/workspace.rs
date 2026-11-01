@@ -1007,6 +1007,21 @@ mod tests {
         value["settings"]["revisions"] =
             json!({ "enabled": true, "mode": "automatic", "minChanges": 240 });
         value["settings"]["suggestionWords"] = json!(12);
+        value["settings"]["cloud"] = json!({
+            "enabled": true,
+            "cadence": "live",
+            "intervalMinutes": 15,
+            "include": { "notes": true, "organize": true, "contexts": true, "settings": true },
+            "spaceIds": [],
+            "deviceName": "Studio Mac",
+            "presence": true,
+            "targets": [
+                { "id": "tabc", "kind": "neon", "label": "Neon", "enabled": true,
+                  "realtimeUrl": "https://ep-x.rt.neon.tech", "vaultId": "v1", "addedAt": 1 },
+                { "id": "tdef", "kind": "d1", "label": "D1", "enabled": true,
+                  "accountId": "0123456789abcdef0123456789abcdef", "databaseId": "db-1", "vaultId": "v1", "addedAt": 2 }
+            ]
+        });
         let workspace: Workspace = serde_json::from_value(value.clone()).unwrap();
         validate_workspace(&workspace).unwrap();
         let directory = tempfile::tempdir().unwrap();
@@ -1029,6 +1044,13 @@ mod tests {
             "/settings/ai/indicator",
             "/settings/revisions/minChanges",
             "/settings/suggestionWords",
+            // Cloud sync field names must not look like credentials either.
+            "/settings/cloud/targets/0/realtimeUrl",
+            "/settings/cloud/targets/1/accountId",
+            "/settings/cloud/targets/1/databaseId",
+            "/settings/cloud/targets/1/vaultId",
+            "/settings/cloud/deviceName",
+            "/settings/cloud/include/notes",
         ] {
             assert_eq!(saved.pointer(pointer), value.pointer(pointer), "{pointer}");
         }
